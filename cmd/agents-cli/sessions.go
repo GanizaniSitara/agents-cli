@@ -277,7 +277,8 @@ var (
 	spinnerRe = regexp.MustCompile(`[\x{2800}-\x{28FF}]|esc to interrupt|Esc to cancel|\(esc\)|Thinking|Working \(|\(\d+[smh][\d\w ]* · |…\s*\(`)
 	promptRe  = regexp.MustCompile(`(?i)\(y/n\)|\[y/n\]|Yes, |Do you want|Do you trust|Allow |Approve|press enter to confirm|enter Confirm|❯ 1\.|› 1\.|\? for shortcuts.*\n.*\b1\. `)
 	// A bare input prompt, or a TUI's empty-input placeholder.
-	idleRe = regexp.MustCompile(`^\s*(>|›|❯|\$|%)\s*$|^› Ask Codex|^> Try "|^>\s+Type your message|^[A-Za-z]:\\[^>]*>\s*$`)
+	brailleOnlyRe = regexp.MustCompile(`^[\s\x{2800}-\x{28FF}]+$`)
+	idleRe        = regexp.MustCompile(`^\s*(>|›|❯|\$|%)\s*$|^› Ask Codex|^> Try "|^>\s+Type your message|^[A-Za-z]:\\[^>]*>\s*$`)
 )
 
 // guessState reads the last screen lines. Spinner glyphs mean a turn is
@@ -287,6 +288,17 @@ func guessState(tool string, lines []string) string {
 	// TUIs draw at the top of a tall window and leave the rest blank, so the
 	// trailing blank rows carry no signal.
 	tail := trimBlankTail(lines)
+	if tool == "vibe" {
+		// Vibe's start-up logo is braille art; its live spinner line always
+		// carries "Generating…"/"to interrupt" text, so glyph-only rows are logo.
+		kept := tail[:0:0]
+		for _, l := range tail {
+			if !brailleOnlyRe.MatchString(l) {
+				kept = append(kept, l)
+			}
+		}
+		tail = kept
+	}
 	if len(tail) > 18 {
 		tail = tail[len(tail)-18:]
 	}

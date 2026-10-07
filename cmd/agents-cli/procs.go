@@ -263,6 +263,11 @@ func classify(p *proc) string {
 		return "opencode"
 	case strings.Contains(p.Cmd, "@google/gemini-cli"), strings.Contains(p.Cmd, `@google\gemini-cli`):
 		return "gemini"
+	case p.Name == "vibe.exe":
+		// Mistral Vibe: a uv trampoline whose python children are the
+		// interpreter, not separate sessions; the shallowest-wins fold keeps
+		// the trampoline.
+		return "vibe"
 	}
 	return ""
 }

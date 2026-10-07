@@ -298,7 +298,7 @@ func cmdAdopt(args []string) error {
 	}
 	tool := strings.ToLower(p.str("tool", ""))
 	if tool == "" {
-		return errors.New("--tool is required (claude|codex|agy|qwen|opencode|copilot|gemini|other)")
+		return errors.New("--tool is required (claude|codex|agy|qwen|opencode|copilot|gemini|vibe|other)")
 	}
 	m := readAdopted()
 	key := p.pos[0]

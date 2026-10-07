@@ -1,7 +1,7 @@
 // agents-cli — ListAgents / SendMessage verbs for every agent TUI on this box.
 //
 // Claude Code's own mesh (ListAgents, SendMessage) only sees other Claude
-// sessions. Codex, agy, Qwen, OpenCode and Copilot windows cannot join it, so
+// sessions. Codex, agy, Qwen, OpenCode, Copilot and Vibe windows cannot join it, so
 // this tool wraps them instead: it discovers the console windows that host an
 // agent, reads their screens, and writes keystrokes into their input buffers.
 //
@@ -90,7 +90,7 @@ func emitError(err error) {
 }
 
 func printHelp() {
-	emit(map[string]string{"help": `agents-cli — list, read and drive agent TUIs (Claude, Codex, agy, Qwen, OpenCode, Copilot)
+	emit(map[string]string{"help": `agents-cli — list, read and drive agent TUIs (Claude, Codex, agy, Qwen, OpenCode, Copilot, Vibe)
 
   ls    [--tool T] [--all] [--fast]        sessions: launch-info + process scan + adopted
   tail  <ref> [--lines N] [--above N]       visible screen of a session (read-only)

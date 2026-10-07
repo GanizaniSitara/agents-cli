@@ -50,6 +50,39 @@ func TestGuessStateLiveScreens(t *testing.T) {
 	if s := guessState("agy", agyIdle); s != "idle" {
 		t.Errorf("agy idle screen with blank tail -> %s", s)
 	}
+	// Mistral Vibe 2.26 (2026-10-07): the start-up logo is braille art, which
+	// must not read as a spinner; its real spinner line says "Generating…".
+	vibeLogo := []string{
+		" ⢠⢢    ⡔⢄⠔⡄",
+		" ⢸⢸⣀⡔⢉⠱⣃⡢⣂⡣",
+		" ⠈⠒⠒⠣⠤⠵⠤⠬⠮⠆",
+		"Mistral Vibe v2.26.0 · Mistral Medium 3.5[high] · unified harness · [Subscription] Pro",
+		"Type /help for more information",
+	}
+	vibeFoot := []string{
+		"──────────────────────────────────────── accept edits ─",
+		">",
+		"────────────────────────────────────────────────────────",
+		`~\vibetest [PID 16476]                 0/200k tokens (0%)`,
+	}
+	if s := guessState("vibe", append(append([]string{}, vibeLogo...), vibeFoot...)); s != "idle" {
+		t.Errorf("vibe idle screen with logo -> %s", s)
+	}
+	vibeBusy := append(append([]string{}, vibeLogo...), "> Run the shell command: echo hi",
+		"⠉⠁ Generating… (0s Esc/Ctrl+C to interrupt)")
+	if s := guessState("vibe", append(vibeBusy, vibeFoot...)); s != "busy" {
+		t.Errorf("vibe busy screen -> %s", s)
+	}
+	vibeApproval := []string{
+		" ⣠ Running command… (1s Esc/Ctrl+C to interrupt)",
+		"│ Permission for the file_system.bash tool (mkdir *)                                                   │",
+		"│ › 1. Allow once                                                                                      │",
+		"│   4. Deny                                                                                            │",
+		"│ ↑↓/jk navigate  Enter select  Esc reject                                                             │",
+	}
+	if s := guessState("vibe", vibeApproval); s != "prompt" {
+		t.Errorf("vibe approval box -> %s", s)
+	}
 	cmdIdle := []string{"ping-from-agents-cli", "", `C:\git\agents-cli>`, ""}
 	if s := guessState("other", cmdIdle); s != "idle" {
 		t.Errorf("cmd prompt -> %s", s)

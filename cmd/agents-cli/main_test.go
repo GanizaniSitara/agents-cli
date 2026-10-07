@@ -39,6 +39,8 @@ func TestClassify(t *testing.T) {
 		{proc{Name: "node.exe", Cmd: `"node" "c:\x\node_modules\@openai\codex\bin\codex.js"`}, "codex"},
 		{proc{Name: "codex.exe", Cmd: ``}, "codex"},
 		{proc{Name: "agy.exe"}, "agy"},
+		{proc{Name: "vibe.exe"}, "vibe"},
+		{proc{Name: "python.exe"}, ""},
 		{proc{Name: "node.exe", Cmd: `"node" "c:\x\context-mode\cli.bundle.mjs"`}, ""},
 		{proc{Name: "bash.exe"}, ""},
 	}
