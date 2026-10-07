@@ -169,7 +169,7 @@ func cmdKey(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := sendKey(s.PID, p.pos[1]); err != nil {
+	if err := keyFor(s.PID, s.Tool, p.pos[1]); err != nil {
 		return err
 	}
 	emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "key": strings.ToLower(p.pos[1])})

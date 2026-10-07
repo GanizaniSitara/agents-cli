@@ -77,6 +77,23 @@ func inject(pid uint32, text string, enter bool) error {
 	return helperErr(out)
 }
 
+// vtKeys are typed as characters for TUIs that read VT input (Textual, i.e.
+// Mistral Vibe). Such apps ignore a bare arrow VK with no character, and hold a
+// lone ESC until the next byte arrives, so escape uses the unambiguous
+// CSI-u form instead.
+var vtKeys = map[string]string{
+	"escape": "\x1b[27u", "esc": "\x1b[27u",
+	"up": "\x1b[A", "down": "\x1b[B", "right": "\x1b[C", "left": "\x1b[D",
+}
+
+// keyFor sends a named key the way the tool reads it.
+func keyFor(pid uint32, tool, key string) error {
+	if seq, ok := vtKeys[strings.ToLower(key)]; ok && tool == "vibe" {
+		return inject(pid, seq, false)
+	}
+	return sendKey(pid, key)
+}
+
 func sendKey(pid uint32, key string) error {
 	out, err := runHelper("key", strconv.FormatUint(uint64(pid), 10), key)
 	if err != nil {
