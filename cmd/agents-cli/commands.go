@@ -69,6 +69,9 @@ func cmdTail(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := requirePolling(s); err != nil {
+		return err
+	}
 	r, err := peek(s.PID, above)
 	if err != nil {
 		return err
@@ -202,12 +205,20 @@ func cmdWait(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := requirePolling(s); err != nil {
+		return err
+	}
 	start := time.Now()
 	deadline := start.Add(timeout)
 	var last string
 	lastChange := start
 	var lines []string
 	for {
+		// Honour a mute issued by another coordinator while wait is running.
+		if a, ok := adoptedFor(readAdopted(), s.PID, startTime(s.PID)); ok && a.PollingMuted {
+			s.PollingMuted = true
+			return requirePolling(s)
+		}
 		r, err := peek(s.PID, 0)
 		if err != nil {
 			if !isAlive(s.PID) {
@@ -244,6 +255,38 @@ func emitWait(s *Session, reason string, start time.Time, lines []string) error 
 		"elapsed": time.Since(start).Round(time.Second).String(),
 		"state":   guessState(s.Tool, lines), "tail": tail,
 	})
+	return nil
+}
+
+func cmdMute(args []string, muted bool) error {
+	p, err := parseArgs(args)
+	if err != nil {
+		return err
+	}
+	if len(p.pos) != 1 || len(p.flags) != 0 {
+		return errors.New("usage: agents-cli mute|unmute <ref>")
+	}
+	s, _, err := lookup(p.pos[0]) // metadata only; never peek to mute
+	if err != nil {
+		return err
+	}
+	started := startTime(s.PID)
+	if !s.Alive || started.IsZero() {
+		return fmt.Errorf("cannot identify live process start time for session %d", s.PID)
+	}
+	m := readAdopted()
+	a, _ := adoptedFor(m, s.PID, started)
+	a.Tool = s.Tool
+	a.Start = started.Format(time.RFC3339)
+	a.PollingMuted = muted
+	if a.Added == "" {
+		a.Added = time.Now().UTC().Format(time.RFC3339)
+	}
+	m[strconv.FormatUint(uint64(s.PID), 10)] = a
+	if err := writeAdopted(m); err != nil {
+		return err
+	}
+	emit(map[string]interface{}{"pid": s.PID, "polling_muted": muted})
 	return nil
 }
 

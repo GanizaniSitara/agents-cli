@@ -13,6 +13,7 @@ import (
 // agent. PID is the console-owning root, the thing the launcher recorded and
 // the thing `stop` kills; AgentPID is the agent process itself.
 type Session struct {
+	PollingMuted      bool   `json:"polling_muted,omitempty"`
 	PID               uint32 `json:"pid"`
 	AgentPID          uint32 `json:"agent_pid,omitempty"`
 	Tool              string `json:"tool"`
@@ -155,6 +156,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		if a.Name != "" {
 			s.Name = a.Name
 		}
+		s.PollingMuted = a.PollingMuted
 	}
 
 	var out []Session
@@ -181,16 +183,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 				s.Started = t.Format(time.RFC3339)
 			}
 		}
-		if opts.withScreen && s.Alive {
-			if r, err := peek(s.PID, 0); err == nil {
-				if r.Title != "" {
-					s.Title = r.Title
-				}
-				s.State = guessState(s.Tool, r.Lines)
-			} else if s.State == "" {
-				s.State = "unknown"
-			}
-		}
+		refreshScreen(s, opts.withScreen, peek)
 		out = append(out, *s)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -207,6 +200,32 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		return out[i].PID < out[j].PID
 	})
 	return out, procs, nil
+}
+
+// Muting is checked before console access, including ordinary ls sweeps.
+func refreshScreen(s *Session, enabled bool, read func(uint32, int) (*peekResult, error)) {
+	if s.PollingMuted {
+		s.State = "muted"
+		return
+	}
+	if !enabled || !s.Alive {
+		return
+	}
+	if r, err := read(s.PID, 0); err == nil {
+		if r.Title != "" {
+			s.Title = r.Title
+		}
+		s.State = guessState(s.Tool, r.Lines)
+	} else if s.State == "" {
+		s.State = "unknown"
+	}
+}
+
+func requirePolling(s *Session) error {
+	if s.PollingMuted {
+		return fmt.Errorf("session %d polling is muted; use agents-cli unmute %d before reading its screen", s.PID, s.PID)
+	}
+	return nil
 }
 
 // resolve turns a <ref> into exactly one session. Order: pid (root or agent),

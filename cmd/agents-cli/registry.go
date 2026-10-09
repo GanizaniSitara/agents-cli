@@ -67,10 +67,11 @@ func readLaunchInfos() map[uint32]launchInfo {
 // ---- adopted sessions and labels -------------------------------------------
 
 type adopted struct {
-	Tool  string `json:"tool,omitempty"`
-	Name  string `json:"name,omitempty"`
-	Start string `json:"start,omitempty"` // process start time, guards PID reuse
-	Added string `json:"added"`
+	PollingMuted bool   `json:"polling_muted,omitempty"`
+	Tool         string `json:"tool,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Start        string `json:"start,omitempty"` // process start time, guards PID reuse
+	Added        string `json:"added"`
 }
 
 func dataDir() string {

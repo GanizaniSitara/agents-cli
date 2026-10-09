@@ -60,6 +60,10 @@ func run(args []string) error {
 		return helperMain(args[1:])
 	case "ls":
 		return cmdLs(args[1:])
+	case "mute":
+		return cmdMute(args[1:], true)
+	case "unmute":
+		return cmdMute(args[1:], false)
 	case "tail":
 		return cmdTail(args[1:])
 	case "send":
@@ -93,6 +97,7 @@ func printHelp() {
 	emit(map[string]string{"help": `agents-cli — list, read and drive agent TUIs (Claude, Codex, agy, Qwen, OpenCode, Copilot, Vibe)
 
   ls    [--tool T] [--all] [--fast]        sessions: launch-info + process scan + adopted
+  mute|unmute <ref>                       persistently disable/enable screen polling
   tail  <ref> [--lines N] [--above N]       visible screen of a session (read-only)
   send  <ref> "text" [--no-enter] [--via auto|inject|native] [--force]
   key   <ref> enter|escape|ctrl-c|ctrl-u|tab|up|down|backspace

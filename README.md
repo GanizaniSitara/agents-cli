@@ -23,6 +23,19 @@ agents-cli stops [--since 7d]
 agents-cli version
 ```
 
+`agents-cli mute <ref>` persistently excludes that session from screen polling.
+`ls` keeps its metadata row with `polling_muted: true` and `state: "muted"`,
+without reading its console; `tail` and `wait` refuse until `unmute <ref>`.
+An already-running `wait` checks for a mute before each further read. The mute
+is bound to PID plus process start time, so it does not affect a reused PID.
+Muting does not pause the agent or send it a message. Explicit `send`/`key`
+commands remain available. Use a numeric PID or registered name to mute;
+discovery does not read live titles to resolve references.
+
+`ls` and `tail` are passive local console reads: they do not prompt the target
+model. Model tokens are spent only if a coordinator interprets their output.
+`ls --fast` skips all screen reads when only process metadata is needed.
+
 `<ref>` is a pid (the window's root cmd.exe or the agent process inside it), a
 launcher task slug, a label given with `name`, or a unique substring of the
 name or window title. An ambiguous ref errors and lists the candidates.
