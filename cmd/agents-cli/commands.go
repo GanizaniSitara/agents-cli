@@ -146,6 +146,15 @@ func cmdSend(args []string) error {
 		emit(sendReceipt(s, "native", true, true))
 		return nil
 	}
+	if s.Tool == "agy" {
+		enter := !p.boolean("no-enter")
+		submitted, err := liveAGYConsole.send(s, text, enter)
+		if err != nil {
+			return err
+		}
+		emit(sendReceipt(s, "inject", enter, submitted))
+		return nil
+	}
 	if s.Tool == "copilot" {
 		enter := !p.boolean("no-enter")
 		submitted, err := liveCopilotConsole.send(s, text, enter)
