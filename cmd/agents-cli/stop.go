@@ -18,17 +18,14 @@ import (
 // when, by whom" until TECH-182 gives the box a real log sink; keep the writer
 // behind logStop so that swap is one edit.
 type stopRecord struct {
-	TS            string   `json:"ts"`
-	PID           uint32   `json:"pid"`
-	Tool          string   `json:"tool"`
-	Name          string   `json:"name,omitempty"`
-	Title         string   `json:"title,omitempty"`
-	Source        string   `json:"source"`
-	Killed        []uint32 `json:"killed"`
-	Failed        []string `json:"failed,omitempty"`
-	CallerPID     uint32   `json:"caller_pid"`
-	CallerCmdline string   `json:"caller_cmdline,omitempty"`
-	Result        string   `json:"result"`
+	TS        string   `json:"ts"`
+	PID       uint32   `json:"pid"`
+	Tool      string   `json:"tool"`
+	Source    string   `json:"source"`
+	Killed    []uint32 `json:"killed"`
+	Failed    []string `json:"failed,omitempty"`
+	CallerPID uint32   `json:"caller_pid"`
+	Result    string   `json:"result"`
 }
 
 func stopsPath() string {
@@ -40,17 +37,87 @@ func stopsPath() string {
 }
 
 func logStop(rec stopRecord) error {
+	_, err := rewriteStops(&rec)
+	return err
+}
+
+func rewriteStops(add *stopRecord) (int, error) {
+	if err := os.MkdirAll(filepath.Dir(stopsPath()), 0700); err != nil {
+		return 0, err
+	}
+	lock, err := os.OpenFile(stopsPath()+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return 0, err
+	}
+	defer lock.Close()
+	var overlapped windows.Overlapped
+	if err := windows.LockFileEx(windows.Handle(lock.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK, 0, 1, 0, &overlapped); err != nil {
+		return 0, err
+	}
+	defer windows.UnlockFileEx(windows.Handle(lock.Fd()), 0, 1, 0, &overlapped)
+	records, err := retainedStops(time.Now())
+	if err != nil {
+		return 0, err
+	}
+	if add != nil {
+		records = append(records, *add)
+	}
+	return len(records), writeStops(records)
+}
+
+// Decoding into stopRecord drops legacy names, titles and command lines.
+func retainedStops(now time.Time) ([]stopRecord, error) {
+	f, err := os.Open(stopsPath())
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var records []stopRecord
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 4096), 1024*1024)
+	for sc.Scan() {
+		var rec stopRecord
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			return nil, errors.New("stop log contains invalid JSON; no records changed")
+		}
+		ts, err := time.Parse(time.RFC3339, rec.TS)
+		if err == nil && !ts.Before(now.Add(-30*24*time.Hour)) {
+			records = append(records, rec)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, errors.New("cannot read stop log; no records changed")
+	}
+	return records, nil
+}
+
+func writeStops(records []stopRecord) error {
 	if err := os.MkdirAll(filepath.Dir(stopsPath()), 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(stopsPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.CreateTemp(filepath.Dir(stopsPath()), ".stops-*")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	line, _ := json.Marshal(rec)
-	_, err = f.Write(append(line, '\n'))
-	return err
+	defer os.Remove(f.Name())
+	for _, rec := range records {
+		line, err := json.Marshal(rec)
+		if err != nil {
+			f.Close()
+			return err
+		}
+		if _, err := f.Write(append(line, '\n')); err != nil {
+			f.Close()
+			return err
+		}
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), stopsPath())
 }
 
 func cmdStop(args []string) error {
@@ -87,8 +154,8 @@ func cmdStop(args []string) error {
 	}
 
 	rec := stopRecord{
-		TS: time.Now().UTC().Format(time.RFC3339), PID: s.PID, Tool: s.Tool, Name: s.Name,
-		Title: s.Title, Source: s.Source, CallerPID: self, CallerCmdline: callerCmdline(procs, self),
+		TS: time.Now().UTC().Format(time.RFC3339), PID: s.PID, Tool: s.Tool,
+		Source: s.Source, CallerPID: self,
 	}
 	victims := append(procs.descendants(s.PID), s.PID)
 	for _, pid := range victims {
@@ -121,28 +188,6 @@ func cmdStop(args []string) error {
 	return nil
 }
 
-// callerCmdline walks up from agents-cli to the first non-shell ancestor so
-// the log says which agent (or human shell) asked for the kill.
-func callerCmdline(procs procMap, self uint32) string {
-	shells := map[string]bool{"agents-cli.exe": true, "bash.exe": true, "sh.exe": true, "cmd.exe": true, "powershell.exe": true, "pwsh.exe": true}
-	for cur, ok := procs[self]; ok; cur, ok = procs[cur.PPID] {
-		if !shells[cur.Name] {
-			cmd := commandLine(cur.PID)
-			if cmd == "" {
-				cmd = cur.Name
-			}
-			if len(cmd) > 200 {
-				cmd = cmd[:200]
-			}
-			return fmt.Sprintf("%d %s", cur.PID, cmd)
-		}
-		if cur.PPID == 0 || cur.PPID == cur.PID {
-			break
-		}
-	}
-	return ""
-}
-
 func terminate(pid uint32) error {
 	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid)
 	if err != nil {
@@ -153,9 +198,17 @@ func terminate(pid uint32) error {
 }
 
 func cmdStops(args []string) error {
-	p, err := parseArgs(args)
+	p, err := parseArgs(args, "scrub")
 	if err != nil {
 		return err
+	}
+	if p.boolean("scrub") {
+		count, err := rewriteStops(nil)
+		if err != nil {
+			return err
+		}
+		emit(map[string]interface{}{"scrubbed": true, "retained": count, "retention_days": 30})
+		return nil
 	}
 	since, err := p.durationFlag("since", 0)
 	if err != nil {

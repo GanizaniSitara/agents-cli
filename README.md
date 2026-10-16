@@ -13,13 +13,13 @@ no port, no MCP.
 ```
 agents-cli ls    [--tool codex|agy|qwen|claude|opencode|copilot] [--all] [--fast]
 agents-cli tail  <ref> [--lines N] [--above N]
-agents-cli send  <ref> "text" [--no-enter] [--via auto|inject|native] [--force]
+agents-cli send  <ref> --stdin | "text" [--no-enter] [--via auto|inject|native] [--force]
 agents-cli key   <ref> enter|escape|ctrl-c|ctrl-u|tab|up|down|backspace
 agents-cli wait  <ref> [--idle-for 10s] [--timeout 10m] [--match REGEX]
 agents-cli name  <ref> "label"
 agents-cli adopt <pid> --tool T [--name L]
 agents-cli stop  <ref> --confirm <pid>
-agents-cli stops [--since 7d]
+agents-cli stops [--since 7d] [--scrub]
 agents-cli version
 ```
 
@@ -80,7 +80,7 @@ pipe:
 - **key** writes a single named virtual key (never a burst), so editing keys
   like `ctrl-u` are interpreted, not pasted.
 
-`send --via auto` uses Codex's queue only for an identified running executable
+`send --via auto --allow-argv` uses Codex's queue only for an identified running executable
 and profile with a thread id, without `--no-daemon`. Codex explicitly rejects
 queuing to a standalone `--no-daemon` TUI; those rows report `can_native: false`
 and `native_unavailable`, and auto uses injection. Explicit native sends fail
@@ -92,6 +92,8 @@ including the default `.codex` home when the caller uses `.codex-second`.
 `variant: codex2` distinguishes the second account. `--no-enter` always uses
 injection in auto mode; explicit native plus `--no-enter` is rejected.
 Queue calls are bounded to 20 seconds; a timeout does not prove non-delivery.
+Without `--allow-argv`, auto uses console injection. Explicit native sends
+require this opt-in because Codex queue accepts the message only as an argument.
 
 `tail --lines N` returns the last N rows after trimming trailing blank rows;
 without it, the full visible screen is retained. Put `--` before literal message
@@ -163,10 +165,31 @@ multiline and Unicode prompts, the four named keys, menu/busy/idle states,
 - `stop` resolves to exactly one pid, prints what it would kill, and does nothing
   without `--confirm <that pid>`. It refuses the caller's own tree. It kills by
   pid only (root plus descendants), never by image name.
-- Every stop appends one JSON line to `%LOCALAPPDATA%\agents-cli\stops.jsonl`
-  (`ts, pid, tool, name, title, source, killed, failed, caller_pid,
-  caller_cmdline, result`). `agents-cli stops` reads it back. The writer sits
-  behind one function so a later log sink is a one-line swap.
+- Stop auditing is local only. `%LOCALAPPDATA%\agents-cli\stops.jsonl` retains
+  `ts, pid, tool, source, killed, failed, caller_pid, result`. It omits labels,
+  titles and caller command lines, strips these fields from older entries and
+  removes entries older than 30 days whenever a stop is logged. `agents-cli
+  stops --scrub` applies that cleanup immediately. Updates use a process lock
+  and a temporary file so concurrent stops preserve each other's records.
+
+## Privacy
+
+Use `agents-cli send <ref> --stdin` and supply the message through the caller's
+stdin pipe (or redirect an existing protected file). Positional message text
+remains supported, but appears in the original process command line and may be
+captured by shell history or the calling agent. Do not construct a shell command
+containing a credential, including an `echo` pipeline. For real credentials use
+the workstation's secret-cli workflow instead of sending them to an agent.
+
+Console helpers receive prompt text through stdin, not process arguments. Send
+receipts contain delivery metadata, never the message or raw native CLI output.
+Malformed helper output is not echoed in errors. Codex native queue requires
+`--allow-argv`; its external CLI cannot currently accept the prompt privately.
+
+`tail` and `wait` deliberately return the target screen, which may contain
+sensitive material. `ls` returns session metadata. These outputs are not
+automatically redacted: review where you send or retain them. A receiving AI
+provider may store prompts and screen output under its own policies.
 
 ## Install
 

@@ -102,7 +102,7 @@ type copilotConsole struct {
 
 var liveCopilotConsole = copilotConsole{
 	paste: func(pid uint32, text string) error {
-		out, err := runHelper("copilot-paste", strconv.FormatUint(uint64(pid), 10), text)
+		out, err := runHelperInput(text, "copilot-paste", strconv.FormatUint(uint64(pid), 10))
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -84,14 +85,14 @@ func cmdTail(args []string) error {
 }
 
 func cmdSend(args []string) error {
-	p, err := parseArgs(args, "no-enter", "force")
+	p, err := parseArgs(args, "no-enter", "force", "stdin", "allow-argv")
 	if err != nil {
 		return err
 	}
-	if len(p.pos) < 2 {
-		return errors.New(`usage: agents-cli send <ref> "text" [--no-enter] [--via auto|inject|native] [--force]`)
+	text, err := sendInput(p, os.Stdin)
+	if err != nil {
+		return err
 	}
-	text := strings.Join(p.pos[1:], " ")
 	s, procs, err := lookup(p.pos[0])
 	if err != nil {
 		return err
@@ -105,7 +106,7 @@ func cmdSend(args []string) error {
 	via := p.str("via", "auto")
 	switch via {
 	case "auto":
-		if s.CanNative && !p.boolean("no-enter") {
+		if s.CanNative && !p.boolean("no-enter") && p.boolean("allow-argv") {
 			via = "native"
 		} else {
 			via = "inject"
@@ -115,6 +116,9 @@ func cmdSend(args []string) error {
 		return fmt.Errorf("--via must be auto, inject or native (got %q)", via)
 	}
 	if via == "native" {
+		if !p.boolean("allow-argv") {
+			return errors.New("Codex queue requires prompt text in process arguments; use injection, or explicitly accept this exposure with --allow-argv")
+		}
 		if p.boolean("no-enter") {
 			return errors.New("--no-enter requires injection; native queue submits immediately")
 		}
@@ -135,11 +139,11 @@ func cmdSend(args []string) error {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, codex, "queue", "--thread", thread, "--message", text)
 		cmd.Env = append(os.Environ(), "CODEX_HOME="+s.Home)
-		out, err := cmd.CombinedOutput()
+		_, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("codex queue: %v: %s", err, strings.TrimSpace(string(out)))
+			return fmt.Errorf("codex queue failed: %w", err)
 		}
-		emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "variant": s.Variant, "via": "native", "thread": thread, "exe": codex, "home": s.Home, "sent": text, "codex": strings.TrimSpace(string(out))})
+		emit(sendReceipt(s, "native", true, true))
 		return nil
 	}
 	if s.Tool == "copilot" {
@@ -148,14 +152,39 @@ func cmdSend(args []string) error {
 		if err != nil {
 			return err
 		}
-		emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": "inject", "sent": text, "enter": enter, "submitted": submitted})
+		emit(sendReceipt(s, "inject", enter, submitted))
 		return nil
 	}
-	if err := inject(s.PID, text, !p.boolean("no-enter")); err != nil {
+	enter := !p.boolean("no-enter")
+	if err := inject(s.PID, text, enter); err != nil {
 		return err
 	}
-	emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": "inject", "sent": text, "enter": !p.boolean("no-enter")})
+	emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": "inject", "enter": enter})
 	return nil
+}
+
+func sendInput(p parsed, input io.Reader) (string, error) {
+	if len(p.pos) < 1 {
+		return "", errors.New("usage: agents-cli send <ref> --stdin, or send <ref> text")
+	}
+	if p.boolean("stdin") {
+		if len(p.pos) != 1 {
+			return "", errors.New("--stdin cannot be combined with positional message text")
+		}
+		text, err := io.ReadAll(input)
+		if err != nil {
+			return "", errors.New("cannot read message from stdin")
+		}
+		return string(text), nil
+	}
+	if len(p.pos) < 2 {
+		return "", errors.New("send needs message text or --stdin")
+	}
+	return strings.Join(p.pos[1:], " "), nil
+}
+
+func sendReceipt(s *Session, via string, enter, submitted bool) map[string]interface{} {
+	return map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": via, "enter": enter, "submitted": submitted}
 }
 
 func screenTail(lines []string, count int) []string {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -28,17 +29,25 @@ type peekResult struct {
 // runHelper re-executes this binary as a detached child so it can attach to
 // the target console without disturbing the caller's own console.
 func runHelper(args ...string) ([]byte, error) {
+	return runHelperInput("", args...)
+}
+
+// Prompt contents travel through an inherited pipe, never child argv.
+func helperCommand(ctx context.Context, exe, input string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, exe, append([]string{"_attach"}, args...)...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS, HideWindow: true}
+	return cmd
+}
+
+func runHelperInput(input string, args ...string) ([]byte, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, append([]string{"_attach"}, args...)...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS,
-		HideWindow:    true,
-	}
+	cmd := helperCommand(ctx, exe, input, args...)
 	out, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError
@@ -57,7 +66,7 @@ func peek(pid uint32, above int) (*peekResult, error) {
 	}
 	var r peekResult
 	if err := json.Unmarshal(out, &r); err != nil {
-		return nil, fmt.Errorf("console helper returned %q", strings.TrimSpace(string(out)))
+		return nil, errors.New("console helper returned invalid JSON")
 	}
 	if r.Error != "" {
 		return &r, errors.New(r.Error)
@@ -70,7 +79,7 @@ func inject(pid uint32, text string, enter bool) error {
 	if enter {
 		e = "1"
 	}
-	out, err := runHelper("inject", strconv.FormatUint(uint64(pid), 10), e, text)
+	out, err := runHelperInput(text, "inject", strconv.FormatUint(uint64(pid), 10), e)
 	if err != nil {
 		return err
 	}
@@ -107,7 +116,7 @@ func helperErr(out []byte) error {
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(out, &r); err != nil {
-		return fmt.Errorf("console helper returned %q", strings.TrimSpace(string(out)))
+		return errors.New("console helper returned invalid JSON")
 	}
 	if r.Error != "" {
 		return errors.New(r.Error)
@@ -172,15 +181,23 @@ func helperMain(args []string) error {
 		}
 		result = doPeek(pid, above)
 	case "copilot-paste":
-		if len(args) < 3 {
-			return errors.New("_attach copilot-paste needs pid, text")
+		if len(args) != 2 {
+			return errors.New("_attach copilot-paste needs pid and text on stdin")
 		}
-		result = errJSON(doCopilotPaste(pid, args[2]))
+		text, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return errors.New("cannot read helper input")
+		}
+		result = errJSON(doCopilotPaste(pid, string(text)))
 	case "inject":
-		if len(args) < 4 {
-			return errors.New("_attach inject needs pid, enter, text")
+		if len(args) != 3 {
+			return errors.New("_attach inject needs pid, enter and text on stdin")
 		}
-		result = errJSON(doInject(pid, args[3], args[2] == "1"))
+		text, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return errors.New("cannot read helper input")
+		}
+		result = errJSON(doInject(pid, string(text), args[2] == "1"))
 	case "key":
 		if len(args) < 3 {
 			return errors.New("_attach key needs pid, key")

@@ -1,3 +1,11 @@
 .verification/
 *.exe
 title
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.log

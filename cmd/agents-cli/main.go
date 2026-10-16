@@ -99,13 +99,14 @@ func printHelp() {
   ls    [--tool T] [--all] [--fast]        sessions: launch-info + process scan + adopted
   mute|unmute <ref>                       persistently disable/enable screen polling
   tail  <ref> [--lines N] [--above N]       visible screen of a session (read-only)
-  send  <ref> "text" [--no-enter] [--via auto|inject|native] [--force]
+  send  <ref> --stdin | "text" [--no-enter] [--via auto|inject|native] [--force]
+        Native queue additionally requires --allow-argv (exposes message to process listings).
   key   <ref> enter|escape|ctrl-c|ctrl-u|tab|up|down|backspace
   wait  <ref> [--idle-for 10s] [--timeout 10m] [--match REGEX]
   name  <ref> "label"                       label a session (persists by pid + start time)
   adopt <pid> --tool T [--name L]           register a session the scan cannot classify
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
-  stops [--since 7d]                        read the stop log
+  stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
   version
 
 <ref> is a pid (root cmd or agent process), a launch-info task slug, a label from
