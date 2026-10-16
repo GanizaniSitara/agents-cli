@@ -200,3 +200,32 @@ func TestCopilotSendWithFakeConsole(t *testing.T) {
 		})
 	}
 }
+
+// TECH-229: agy frames a background-task row with rules below its composer.
+func TestCopilotComposerSkipsFramedTaskRow(t *testing.T) {
+	rule := "───────────────────────────────────────────────"
+	task := "  ● [16:05:14] Schedule 120s check on NGH-050 and NGH-052 running"
+	footer := "? for shortcuts                       Gemini 4 Argon · high · 1 task(s) · /tasks"
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		draft string
+		ok    bool
+	}{
+		{"idle with task", []string{rule, ">", rule, task, rule, footer}, "", true},
+		{"draft with task", []string{rule, "> ping the crew", rule, task, rule, footer}, "ping the crew", true},
+		{"wrapped draft with task", []string{rule, "> first", "  second", rule, task, rule, footer, "", ""}, "first\nsecond", true},
+		{"two task rows", []string{"old transcript", rule, "❯", rule, task, rule, task, rule, footer}, "", true},
+		{"empty adjacent pair", []string{rule, "> x", rule, rule, footer}, "x", true},
+		{"only task framed", []string{"> old transcript prompt", rule, task, rule, footer}, "", false},
+		{"only empty pair", []string{"> old transcript prompt", rule, rule, footer}, "", false},
+		{"no rules", []string{"> old transcript prompt", footer}, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			draft, ok := copilotComposer(tc.lines)
+			if draft != tc.draft || ok != tc.ok {
+				t.Fatalf("copilotComposer = %q, %v; want %q, %v", draft, ok, tc.draft, tc.ok)
+			}
+		})
+	}
+}

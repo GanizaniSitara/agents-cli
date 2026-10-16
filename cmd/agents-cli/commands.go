@@ -148,7 +148,7 @@ func cmdSend(args []string) error {
 	}
 	if s.Tool == "agy" {
 		enter := !p.boolean("no-enter")
-		submitted, err := liveAGYConsole.send(s, text, enter)
+		submitted, err := liveAGYConsole.send(s, text, enter, p.boolean("force"))
 		if err != nil {
 			return err
 		}

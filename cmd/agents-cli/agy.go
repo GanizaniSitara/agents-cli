@@ -18,14 +18,18 @@ func agyBusy(lines []string) bool {
 	return len(tail) > 0 && strings.Contains(strings.ToLower(tail[len(tail)-1]), "esc to cancel")
 }
 
-func (c agyConsole) send(s *Session, text string, enter bool) (bool, error) {
+// force skips only the empty-composer check; busy and menu screens still refuse.
+func (c agyConsole) send(s *Session, text string, enter, force bool) (bool, error) {
 	if !s.PollingMuted {
 		r, err := c.peek(s.PID, 0)
 		if err != nil {
 			return false, err
 		}
+		if agyBusy(r.Lines) || copilotMenu(r.Lines) {
+			return false, fmt.Errorf("agy must have an empty idle composer before sending; inspect tail")
+		}
 		draft, ok := copilotComposer(r.Lines)
-		if !ok || draft != "" || agyBusy(r.Lines) || copilotMenu(r.Lines) {
+		if !force && (!ok || draft != "") {
 			return false, fmt.Errorf("agy must have an empty idle composer before sending; inspect tail")
 		}
 	}

@@ -34,6 +34,8 @@ func copilotState(lines []string) string {
 
 // The composer is enclosed by horizontal rules; it may wrap or scroll. Do not
 // mistake a transcript's identical prompt glyph for the active input field.
+// agy frames other rows (e.g. background tasks) below the composer, so try
+// each adjacent pair of rules from the bottom up.
 func copilotComposer(lines []string) (string, bool) {
 	bottom := -1
 	for i := len(lines) - 1; i >= 0; i-- {
@@ -41,16 +43,14 @@ func copilotComposer(lines []string) (string, bool) {
 		if len([]rune(line)) < 3 || strings.Trim(line, "─━") != "" {
 			continue
 		}
-		if bottom < 0 {
+		if bottom < 0 || i+1 >= bottom {
 			bottom = i
 			continue
 		}
-		if i+1 >= bottom {
-			return "", false
-		}
 		first := strings.TrimSpace(lines[i+1])
 		if !strings.HasPrefix(first, "❯") && !strings.HasPrefix(first, ">") {
-			return "", false
+			bottom = i
+			continue
 		}
 		draft := []string{strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(first, "❯"), ">"))}
 		for _, row := range lines[i+2 : bottom] {
