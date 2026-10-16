@@ -40,6 +40,42 @@ model. Model tokens are spent only if a coordinator interprets their output.
 launcher task slug, a label given with `name`, or a unique substring of the
 name or window title. An ambiguous ref errors and lists the candidates.
 
+## Give your LLM access
+
+Install the Windows executable into a directory on PATH, such as `C:\Tools`,
+then check `agents-cli version` from the agent's own shell. The agent needs
+permission to execute local commands and access the target Windows console.
+The existing agent sessions keep their own provider sign-ins; agents-cli needs
+no model API key or MCP server registration.
+
+Copy [the agent instructions](docs/agent-instructions.md) into the instruction
+file your CLI loads. Merge them with existing instructions rather than
+overwriting your rules. For use across projects, the usual user-level locations
+are:
+
+| Agent | User-level instruction file |
+|---|---|
+| [Claude Code](https://code.claude.com/docs/en/memory) | `~/.claude/CLAUDE.md` |
+| [Codex](https://developers.openai.com/codex/guides/agents-md) | `~/.codex/AGENTS.md` (or `$CODEX_HOME/AGENTS.md`) |
+| [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions) | `~/.copilot/copilot-instructions.md` |
+| [OpenCode](https://docs.opencode.ai/docs/rules/) | `~/.config/opencode/AGENTS.md` |
+| [Mistral Vibe](https://docs.mistral.ai/vibe/code/cli/agents) | `~/.vibe/AGENTS.md` (or `$VIBE_HOME/AGENTS.md`) |
+
+Here `~` means the Windows user's home directory. Alternatively, put the
+instructions in the CLI's project-level instruction file to limit their scope.
+Restart the agent session after changing its global instructions. These files
+teach the model how to invoke the CLI; command approvals still belong to the
+agent's own permission system.
+
+For a read-only setup check, ask the agent:
+
+> Run `agents-cli version`, then `agents-cli ls --fast`, and summarize the
+> sessions found. Do not send messages, launch agents or stop anything.
+
+This verifies the executable and shell access without prompting other models.
+Mempalace and other MCP tools are separate integrations; agents-cli works
+without them.
+
 ## How sessions are found
 
 `ls` unions three sources and folds them onto the console-owning root process:
