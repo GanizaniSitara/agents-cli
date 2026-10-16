@@ -171,6 +171,11 @@ func helperMain(args []string) error {
 			above, _ = strconv.Atoi(args[2])
 		}
 		result = doPeek(pid, above)
+	case "copilot-paste":
+		if len(args) < 3 {
+			return errors.New("_attach copilot-paste needs pid, text")
+		}
+		result = errJSON(doCopilotPaste(pid, args[2]))
 	case "inject":
 		if len(args) < 4 {
 			return errors.New("_attach inject needs pid, enter, text")

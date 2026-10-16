@@ -75,6 +75,17 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		}}
 	}
 	for pid, c := range best {
+		if c.s.Tool == "copilot" {
+			// npm-loader.js launches the native executable. Expose that PID so
+			// either the cmd root or the actual Copilot process resolves.
+			for _, d := range procs.descendants(c.s.AgentPID) {
+				if dp := procs[d]; dp != nil && dp.Name == "copilot.exe" {
+					c.s.AgentPID = dp.PID
+					c.s.Exe = exePath(commandLine(dp.PID))
+					break
+				}
+			}
+		}
 		if c.s.Tool == "codex" {
 			// The real codex.exe (child of the node shim) carries the profile;
 			// prefer it over the shim for home/exe so native sends hit the

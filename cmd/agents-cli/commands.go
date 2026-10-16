@@ -142,6 +142,15 @@ func cmdSend(args []string) error {
 		emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "variant": s.Variant, "via": "native", "thread": thread, "exe": codex, "home": s.Home, "sent": text, "codex": strings.TrimSpace(string(out))})
 		return nil
 	}
+	if s.Tool == "copilot" {
+		enter := !p.boolean("no-enter")
+		submitted, err := liveCopilotConsole.send(s, text, enter)
+		if err != nil {
+			return err
+		}
+		emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": "inject", "sent": text, "enter": enter, "submitted": submitted})
+		return nil
+	}
 	if err := inject(s.PID, text, !p.boolean("no-enter")); err != nil {
 		return err
 	}
