@@ -1,4 +1,31 @@
-# Verification — agy input latency, 2026-10-16
+# Follow-up — Gemini paste routing, 2026-10-16
+
+Google Gemini CLI now uses the same stdin-only bracketed-paste primitive as
+agy, with a separate bounded delay before Enter. Its existing submission
+checks are retained. Classification requires `gemini.exe`, or `node.exe`
+with an actual script argument inside `@google/gemini-cli/`; a package name
+inside prompt text or an echo command does not classify a process as Gemini.
+The Go suite passes 74 tests; vet, build and diff checks pass.
+
+Handy's separate source change detects classic console clients from window
+owner PID, actual executable, Node script argument and process start time.
+Read-only checks recognized both the existing agy process and a disposable
+Google Gemini Node process. It emits explicit bracketed Unicode batches for
+identified Gemini consoles, including retype, while Windows Terminal retains
+native clipboard paste. Fake-bridge and recovery suites pass. Actual Handy
+SendInput delivery remains untested because it requires changing foreground
+focus; no input was injected into the existing agy window.
+
+Unexpected side effect during the disposable Google Gemini identity check:
+Gemini rejected the temporary system-settings directory as insecure and
+attempted its own automatic update despite the requested disabled-update
+setting. The installed package changed from 0.62.0 to 0.64.0. The user was
+informed; both disposable processes and their descendant updaters were gone
+when checked. No rollback or further Gemini launch was attempted. The
+diagnostic driver now refuses that launch mode. Do not reuse a purported
+disabled-update setting without checking that Gemini accepted it.
+
+# Initial investigation — agy input latency, 2026-10-16
 
 Reproduced with Antigravity CLI 1.4.0 in new hidden consoles. The existing
 busy agy session received no test input. Its read-only samples showed input

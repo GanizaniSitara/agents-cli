@@ -263,7 +263,7 @@ func classify(p *proc) string {
 		return "copilot"
 	case p.Name == "opencode.exe", strings.Contains(p.Cmd, "opencode-ai"):
 		return "opencode"
-	case strings.Contains(p.Cmd, "@google/gemini-cli"), strings.Contains(p.Cmd, `@google\gemini-cli`):
+	case p.Name == "gemini.exe", p.Name == "node.exe" && isGeminiCLICommand(p.Cmd):
 		return "gemini"
 	case p.Name == "vibe.exe":
 		// Mistral Vibe: a uv trampoline whose python children are the
@@ -272,6 +272,25 @@ func classify(p *proc) string {
 		return "vibe"
 	}
 	return ""
+}
+
+// Identify the Node script, not text in a prompt or an echo command. Window
+// titles and the model selected inside another CLI do not select a protocol.
+func isGeminiCLICommand(cmd string) bool {
+	args := strings.TrimSpace(cmd)
+	if strings.HasPrefix(args, `"`) {
+		end := strings.IndexByte(args[1:], '"')
+		if end < 0 {
+			return false
+		}
+		args = args[end+2:]
+	} else if end := strings.IndexAny(args, " \t"); end >= 0 {
+		args = args[end:]
+	} else {
+		return false
+	}
+	script := strings.ToLower(strings.ReplaceAll(exePath(args), `\`, "/"))
+	return strings.Contains(script, "/@google/gemini-cli/")
 }
 
 // fillCmd reads the command line for every process whose classification or

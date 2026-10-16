@@ -165,7 +165,11 @@ func cmdSend(args []string) error {
 		return nil
 	}
 	enter := !p.boolean("no-enter")
-	if err := inject(s.PID, text, enter); err != nil {
+	send := inject
+	if s.Tool == "gemini" {
+		send = liveGeminiConsole.inject
+	}
+	if err := send(s.PID, text, enter); err != nil {
 		return err
 	}
 	submitted := false
