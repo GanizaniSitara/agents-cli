@@ -104,6 +104,57 @@ searches the whole visible screen including echoed prompts; choose an answer
 that is absent from the prompt. State is a heuristic: background Claude and
 some OpenCode screens legitimately remain `unknown`.
 
+## Copilot CLI
+
+Copilot is discovered from `copilot.exe` or the npm `@github/copilot` loader
+(Windows or forward-slash paths). The loader and native child fold into one
+session; either the root cmd PID or native Copilot PID resolves. Detection does
+not depend on the window title: the live cmd.exe test window retained the title
+`Windows PowerShell` after Copilot initialized its shell support.
+
+Copilot's footer says `Working esc interrupt`, without the `to` used by other
+agents. `ls` and `tail` inspect that footer and the bordered composer, ignoring
+old transcript text. An empty composer is `idle`, a draft or selection dialog
+is `prompt`, and the interrupt footer is `busy`. `wait` requires an idle
+composer as well as a stable screen; a stationary busy indicator or model
+picker does not count as idle.
+
+`send` uses bracketed paste, including multiline/Unicode text, then waits for
+the composer to settle before sending a separate Enter. This also prevents
+slash-command completion from consuming text midway through a paste. The
+initial delay scales with length (800 ms plus 100 ms per 200 characters, capped
+at 4 seconds), followed by bounded screen checks. `submitted: true` means an
+empty composer or a newly opened dialog was observed, not that the model has
+finished. Enter is never blindly retried: a second Enter could select a model
+or approve a tool. If `submitted` is false or a console check fails, inspect
+`tail` before retrying. `--no-enter` only pastes and returns `submitted: false`.
+Muted sessions skip screen checks and cannot confirm submission. For unmuted
+sessions, sending while busy or in a menu is refused; use `wait` or `key` first.
+
+`key enter`, `escape`, `up` and `down` use ordinary Win32 key events. Enter uses
+the same record shape as send's submission, and arrows navigate the model
+picker. No Copilot-specific VT-key workaround is needed. `stop` retains the
+usual exact root-PID `--confirm` requirement.
+
+Authentication uses `copilot login` or interactive `/login` (OAuth, with
+browser/device-code flows). Supported environment tokens take precedence in
+the order `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`; fine-grained PATs
+need the Copilot Requests permission, and classic PATs are unsupported. See
+[GitHub's authentication guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli).
+The tested CLI has no standalone subscription-status command. `/usage` shows
+session usage; a successful trivial `copilot -p` prompt verifies usable model
+access, not the billing plan or renewal status. Organization policy can also
+block access; see [GitHub's auth troubleshooting guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/troubleshoot-copilot-cli-auth).
+If login is needed, the user completes it; agents-cli does not handle credentials.
+
+Live verification on 2026-10-16: `copilot --version` reported 1.0.83 and a trivial
+prompt succeeded. The single cmd.exe session launched with `--no-auto-update`
+displayed 1.0.74 from the npm-bundled native executable. Version output and the
+interactive banner differed on this installation; compare both when reporting
+issues. The repo build was tested against that session with short, long,
+multiline and Unicode prompts, the four named keys, menu/busy/idle states,
+`wait`, and confirmed stop. Fake-console tests run with `go test ./...`.
+
 ## Safety
 
 - `send` refuses when the target is a Claude session **and** the caller is a
