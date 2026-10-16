@@ -204,6 +204,7 @@ var chainNames = map[string]bool{
 	"cmd.exe": true, "bash.exe": true, "sh.exe": true, "powershell.exe": true,
 	"pwsh.exe": true, "node.exe": true, "claude.exe": true, "codex.exe": true,
 	"agy.exe": true, "python.exe": true, "pythonw.exe": true, "conhost.exe": true,
+	"copilot.exe": true,
 }
 
 // needsCmd lists image names whose classification depends on the command line.
@@ -257,7 +258,8 @@ func classify(p *proc) string {
 		return "agy"
 	case strings.Contains(p.Cmd, "@qwen-code"):
 		return "qwen"
-	case strings.Contains(p.Cmd, `@github\copilot`):
+	case p.Name == "copilot.exe", p.Name == "node.exe" &&
+		strings.Contains(strings.ReplaceAll(p.Cmd, `\`, "/"), "@github/copilot/"):
 		return "copilot"
 	case p.Name == "opencode.exe", strings.Contains(p.Cmd, "opencode-ai"):
 		return "opencode"

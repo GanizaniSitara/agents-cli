@@ -235,7 +235,7 @@ func cmdWait(args []string) error {
 		if screen != last {
 			last = screen
 			lastChange = time.Now()
-		} else if time.Since(lastChange) >= idleFor {
+		} else if time.Since(lastChange) >= idleFor && waitCanIdle(s.Tool, lines) {
 			return emitWait(s, "idle", start, lines)
 		}
 		if time.Now().After(deadline) {
