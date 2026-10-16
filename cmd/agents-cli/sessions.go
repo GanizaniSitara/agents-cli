@@ -343,7 +343,7 @@ func guessState(tool string, lines []string) string {
 		return "busy"
 	}
 	for _, l := range tail {
-		if idleRe.MatchString(l) {
+		if idleRe.MatchString(strings.TrimSpace(l)) {
 			return "idle"
 		}
 	}

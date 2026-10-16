@@ -31,6 +31,10 @@ is bound to PID plus process start time, so it does not affect a reused PID.
 Muting does not pause the agent or send it a message. Explicit `send`/`key`
 commands remain available. Use a numeric PID or registered name to mute;
 discovery does not read live titles to resolve references.
+For generic console sends (including Claude), an explicit `send` with Enter
+performs bounded screen checks to verify delivery even when polling is muted.
+It does not change the mute setting or emit the screen contents. Copilot's
+separate transport retains its no-screen-check behavior while muted.
 
 `ls` and `tail` are passive local console reads: they do not prompt the target
 model. Model tokens are spent only if a coordinator interprets their output.
@@ -110,9 +114,15 @@ pipe:
   captured) and reads the visible window rows with `ReadConsoleOutputCharacterW`.
   Read-only.
 - **inject** opens `CONIN$` and writes key events with `WriteConsoleInputW`.
-  The text goes in one burst and the Enter in a second write 150 ms later:
+  The text goes in one burst and Enter in a separate write after a length-scaled
+  pause (500 ms to 4 seconds for nonempty text):
   TUIs treat a fast burst as a paste and turn a trailing CR into a newline
   instead of a submit.
+  `send` then checks for submission and may retry Enter once, only when a fresh
+  screen still shows the draft or paste pill. Claude's `[Pasted text ...]` and
+  Codex's `[Pasted Content ...]` both count as unsubmitted input. A receipt with
+  `submitted: false` means delivery could not be confirmed; inspect the target
+  before retrying. `--no-enter` only types and never retries or verifies.
 - **key** writes a single named virtual key (never a burst), so editing keys
   like `ctrl-u` are interpreted, not pasted.
 

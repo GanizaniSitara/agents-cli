@@ -300,6 +300,20 @@ func keyPair(vk, ch uint16, ctrl uint32) []inputRecord {
 	}
 }
 
+// enterDelay scales the pause before pressing Enter based on text length:
+// TUIs (especially Codex) treat rapid bursts as pastes and ignore or swallow
+// an Enter that arrives inside the burst window.
+func enterDelay(textLen int) time.Duration {
+	if textLen <= 0 {
+		return 150 * time.Millisecond
+	}
+	d := 500*time.Millisecond + time.Duration(textLen/200)*100*time.Millisecond
+	if d > 4*time.Second {
+		return 4 * time.Second
+	}
+	return d
+}
+
 // doInject types text into the target's input buffer. The Enter goes in a
 // second write after a pause: TUIs treat a fast burst as a paste and turn a
 // trailing CR into a newline instead of a submit.
@@ -312,20 +326,25 @@ func doInject(pid uint32, text string, enter bool) error {
 		return err
 	}
 	defer windows.CloseHandle(h)
+	return injectInput(func(recs []inputRecord) error { return writeInput(h, recs) }, time.Sleep, text, enter)
+}
+
+// Keep transport ordering testable without attaching to a real console.
+func injectInput(write func([]inputRecord) error, sleep func(time.Duration), text string, enter bool) error {
 	if text != "" {
-		var recs []inputRecord
+		recs := make([]inputRecord, 0, len(text)*2)
 		for _, r := range text {
 			for _, u := range utf16Units(r) {
-				recs = append(recs, keyPair(0, u, 0)...)
+				recs = append(recs, keyPair(0xE7, u, 0)...)
 			}
 		}
-		if err := writeInput(h, recs); err != nil {
+		if err := write(recs); err != nil {
 			return err
 		}
 	}
 	if enter {
-		time.Sleep(150 * time.Millisecond)
-		return writeInput(h, keyPair(0x0D, '\r', 0))
+		sleep(enterDelay(len([]rune(text))))
+		return write(keyPair(0x0D, '\r', 0))
 	}
 	return nil
 }

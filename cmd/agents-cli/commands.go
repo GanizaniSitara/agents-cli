@@ -159,7 +159,11 @@ func cmdSend(args []string) error {
 	if err := inject(s.PID, text, enter); err != nil {
 		return err
 	}
-	emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": "inject", "enter": enter})
+	submitted := false
+	if enter {
+		submitted = defaultVerifier.verify(s, text)
+	}
+	emit(sendReceipt(s, "inject", enter, submitted))
 	return nil
 }
 
@@ -185,6 +189,142 @@ func sendInput(p parsed, input io.Reader) (string, error) {
 
 func sendReceipt(s *Session, via string, enter, submitted bool) map[string]interface{} {
 	return map[string]interface{}{"pid": s.PID, "tool": s.Tool, "via": via, "enter": enter, "submitted": submitted}
+}
+
+var pastedContentRe = regexp.MustCompile(`(?i)\[pasted (content|text)`)
+
+// Retry only when the last input prompt still contains our text or a paste
+// pill. Transcript text, unknown screens and permission menus are not evidence
+// that Enter was swallowed.
+func hasUnsubmittedInput(text string, lines []string) bool {
+	prefix := []rune(strings.TrimSpace(strings.SplitN(text, "\n", 2)[0]))
+	if len(prefix) > 30 {
+		prefix = prefix[:30]
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if !strings.HasPrefix(line, "❯") && !strings.HasPrefix(line, "›") && !strings.HasPrefix(line, ">") {
+			continue
+		}
+		if idleRe.MatchString(line) {
+			return false
+		}
+		return pastedContentRe.MatchString(line) || (len(prefix) > 0 && strings.Contains(line, string(prefix)))
+	}
+	return false
+}
+
+// isSubmitted checks whether an injected input was submitted and is executing or completed.
+// Returns true if a busy marker is visible (Working, spinners, esc to interrupt),
+// if a prompt dialog appeared, or if the composer cleared back to an idle prompt without
+// the unsubmitted paste/text.
+func isSubmitted(tool, text string, lines []string) bool {
+	tail := trimBlankTail(lines)
+	if len(tail) == 0 {
+		return false
+	}
+	if len(tail) > 18 {
+		tail = tail[len(tail)-18:]
+	}
+	if hasUnsubmittedInput(text, tail) {
+		return false
+	}
+
+	for _, l := range tail {
+		if pastedContentRe.MatchString(l) {
+			return false
+		}
+	}
+
+	st := guessState(tool, lines)
+	if st == "busy" || st == "prompt" {
+		return true
+	}
+
+	hasIdle := false
+	for _, l := range tail {
+		if idleRe.MatchString(strings.TrimSpace(l)) {
+			hasIdle = true
+			break
+		}
+	}
+	if !hasIdle {
+		return false
+	}
+
+	trimmed := strings.TrimSpace(text)
+	if trimmed != "" {
+		runes := []rune(trimmed)
+		prefix := string(runes)
+		if len(runes) > 30 {
+			prefix = string(runes[:30])
+		}
+		start := 0
+		if len(tail) > 4 {
+			start = len(tail) - 4
+		}
+		for _, l := range tail[start:] {
+			if strings.Contains(l, prefix) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+type submissionVerifier struct {
+	peek  func(uint32, int) (*peekResult, error)
+	key   func(uint32, string, string) error
+	alive func(uint32) bool
+	sleep func(time.Duration)
+	now   func() time.Time
+}
+
+var defaultVerifier = submissionVerifier{
+	peek:  peek,
+	key:   keyFor,
+	alive: isAlive,
+	sleep: time.Sleep,
+	now:   time.Now,
+}
+
+func (v submissionVerifier) waitFor(s *Session, text string, timeout time.Duration) bool {
+	v.sleep(100 * time.Millisecond)
+	deadline := v.now().Add(timeout)
+	for {
+		r, err := v.peek(s.PID, 0)
+		if err != nil {
+			if !v.alive(s.PID) {
+				return true
+			}
+			return false
+		}
+		if isSubmitted(s.Tool, text, r.Lines) {
+			return true
+		}
+		if !v.now().Before(deadline) {
+			return false
+		}
+		v.sleep(150 * time.Millisecond)
+	}
+}
+
+func (v submissionVerifier) verify(s *Session, text string) bool {
+	// An explicit send includes bounded delivery verification. Mute continues
+	// to suppress background discovery and tail/wait; it is never changed here.
+	if v.waitFor(s, text, 1200*time.Millisecond) {
+		return true
+	}
+	// Re-read immediately before retrying so a dialog or failed screen read
+	// cannot cause an unsolicited Enter.
+	r, err := v.peek(s.PID, 0)
+	if err != nil || guessState(s.Tool, r.Lines) == "prompt" || !hasUnsubmittedInput(text, r.Lines) {
+		return false
+	}
+	if err := v.key(s.PID, s.Tool, "enter"); err != nil {
+		return false
+	}
+	return v.waitFor(s, text, 1200*time.Millisecond)
 }
 
 func screenTail(lines []string, count int) []string {
