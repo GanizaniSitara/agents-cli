@@ -199,11 +199,13 @@ func (m procMap) descendants(root uint32) []uint32 {
 
 // Image names that can sit between an agent process and the cmd.exe that owns
 // the window. The root walk climbs through these and stops at anything else
-// (explorer, WindowsTerminal, services).
+// (explorer, WindowsTerminal, services). conhost.exe is deliberately absent:
+// when it is a parent it is hosting the console, not attached to it, so
+// AttachConsole on it fails.
 var chainNames = map[string]bool{
 	"cmd.exe": true, "bash.exe": true, "sh.exe": true, "powershell.exe": true,
 	"pwsh.exe": true, "node.exe": true, "claude.exe": true, "codex.exe": true,
-	"agy.exe": true, "python.exe": true, "pythonw.exe": true, "conhost.exe": true,
+	"agy.exe": true, "python.exe": true, "pythonw.exe": true,
 	"copilot.exe": true,
 }
 

@@ -86,6 +86,33 @@ func TestRootOfStopsAtPtyHost(t *testing.T) {
 	}
 }
 
+// A console launched as "conhost.exe <shell>" has conhost as the shell's
+// parent. conhost hosts the console but is not attached to it, so the root
+// must stop at the shell or AttachConsole fails.
+func TestRootOfStopsBelowConhost(t *testing.T) {
+	m := procMap{
+		1: {PID: 1, PPID: 0, Name: "explorer.exe"},
+		2: {PID: 2, PPID: 1, Name: "conhost.exe"},
+		3: {PID: 3, PPID: 2, Name: "cmd.exe"},
+		4: {PID: 4, PPID: 3, Name: "copilot.exe"},
+		5: {PID: 5, PPID: 2, Name: "copilot.exe"},
+	}
+	if root, _ := m.rootOf(m[4]); root.PID != 3 {
+		t.Fatalf("copilot under conhost-hosted cmd: root %d, want 3", root.PID)
+	}
+	if root, _ := m.rootOf(m[5]); root.PID != 5 {
+		t.Fatalf("copilot hosted directly by conhost: root %d, want 5", root.PID)
+	}
+}
+
+func TestGuessStateClaudeIdlePlaceholder(t *testing.T) {
+	for _, line := range []string{`❯ Try "fix lint errors"`, `> Try "fix lint errors"`, `› Try "fix lint errors"`} {
+		if s := guessState("claude", []string{"previous answer", "", line, "  ? for shortcuts"}); s != "idle" {
+			t.Errorf("%q -> %s, want idle", line, s)
+		}
+	}
+}
+
 func TestGuessState(t *testing.T) {
 	if s := guessState("claude", []string{"", "⠋ Thinking…", "esc to interrupt"}); s != "busy" {
 		t.Fatalf("busy -> %s", s)

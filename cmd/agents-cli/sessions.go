@@ -308,7 +308,7 @@ var (
 	promptRe  = regexp.MustCompile(`(?i)\(y/n\)|\[y/n\]|Yes, |Do you want|Do you trust|Allow |Approve|press enter to confirm|enter Confirm|❯ 1\.|› 1\.|\? for shortcuts.*\n.*\b1\. `)
 	// A bare input prompt, or a TUI's empty-input placeholder.
 	brailleOnlyRe = regexp.MustCompile(`^[\s\x{2800}-\x{28FF}]+$`)
-	idleRe        = regexp.MustCompile(`^\s*(>|›|❯|\$|%)\s*$|^› Ask Codex|^> Try "|^>\s+Type your message|^[A-Za-z]:\\[^>]*>\s*$`)
+	idleRe        = regexp.MustCompile(`^\s*(>|›|❯|\$|%)\s*$|^› Ask Codex|^[>›❯] Try "|^>\s+Type your message|^[A-Za-z]:\\[^>]*>\s*$`)
 )
 
 // guessState reads the last screen lines. Spinner glyphs mean a turn is
