@@ -1,5 +1,63 @@
 # Console key regression check
 
+## Confirmed cause: painted SI, not injected Ctrl-O
+
+Follow-up evidence on 24 October reproduced the glyph after real model turns
+in both Claude 2.1.280 and 2.1.295. A six-minute scratch control receiving only
+tail reads stayed clean. The initial local `/help` tests below did not exercise
+stdin resume after a model turn.
+
+The upstream report [anthropics/claude-code#88306](https://github.com/anthropics/claude-code/issues/88306)
+identifies the charset reset emitted by `reassertTerminalModes()` on stdin
+resume and after event-loop stalls. Legacy Win10 conhost consumes `ESC(B` but
+paints the subsequent SI (`0x0F`) into the output buffer at the cursor.
+
+Local proof, independent of any input injection:
+
+- Suspend only the adopted scratch Claude process; attach a diagnostic helper.
+- Write bytes `1b 28 42 0f` to **CONOUT$** through WriteFile, without writing to
+  CONIN$. The screen changes from `abcXYZ` to `abcXYZ\u000f`.
+- PeekConsoleInputW reports an empty input queue. Resume the scratch process.
+- Write `1b 28 42 00` to CONOUT$ the same way: no additional glyph appears.
+- A suspended Ctrl-U injection instead queued character `0x15`, as expected,
+  not `0x0F`. Trying VK_PACKET or omitting key-up did not cure the glyph;
+  those experimental source changes were reverted.
+
+This corrects the original task's inference that a tail-visible SI must be real
+composer input. Submitting or repainting can remove a painted cell too. A glyph
+appearing after a key call is not proof that the call injected that character.
+Overpainting at the cursor can also resemble missing input characters.
+
+Both installed binaries contain exactly one `ESC(B SI` literal. The prepared
+workaround preserves file length and changes its final byte to NUL:
+
+| Installation | Version | SI byte offset (decimal) |
+| --- | --- | --- |
+| NVM | 2.1.295 | 107460427 |
+| npm | 2.1.280 | 105699495 |
+
+`C:\scripts\_oneshot_tech238_claude_charset_patch.py` defaults to a read-only
+plan with original/patched hashes. Its explicit `--apply` mode verifies the
+known original hashes, stages the one-byte patch and retains hash-named original
+executables as backups. It never restarts sessions. Patching changes executable
+signatures and future Claude updates can overwrite it. Applying it requires
+the user's explicit approval to repair these Claude installations; authorization
+to rebuild agents-cli alone does not authorize that software change.
+
+The output-only NUL probe verifies conhost behavior, not successful execution of
+a patched Claude binary. After approval, verify the patched binaries in fresh
+scratch consoles through a model turn, delayed polling, Enter, Ctrl-U and
+backspace before calling the workaround complete. Existing processes still map
+their original binaries until restarted.
+
+Evidence: ignored `.verification/tech238-{nvm-turn,npm-turn,read-control,live-debug}.json`.
+Diagnostic helper: `C:\scripts\_oneshot_tech238_peek_input.py`; optional
+`--output-reset`/`--output-nul` probes target only an adopted scratch session.
+The helper can briefly suspend that scratch process and always resumes it in
+`finally`. No test input reached the owner's existing sessions.
+
+## Repeatable named-key check
+
 Use a disposable Claude console only. Do not clear, submit, or otherwise edit
 the owner's existing composers to investigate unexpected control characters.
 
@@ -23,7 +81,7 @@ Run against both the installed CLI and a freshly built candidate. Record the
 actual Claude versions: two installation paths can contain different versions.
 Never assume a long-running process has the version currently on disk.
 
-## Investigation on 24 October 2026
+## Initial investigation on 24 October 2026 (superseded by the cause above)
 
 The reported symptom is literal SI (`0x0F`) in idle Claude composers, sometimes
 replacing leading draft text after named-key calls. It has **not reproduced**
