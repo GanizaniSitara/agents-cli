@@ -28,27 +28,69 @@ composer input. Submitting or repainting can remove a painted cell too. A glyph
 appearing after a key call is not proof that the call injected that character.
 Overpainting at the cursor can also resemble missing input characters.
 
-Both installed binaries contain exactly one `ESC(B SI` literal. The prepared
-workaround preserves file length and changes its final byte to NUL:
+## Current disposition: unmodified Claude, classic cmd.exe, filtered tail
 
-| Installation | Version | SI byte offset (decimal) |
+The owner withdrew approval for binary patching and explicitly requires classic
+cmd.exe. Both installations were briefly patched, then restored from verified
+original backups before the later scratch tests. The patch helpers were removed.
+Do not binary-patch Claude, recommend Windows Terminal, or reapply a patch after
+an update. Backups remain beside the executables with suffix
+`.si-byte-original-<original SHA256>`.
+
+| Installation | Version | Restored original SHA256 |
 | --- | --- | --- |
-| NVM | 2.1.295 | 107460427 |
-| npm | 2.1.280 | 105699495 |
+| NVM | 2.1.295 | `a30012741c3d0b55e2a6c252dab3781134b75be95896ae89d40a93e10f83bcd6` |
+| npm | 2.1.280 | `0e4195524b73eb77efbdf3e2b36de5322a29f0ca575dfd2d9b4f946b1d425469` |
 
-`C:\scripts\_oneshot_tech238_claude_charset_patch.py` defaults to a read-only
-plan with original/patched hashes. Its explicit `--apply` mode verifies the
-known original hashes, stages the one-byte patch and retains hash-named original
-executables as backups. It never restarts sessions. Patching changes executable
-signatures and future Claude updates can overwrite it. Applying it requires
-the user's explicit approval to repair these Claude installations; authorization
-to rebuild agents-cli alone does not authorize that software change.
+The interim agents-cli mitigation removes SI cells when reading console lines,
+before returning `tail` output or classifying state. It preserves surrounding
+draft text and leaves other controls alone. It does not edit console input or
+fix the glyph displayed by conhost. A live check found one SI in the original
+raw reader, zero in installed `tail`, and correctly classified the empty
+composer as `idle`. The Go suite has 96 passing tests; vet and build pass.
 
-The output-only NUL probe verifies conhost behavior, not successful execution of
-a patched Claude binary. After approval, verify the patched binaries in fresh
-scratch consoles through a model turn, delayed polling, Enter, Ctrl-U and
-backspace before calling the workaround complete. Existing processes still map
-their original binaries until restarted.
+## Plain cmd.exe settings and release investigation
+
+The standard `launch.ps1 new ... -Tool claude` created classic console PID23232
+with Claude child37308, input mode `0x208`, output mode `0x7`, CP65001 and Consolas.
+Source inspection found no `SetConsoleMode`, `chcp`, ConsoleCP or encoding setup
+in launch.ps1/lib-window-tiling.ps1; the font-profile calls are Codex-specific.
+Claude/conhost determine the observed runtime modes.
+
+Output-only probes in that scratch console tested modes 1,3,5,7,15,23,
+CP65001/437/850/1252, and Consolas/Lucida Console/Courier New. Every case retained
+an unwanted third cell in `A ESC(B SI B`; CP437/850 converted it to U+263C (sun),
+which is not a fix. Disabling VT output also exposed the escape sequence and
+would break the TUI. Original settings were restored after each experiment.
+
+A subsequent short-lived hidden classic-console probe (no Claude session or
+visible window) tested output modes 0,1,2,3,4,5,6,7,8,12,14,15,23 and input modes
+0,8,512,520 with output mode7 and CP65001. None produced the correct two-cell
+`AB`; toggling ENABLE_VIRTUAL_TERMINAL_INPUT did not remove SI. This covers
+processed-output, wrapping, VT processing and newline-mode combinations.
+
+No verified cmd.exe setting fix was found. **No launch.ps1 change is proposed
+or applied**, because recommending an unproven flag/code-page/font adjustment
+would misrepresent these results. A Terminal comparison was explored, rejected
+by the owner as unsuitable, and stopped; all test Terminal windows were closed.
+
+The live GitHub API reports issue88306 closed `not_planned` on 2026-10-11, with
+the sole comment closing it for inactivity. The latest release checked was
+[v2.1.310](https://github.com/anthropics/claude-code/releases/tag/v2.1.310),
+published 2026-10-23. Reviewing 100 official release notes (v2.1.196–v2.1.310)
+found no documented conhost SI/charset-reset fix. No fixed release version can
+be confirmed; latest-release code was not installed or run. Local 2.1.280 and
+2.1.295 remain verified affected. The bracketed-paste reset fix in v2.1.282 is
+a separate input issue, not evidence this output bug was fixed.
+
+Cleanup: `agents-cli stop 23232 --confirm 23232` and
+`agents-cli stop 26836 --confirm 26836` succeeded. Test Terminal launcher shells
+18100/11388 were also stopped through agents-cli. Only the test Terminal HWNDs
+1049094/86381924 received WM_CLOSE; the owner's other windows were not targeted.
+
+Evidence under ignored `.verification`: `tech238-conhost-matrix.json`,
+`tech238-input-mode-matrix.json`, `tech238-tail-mitigation.json`,
+`tech238-issue-status.json`, and `tech238-release-audit.json`.
 
 Evidence: ignored `.verification/tech238-{nvm-turn,npm-turn,read-control,live-debug}.json`.
 Diagnostic helper: `C:\scripts\_oneshot_tech238_peek_input.py`; optional
@@ -129,7 +171,5 @@ ignored `.verification` directory.
 Use the already-provisioned Python interpreter to run it. No dependencies or
 package updates are required.
 
-Remaining prerequisite: reproduce the failure with an exact triggering action
-or identify a relevant state difference in the affected long-running process.
-Do not change the transport speculatively or label these passing baseline
-checks as proof that the original corruption is fixed.
+The historical baseline checks above did not exercise post-turn resets.
+The current outcome and outstanding upstream display bug are documented above.

@@ -276,9 +276,15 @@ func doPeek(pid uint32, above int) *peekResult {
 			return r
 		}
 		line := windows.UTF16ToString(buf[:read])
-		r.Lines = append(r.Lines, strings.TrimRight(strings.ReplaceAll(line, "\x00", ""), " "))
+		r.Lines = append(r.Lines, cleanConsoleLine(line))
 	}
 	return r
+}
+
+// Legacy conhost paints Claude's charset-reset SI as a buffer cell. It is
+// output debris, not composer input; omit it before returning/classifying lines.
+func cleanConsoleLine(line string) string {
+	return strings.TrimRight(strings.ReplaceAll(strings.ReplaceAll(line, "\x00", ""), "\x0f", ""), " ")
 }
 
 func writeInput(h windows.Handle, recs []inputRecord) error {

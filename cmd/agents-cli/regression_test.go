@@ -7,6 +7,23 @@ import (
 	"time"
 )
 
+func TestConsoleLineIgnoresPaintedSI(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"❯\u00a0\x0f\x0fgo ahead\x0f  ", "❯\u00a0go ahead"},
+		{"\x00\x0f  ", ""},
+		{"draft 😃\t\x15 preserved", "draft 😃\t\x15 preserved"},
+		{"unchanged text", "unchanged text"},
+	} {
+		if got := cleanConsoleLine(tc.input); got != tc.want {
+			t.Errorf("cleanConsoleLine(%q) = %q; want %q", tc.input, got, tc.want)
+		}
+	}
+	lines := []string{cleanConsoleLine("❯\u00a0\x0f")}
+	if got := guessState("claude", lines); got != "idle" {
+		t.Fatalf("painted SI must not make an empty composer %s", got)
+	}
+}
+
 func TestTailLineLimit(t *testing.T) {
 	screen := []string{"one", "two", "three", "", " "}
 	if got := screenTail(screen, 2); !reflect.DeepEqual(got, []string{"two", "three"}) {
