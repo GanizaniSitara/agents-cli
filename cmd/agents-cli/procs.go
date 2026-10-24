@@ -206,7 +206,8 @@ var chainNames = map[string]bool{
 	"cmd.exe": true, "bash.exe": true, "sh.exe": true, "powershell.exe": true,
 	"pwsh.exe": true, "node.exe": true, "claude.exe": true, "codex.exe": true,
 	"agy.exe": true, "python.exe": true, "pythonw.exe": true,
-	"copilot.exe": true,
+	"copilot.exe":               true,
+	"claude-console-filter.exe": true,
 }
 
 // needsCmd lists image names whose classification depends on the command line.
@@ -248,6 +249,9 @@ func hasCommandFlag(cmd, flag string) bool {
 // line is lower-cased.
 func classify(p *proc) string {
 	switch {
+	case p.Name == "cmd.exe" && strings.Contains(p.Cmd, "claude-console-filter.exe"):
+		// The real Claude child supplies the agent PID and session identity.
+		return ""
 	case p.Name == "claude.exe", strings.Contains(p.Cmd, `@anthropic-ai\claude-code`):
 		// Daemon and pty-host processes are infrastructure, not sessions.
 		if strings.Contains(p.Cmd, "daemon run") || strings.Contains(p.Cmd, "--bg-pty-host") {
@@ -313,6 +317,13 @@ func (m procMap) rootOf(p *proc) (root *proc, kind string) {
 	for {
 		parent, ok := m[cur.PPID]
 		if !ok || parent.PID == cur.PID {
+			return cur, "window"
+		}
+		if cur.Name == "claude-console-filter.exe" {
+			// ConPTY is a console boundary, even while the launcher is alive.
+			if parent.Name == "cmd.exe" {
+				return parent, "window"
+			}
 			return cur, "window"
 		}
 		if strings.Contains(parent.Cmd, "--bg-pty-host") {

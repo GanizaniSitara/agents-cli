@@ -1,5 +1,41 @@
 # Console key regression check
 
+## Delivered: external ConPTY output filter, 24 October 2026
+
+The follow-up owner brief is now implemented in `C:\git\claude-console-filter`.
+`C:\Tools\claude-console-filter.exe` runs the unmodified native Claude executable
+inside ConPTY, with classic cmd.exe as the visible host. `launch.ps1` defaults
+local Claude task/new/skip/resume launches to this wrapper; the explicit bypass
+is `-NoClaudeConsoleFilter`. Remote launches keep their remote executable.
+New launches use the current installed Claude path, so no binary patch needs
+reapplying after updates. Existing owner sessions were not restarted or injected.
+
+ConPTY capture confirmed the surviving output SI byte; ESC(B is consumed before
+the captured stream. A simple SI deletion caused incorrect partial repaints:
+Win10 ConPTY counts SI as a column and can emit BS after it. The final filter
+replaces SI with nonpainting `ESC[1C`, retaining the serializer's column movement.
+Raw ReadFile forwards input unchanged, including Ctrl-Z, which Go's console
+reader would consume as EOF. `agents-cli` recognizes the wrapper's console
+boundary, skips classifying its cmd command as the agent, and retains Claude's
+actual child PID even while the launching PowerShell remains alive.
+
+Final installed-wrapper acceptance: launcher-created cmd 28716, Claude 7468,
+version 2.1.280; ten distinct replies verified in the transcript; raw visible
+buffer checked throughout and another 60 seconds idle; zero SI cells. Backspace
+produced `abcXY`, Ctrl-U cleared it, and separate Enter opened /help. Automatic
+scan found the correct root and child before adoption. Raw capture contained
+nine SI bytes in 82064 bytes, so the defect was exercised. Both original Claude
+SHA256 hashes below stayed unchanged. Scratch 28716 stopped via exact confirmed
+agents-cli stop; no test wrapper remained. Separate 2.1.295 edit and native-version
+checks passed. Filter unit test, 97 agents-cli tests, vet, builds and diff checks
+passed. Normal child exit and missing-executable failure were also checked.
+
+Evidence: `.verification/tech238-filter-accepted{.json,.summary.json,.vt,.vt.input}`
+and `tech238-filter-lifecycle-final.json`; earlier failing deletion evidence is
+retained separately. Driver: `C:\scripts\_oneshot_tech238_console_keys.py` with
+`--launch-filter`. Upstream comment draft is in the filter repository and on the
+TECH-238 ticket, explicitly unposted. Local commits only.
+
 ## Confirmed cause: painted SI, not injected Ctrl-O
 
 Follow-up evidence on 24 October reproduced the glyph after real model turns
@@ -28,7 +64,7 @@ composer input. Submitting or repainting can remove a painted cell too. A glyph
 appearing after a key call is not proof that the call injected that character.
 Overpainting at the cursor can also resemble missing input characters.
 
-## Current disposition: unmodified Claude, classic cmd.exe, filtered tail
+## Earlier disposition: unmodified Claude, classic cmd.exe, filtered tail
 
 The owner withdrew approval for binary patching and explicitly requires classic
 cmd.exe. Both installations were briefly patched, then restored from verified

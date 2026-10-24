@@ -105,6 +105,22 @@ func TestRootOfStopsBelowConhost(t *testing.T) {
 	}
 }
 
+func TestRootOfClaudeConsoleFilter(t *testing.T) {
+	m := procMap{
+		1: {PID: 1, Name: "explorer.exe"},
+		2: {PID: 2, PPID: 5, Name: "cmd.exe", Cmd: `cmd /k claude-console-filter.exe c:\npm\@anthropic-ai\claude-code\bin\claude.exe`},
+		3: {PID: 3, PPID: 2, Name: "claude-console-filter.exe"},
+		4: {PID: 4, PPID: 3, Name: "claude.exe"},
+		5: {PID: 5, PPID: 1, Name: "powershell.exe"},
+	}
+	if root, kind := m.rootOf(m[4]); root.PID != 2 || kind != "window" {
+		t.Fatalf("filtered Claude: root %d kind %s; want outer cmd 2", root.PID, kind)
+	}
+	if tool := classify(m[2]); tool != "" {
+		t.Fatalf("wrapper command classified as %q instead of deferring to Claude child", tool)
+	}
+}
+
 func TestGuessStateClaudeIdlePlaceholder(t *testing.T) {
 	for _, line := range []string{`❯ Try "fix lint errors"`, `> Try "fix lint errors"`, `› Try "fix lint errors"`} {
 		if s := guessState("claude", []string{"previous answer", "", line, "  ? for shortcuts"}); s != "idle" {
