@@ -48,6 +48,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 	}
 	procs.fillCmd()
 	selfRoot := procs.selfRoot()
+	selfSess := callerSessionID(procs)
 
 	byRoot := map[uint32]*Session{}
 
@@ -116,6 +117,9 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		if !launchMatches(li, startTime(pid)) {
 			continue // stale launcher metadata must never target a reused PID
 		}
+		if !launchTreeIntact(procs, pid, li) {
+			continue // TECH-211: the window's process tree changed (e.g. `claude attach` of another session); drop the stale launch-info name
+		}
 		s, ok := byRoot[pid]
 		if !ok {
 			s = &Session{PID: pid, Tool: strings.ToLower(li.Tool), Kind: "window", Alive: isAlive(pid), Source: "launch-info"}
@@ -175,7 +179,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		if opts.toolFilter != "" && s.Tool != opts.toolFilter {
 			continue
 		}
-		s.Self = s.PID == selfRoot
+		markSelf(s, procs, selfRoot, selfSess)
 		if s.Tool == "codex" && s.NativeUnavailable == "" {
 			switch {
 			case !s.Alive:
@@ -214,6 +218,13 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 }
 
 // Muting is checked before console access, including ordinary ls sweeps.
+// markSelf flags the caller's own window -- including a window whose console
+// was later attached to the caller's session (`claude attach <own sid>`, the
+// TECH-211 case where launch-info still names the window for another task).
+func markSelf(s *Session, procs procMap, selfRoot uint32, selfSess string) {
+	s.Self = s.PID == selfRoot || procs.treeAttachesSession(s.PID, selfSess)
+}
+
 func refreshScreen(s *Session, enabled bool, read func(uint32, int) (*peekResult, error)) {
 	if s.PollingMuted {
 		s.State = "muted"

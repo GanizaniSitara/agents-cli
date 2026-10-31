@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 // ---- launch-info: the launcher's own record of task sessions ----------------
@@ -114,4 +116,63 @@ func adoptedFor(m map[string]adopted, pid uint32, start time.Time) (adopted, boo
 		return adopted{}, false
 	}
 	return a, true
+}
+
+// launchTreeIntact reports whether the window's process tree still matches its
+// launch-info: some descendant command line carries the task slug or session
+// id. When the tree instead runs a different agent (e.g. a `claude attach` of
+// another session), the launch-info name is stale and must be dropped
+// (TECH-211). With no readable agent descendant yet (startup race, or a window
+// kept alive at a bare cmd prompt) the record is kept.
+func launchTreeIntact(procs procMap, pid uint32, li launchInfo) bool {
+	slug := strings.ToLower(li.TaskSlug)
+	sid := strings.ToLower(li.SessionId)
+	sawAgent := false
+	sawUnreadable := false
+	for _, d := range procs.descendants(pid) {
+		p := procs[d]
+		if p == nil || classify(p) == "" {
+			continue
+		}
+		sawAgent = true
+		if p.Cmd == "" {
+			sawUnreadable = true // protected/unreadable: cannot prove a change
+			continue
+		}
+		if (slug != "" && strings.Contains(p.Cmd, slug)) || (sid != "" && strings.Contains(p.Cmd, sid)) {
+			return true
+		}
+	}
+	if sawUnreadable {
+		return true
+	}
+	return !sawAgent
+}
+
+// callerSessionID learns the Claude session id of the agents-cli caller when
+// it runs inside a Claude session: first from the ancestor claude.exe's
+// environment, then from the launcher's ~/.claude/sessions/<pid>.json map.
+func callerSessionID(m procMap) string {
+	pid := m.callerClaudeAncestor(uint32(windows.GetCurrentProcessId()))
+	if pid == 0 {
+		return ""
+	}
+	if sid := envVar(pid, "CLAUDE_CODE_SESSION_ID"); sid != "" {
+		return sid
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".claude", "sessions", strconv.FormatUint(uint64(pid), 10)+".json"))
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(raw, &v); err == nil {
+		return v.SessionID
+	}
+	return ""
 }

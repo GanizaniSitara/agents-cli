@@ -115,6 +115,10 @@ func cmdSend(args []string) error {
 	default:
 		return fmt.Errorf("--via must be auto, inject or native (got %q)", via)
 	}
+	if err := selfSlashRefusal(s, via, text); err != nil {
+		return err
+	}
+
 	if via == "native" {
 		if !p.boolean("allow-argv") {
 			return errors.New("Codex queue requires prompt text in process arguments; use injection, or explicitly accept this exposure with --allow-argv")
@@ -177,6 +181,17 @@ func cmdSend(args []string) error {
 		submitted = defaultVerifier.verify(s, text)
 	}
 	emit(sendReceipt(s, "inject", enter, submitted))
+	return nil
+}
+
+// selfSlashRefusal blocks injecting a slash command into the caller's own
+// session (TECH-211): a window whose console is attached to the caller's
+// session (`claude attach <own sid>`) is marked Self, and /rename & co. sent
+// there would rename the caller itself. Refused even with --force.
+func selfSlashRefusal(s *Session, via, text string) error {
+	if s.Self && via == "inject" && strings.HasPrefix(strings.TrimSpace(text), "/") {
+		return fmt.Errorf("refusing to inject slash command into session %d: that window hosts your own session (claude attach); use the native SendMessage tool", s.PID)
+	}
 	return nil
 }
 

@@ -371,3 +371,36 @@ func (m procMap) selfRoot() uint32 {
 	root, _ := m.rootOf(self)
 	return root.PID
 }
+
+// callerClaudeAncestor returns the PID of the nearest claude.exe ancestor of
+// pid (inclusive), skipping daemon/pty-host infrastructure, or 0.
+func (m procMap) callerClaudeAncestor(pid uint32) uint32 {
+	for cur, ok := m[pid]; ok; cur, ok = m[cur.PPID] {
+		if cur.Name == "claude.exe" &&
+			!strings.Contains(cur.Cmd, "daemon run") &&
+			!strings.Contains(cur.Cmd, "--bg-pty-host") {
+			return cur.PID
+		}
+		if cur.PPID == cur.PID || cur.PPID == 0 {
+			break
+		}
+	}
+	return 0
+}
+
+// treeAttachesSession reports whether root's process tree (inclusive) contains
+// a `claude attach <sid>` process -- the window now hosts that session even
+// though it was launched for something else (TECH-211).
+func (m procMap) treeAttachesSession(root uint32, sid string) bool {
+	if sid == "" {
+		return false
+	}
+	needle := "attach " + strings.ToLower(sid)
+	for _, d := range append([]uint32{root}, m.descendants(root)...) {
+		p := m[d]
+		if p != nil && p.Name == "claude.exe" && strings.Contains(p.Cmd, needle) {
+			return true
+		}
+	}
+	return false
+}
