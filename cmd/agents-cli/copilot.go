@@ -165,7 +165,14 @@ func (c copilotConsole) send(s *Session, text string, enter bool) (bool, error) 
 	if s.PollingMuted {
 		return false, nil
 	} // delivered, but cannot verify by polling
-	deadline := c.now().Add(3 * time.Second)
+	// Verify from the pane: an empty composer at a busy/idle state, or a newly
+	// opened dialog, means submitted. If the composer still holds the draft at a
+	// live prompt and no dialog opened, the Enter was swallowed; retry it with
+	// backoff instead of leaving the text unsubmitted. Busy and menu screens are
+	// never retried: a second Enter could approve a permission or select a model.
+	deadline := c.now().Add(10 * time.Second)
+	backoff := 400 * time.Millisecond
+	retries := 0
 	for {
 		c.sleep(150 * time.Millisecond)
 		r, err := c.peek(s.PID, 0)
@@ -174,14 +181,24 @@ func (c copilotConsole) send(s *Session, text string, enter bool) (bool, error) 
 		}
 		state := copilotState(r.Lines)
 		draft, ok := copilotComposer(r.Lines)
-		if (ok && draft == "" && (state == "busy" || state == "idle")) || copilotMenu(r.Lines) {
+		menu := copilotMenu(r.Lines)
+		if (ok && draft == "" && (state == "busy" || state == "idle")) || menu {
 			return true, nil
+		}
+		if ok && draft != "" && !menu && state == "prompt" && retries < 3 && c.now().Before(deadline) {
+			retries++
+			c.sleep(backoff)
+			if backoff < 2*time.Second {
+				backoff *= 2
+			}
+			if err := c.key(s.PID, "copilot", "enter"); err != nil {
+				return false, err
+			}
+			continue
 		}
 		if !c.now().Before(deadline) {
 			return false, nil
 		}
-		// Never blindly retry Enter: it could approve a permission or select a
-		// model after the first Enter already opened a dialog.
 	}
 }
 

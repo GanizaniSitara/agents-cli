@@ -111,13 +111,13 @@ func TestCopilotPasteAndKeyRecords(t *testing.T) {
 }
 
 func TestCopilotSendWithFakeConsole(t *testing.T) {
-	for _, outcome := range []string{"busy", "idle", "menu", "unsubmitted", "no-enter", "muted", "paste-error", "peek-error", "key-error", "unsettled", "already-busy", "already-menu"} {
+	for _, outcome := range []string{"busy", "idle", "menu", "unsubmitted", "retry-submit", "no-enter", "muted", "paste-error", "peek-error", "key-error", "unsettled", "already-busy", "already-menu"} {
 		t.Run(outcome, func(t *testing.T) {
 			text := "long\n" + strings.Repeat("£漢😀 ", 400)
 			now := time.Unix(0, 0)
 			start := now
 			var operations []string
-			pasted, entered := false, false
+			pasted, enters := false, 0
 			reads := 0
 			c := copilotConsole{
 				paste: func(pid uint32, got string) error {
@@ -142,22 +142,29 @@ func TestCopilotSendWithFakeConsole(t *testing.T) {
 						return nil, errors.New("read failed")
 					}
 					draft, footer := "", "/ commands · ? help"
-					if !pasted {
-						if outcome == "already-busy" {
-							footer = "◎ Working esc interrupt"
-						}
-						if outcome == "already-menu" {
-							footer = "enter to select · esc to cancel"
-						}
-					} else if !entered || outcome == "unsubmitted" {
+					switch {
+					case !pasted && outcome == "already-busy":
+						footer = "◎ Working esc interrupt"
+					case !pasted && outcome == "already-menu":
+						footer = "enter to select · esc to cancel"
+					case !pasted:
+						// idle before the paste
+					case enters == 0 || outcome == "unsettled":
+						// composer still redrawing after the paste
 						reads++
 						draft = " [Pasted text]"
 						if reads == 1 || outcome == "unsettled" {
 							draft += strings.Repeat("x", reads)
 						}
-					} else if outcome == "busy" {
+					case outcome == "unsubmitted":
+						// every Enter is swallowed; the draft never leaves
+						draft = " [Pasted text]"
+					case outcome == "retry-submit" && enters == 1:
+						// first Enter did not submit; the retry must
+						draft = " [Pasted text]"
+					case outcome == "busy" || outcome == "retry-submit":
 						footer = "◎ Working esc interrupt"
-					} else if outcome == "menu" {
+					case outcome == "menu":
 						draft, footer = " Search models…", "↑/↓ to navigate · enter to select · esc to cancel"
 					}
 					return &peekResult{Lines: copilotScreen(draft, footer)}, nil
@@ -169,12 +176,12 @@ func TestCopilotSendWithFakeConsole(t *testing.T) {
 					if now.Sub(start) < 1600*time.Millisecond {
 						t.Fatal("long paste submitted too early")
 					}
-					if entered {
-						t.Fatal("blind Enter retry")
+					enters++
+					if enters > 4 {
+						t.Fatal("Enter retry storm")
 					}
-					entered = true
 					operations = append(operations, "enter")
-					if outcome == "key-error" {
+					if outcome == "key-error" && enters == 1 {
 						return errors.New("key failed")
 					}
 					return nil
@@ -183,16 +190,21 @@ func TestCopilotSendWithFakeConsole(t *testing.T) {
 			}
 			s := &Session{PID: 42, Tool: "copilot", PollingMuted: outcome == "muted"}
 			submitted, err := c.send(s, text, outcome != "no-enter")
-			wantSubmitted := outcome == "busy" || outcome == "idle" || outcome == "menu"
+			wantSubmitted := outcome == "busy" || outcome == "idle" || outcome == "menu" || outcome == "retry-submit"
 			wantErr := strings.HasSuffix(outcome, "-error") || outcome == "unsettled" || strings.HasPrefix(outcome, "already-")
 			if submitted != wantSubmitted || (err != nil) != wantErr {
 				t.Fatalf("submitted=%v err=%v", submitted, err)
 			}
 			wantOps := []string{"paste", "enter"}
-			if strings.HasPrefix(outcome, "already-") {
+			switch {
+			case strings.HasPrefix(outcome, "already-"):
 				wantOps = nil
-			} else if outcome == "no-enter" || outcome == "paste-error" || outcome == "peek-error" || outcome == "unsettled" {
+			case outcome == "no-enter" || outcome == "paste-error" || outcome == "peek-error" || outcome == "unsettled":
 				wantOps = []string{"paste"}
+			case outcome == "retry-submit":
+				wantOps = []string{"paste", "enter", "enter"}
+			case outcome == "unsubmitted":
+				wantOps = []string{"paste", "enter", "enter", "enter", "enter"}
 			}
 			if !reflect.DeepEqual(operations, wantOps) {
 				t.Fatalf("operations = %v", operations)

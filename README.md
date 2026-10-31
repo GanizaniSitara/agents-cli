@@ -173,9 +173,12 @@ slash-command completion from consuming text midway through a paste. The
 initial delay scales with length (800 ms plus 100 ms per 200 characters, capped
 at 4 seconds), followed by bounded screen checks. `submitted: true` means an
 empty composer or a newly opened dialog was observed, not that the model has
-finished. Enter is never blindly retried: a second Enter could select a model
-or approve a tool. If `submitted` is false or a console check fails, inspect
-`tail` before retrying. `--no-enter` only pastes and returns `submitted: false`.
+finished. After Enter, `send` verifies the pane and, while the composer still
+shows the draft at a live prompt with no dialog open, retries Enter with
+backoff (up to 3 retries) instead of leaving the text unsubmitted. Busy and
+menu screens are never retried: a second Enter could select a model or approve
+a tool. If `submitted` is false or a console check fails, inspect `tail`
+before retrying. `--no-enter` only pastes and returns `submitted: false`.
 Muted sessions skip screen checks and cannot confirm submission. For unmuted
 sessions, sending while busy or in a menu is refused; use `wait` or `key` first.
 
