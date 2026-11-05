@@ -314,9 +314,12 @@ func (m procMap) fillCmd() {
 // window; the walk stops there and reports kind "bg".
 func (m procMap) rootOf(p *proc) (root *proc, kind string) {
 	cur := p
+	// A dead parent's PID may have been reused. Never assume parent IDs form
+	// a tree: at most len(m) distinct processes can be visited.
+	seen := map[uint32]bool{cur.PID: true}
 	for {
 		parent, ok := m[cur.PPID]
-		if !ok || parent.PID == cur.PID {
+		if !ok || seen[parent.PID] {
 			return cur, "window"
 		}
 		if cur.Name == "claude-console-filter.exe" {
@@ -333,17 +336,15 @@ func (m procMap) rootOf(p *proc) (root *proc, kind string) {
 			return cur, "window"
 		}
 		cur = parent
+		seen[cur.PID] = true
 	}
 }
 
 // depth is the number of hops from p up to root.
 func (m procMap) depth(p *proc, root uint32) int {
 	d := 0
-	for cur := p; cur != nil && cur.PID != root; d++ {
+	for cur := p; cur != nil && cur.PID != root && d < len(m); d++ {
 		cur = m[cur.PPID]
-		if d > 64 {
-			break
-		}
 	}
 	return d
 }
@@ -351,7 +352,7 @@ func (m procMap) depth(p *proc, root uint32) int {
 // ancestorNamed reports whether any ancestor of pid (inclusive) has the image
 // name. Used to decide whether the caller is itself a Claude session.
 func (m procMap) ancestorNamed(pid uint32, name string) bool {
-	for cur, ok := m[pid]; ok; cur, ok = m[cur.PPID] {
+	for cur, hops := m[pid], 0; cur != nil && hops < len(m); cur, hops = m[cur.PPID], hops+1 {
 		if cur.Name == name {
 			return true
 		}
@@ -375,7 +376,7 @@ func (m procMap) selfRoot() uint32 {
 // callerClaudeAncestor returns the PID of the nearest claude.exe ancestor of
 // pid (inclusive), skipping daemon/pty-host infrastructure, or 0.
 func (m procMap) callerClaudeAncestor(pid uint32) uint32 {
-	for cur, ok := m[pid]; ok; cur, ok = m[cur.PPID] {
+	for cur, hops := m[pid], 0; cur != nil && hops < len(m); cur, hops = m[cur.PPID], hops+1 {
 		if cur.Name == "claude.exe" &&
 			!strings.Contains(cur.Cmd, "daemon run") &&
 			!strings.Contains(cur.Cmd, "--bg-pty-host") {
