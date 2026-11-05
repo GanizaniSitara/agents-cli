@@ -30,7 +30,7 @@ var (
 )
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := runWithDeadline(os.Args[1:], run); err != nil {
 		emitError(err)
 		os.Exit(1)
 	}
@@ -108,6 +108,11 @@ func printHelp() {
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
   stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
   version
+
+ls, tail, send and key accept --timeout D for a hard overall deadline, including
+discovery and stdin (defaults: ls 60s, others 30s). Console helpers are capped at
+15s. wait's --timeout includes discovery; its watchdog allows 1s for the receipt.
+After a send timeout, inspect tail before retrying: input may already be delivered.
 
 <ref> is a pid (root cmd or agent process), a launch-info task slug, a label from
 'name', or a unique substring of the name/title. Output is JSON. Claude-to-Claude

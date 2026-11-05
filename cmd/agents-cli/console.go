@@ -45,10 +45,15 @@ func runHelperInput(input string, args ...string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(operationContext, 15*time.Second)
 	defer cancel()
 	cmd := helperCommand(ctx, exe, input, args...)
+	// A descendant retaining a pipe must not keep Output waiting indefinitely.
+	cmd.WaitDelay = 250 * time.Millisecond
 	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("console helper timed out: %w", ctx.Err())
+	}
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && len(out) > 0 {

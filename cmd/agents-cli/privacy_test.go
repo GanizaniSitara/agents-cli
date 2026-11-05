@@ -17,6 +17,23 @@ const privateTestText = "privacy-test-only: £漢😀\n" + "not-a-real-credentia
 // Exercise the real detached-helper launch and stdin pipe without attaching
 // to a user's console. No actual credentials are used in these tests.
 func TestMain(m *testing.M) {
+	if os.Getenv("AGENTS_CLI_TEST_SPIN") == "1" {
+		if err := runWithDeadline(os.Args[1:], func([]string) error {
+			for {
+			}
+		}); err != nil {
+			emitError(err)
+		}
+		os.Exit(0)
+	}
+	if os.Getenv("AGENTS_CLI_TEST_HELPER_HANG") == "1" {
+		time.Sleep(30 * time.Second)
+		os.Exit(0)
+	}
+	if os.Getenv("AGENTS_CLI_TEST_DEADLINE") == "1" {
+		main()
+		os.Exit(0)
+	}
 	if os.Getenv("AGENTS_CLI_TEST_PIPE") == "1" {
 		text, err := io.ReadAll(os.Stdin)
 		if err != nil || string(text) != strings.Repeat(privateTestText, 100) || strings.Contains(strings.Join(os.Args, " "), privateTestText) {

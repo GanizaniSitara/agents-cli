@@ -139,9 +139,10 @@ func cmdSend(args []string) error {
 		// Use the session's own codex.exe and CODEX_HOME: two Codex installs
 		// share this box and a queue aimed at the wrong profile lands nowhere.
 		codex := s.Exe
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(operationContext, 20*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, codex, "queue", "--thread", thread, "--message", text)
+		cmd.WaitDelay = 250 * time.Millisecond
 		cmd.Env = append(os.Environ(), "CODEX_HOME="+s.Home)
 		_, err := cmd.CombinedOutput()
 		if err != nil {
@@ -386,6 +387,7 @@ func cmdKey(args []string) error {
 }
 
 func cmdWait(args []string) error {
+	start := time.Now()
 	p, err := parseArgs(args)
 	if err != nil {
 		return err
@@ -401,6 +403,9 @@ func cmdWait(args []string) error {
 	if err != nil {
 		return err
 	}
+	if timeout <= 0 || idleFor < 0 {
+		return errors.New("--timeout must be positive and --idle-for nonnegative")
+	}
 	var match *regexp.Regexp
 	if m := p.str("match", ""); m != "" {
 		if match, err = regexp.Compile(m); err != nil {
@@ -414,12 +419,14 @@ func cmdWait(args []string) error {
 	if err := requirePolling(s); err != nil {
 		return err
 	}
-	start := time.Now()
 	deadline := start.Add(timeout)
 	var last string
 	lastChange := start
 	var lines []string
 	for {
+		if !time.Now().Before(deadline) {
+			return emitWait(s, "timeout", start, lines)
+		}
 		// Honour a mute issued by another coordinator while wait is running.
 		if a, ok := adoptedFor(readAdopted(), s.PID, startTime(s.PID)); ok && a.PollingMuted {
 			s.PollingMuted = true
@@ -447,7 +454,7 @@ func cmdWait(args []string) error {
 		if time.Now().After(deadline) {
 			return emitWait(s, "timeout", start, lines)
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(min(2*time.Second, time.Until(deadline)))
 	}
 }
 
