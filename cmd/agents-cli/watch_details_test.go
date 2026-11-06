@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -53,23 +55,26 @@ func TestWatchTrialPhases(t *testing.T) {
 	}
 }
 
-func TestWatchThemeFadeAndCautiousIdle(t *testing.T) {
-	theme := defaultWatchTheme()
-	fresh := theme.rowColour("waiting", 0, false, false)
-	old := theme.rowColour("waiting", time.Hour, false, false)
-	if fresh == old {
-		t.Fatal("old stops do not fade")
+func TestWatchFixedStateColours(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "theme.json"), []byte(`{"fade_seconds":1,"minimum_brightness":0.1}`), 0600); err != nil {
+		t.Fatal(err)
 	}
-	if theme.rowColour("idle", 0, false, false) != fresh {
-		t.Fatal("uncertain idle must use amber")
+	theme := loadWatchTheme(dir)
+	seen := map[uintptr]string{}
+	for _, phase := range []string{"waiting", "error", "finished", "working", "idle"} {
+		colour := theme.rowColour(phase)
+		if previous, ok := seen[colour]; ok {
+			t.Fatalf("%s shares colour with %s", phase, previous)
+		}
+		seen[colour] = phase
 	}
-	if theme.rowColour("idle", 0, false, true) == fresh {
-		t.Fatal("idle colour preference ignored")
+	if theme.rowColour("unknown") != theme.rowColour("idle") {
+		t.Fatal("uncertain states must be muted grey")
 	}
-	if theme.rowColour("finished", 0, false, false) == fresh {
-		t.Fatal("explicit finished must be green")
-	}
-	if theme.rowColour("error", 0, false, false) == fresh {
-		t.Fatal("errors must be red")
+	// Colour conversion has no age argument: persisted fade fields cannot
+	// make the same state change appearance as its age counter advances.
+	if theme.colour(theme.Waiting) != theme.rowColour("waiting") {
+		t.Fatal("waiting colour changed")
 	}
 }

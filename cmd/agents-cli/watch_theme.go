@@ -6,22 +6,19 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type watchTheme struct {
-	Waiting           string  `json:"waiting"`
-	Finished          string  `json:"finished"`
-	Error             string  `json:"error"`
-	Working           string  `json:"working"`
-	Metadata          string  `json:"metadata"`
-	Background        string  `json:"background"`
-	FadeSeconds       int     `json:"fade_seconds"`
-	MinimumBrightness float64 `json:"minimum_brightness"`
+	Waiting    string `json:"waiting"`
+	Finished   string `json:"finished"`
+	Error      string `json:"error"`
+	Working    string `json:"working"`
+	Metadata   string `json:"metadata"`
+	Background string `json:"background"`
 }
 
 func defaultWatchTheme() watchTheme {
-	return watchTheme{Waiting: "#E3AD55", Finished: "#88C58E", Error: "#ED7373", Working: "#81878F", Metadata: "#ADB3BB", Background: "#20252B", FadeSeconds: 600, MinimumBrightness: 0.60}
+	return watchTheme{Waiting: "#FFC247", Finished: "#88C58E", Error: "#ED7373", Working: "#D4D9DE", Metadata: "#9299A1", Background: "#20252B"}
 }
 
 func loadWatchTheme(dir string) watchTheme {
@@ -30,6 +27,16 @@ func loadWatchTheme(dir string) watchTheme {
 	if b, err := os.ReadFile(path); err == nil {
 		var candidate watchTheme = theme
 		if json.Unmarshal(b, &candidate) == nil {
+			// Upgrade the former default shades; preserve custom palette values.
+			if candidate.Waiting == "#E3AD55" {
+				candidate.Waiting = theme.Waiting
+			}
+			if candidate.Working == "#81878F" {
+				candidate.Working = theme.Working
+			}
+			if candidate.Metadata == "#ADB3BB" {
+				candidate.Metadata = theme.Metadata
+			}
 			theme = candidate
 		}
 	} else if os.IsNotExist(err) {
@@ -50,51 +57,23 @@ func watchRGB(hex string, fallback uint32) uint32 {
 	return uint32(n)
 }
 
-func (t watchTheme) colour(hex string, age time.Duration) uintptr {
-	rgb := watchRGB(hex, 0xADB3BB)
-	bg := watchRGB(t.Background, 0x20252B)
-	minimum := t.MinimumBrightness
-	if minimum < 0.35 || minimum > 1 {
-		minimum = 0.60
-	}
-	fraction := 0.0
-	if t.FadeSeconds > 0 {
-		fraction = age.Seconds() / float64(t.FadeSeconds)
-		if fraction > 1 {
-			fraction = 1
-		}
-		if fraction < 0 {
-			fraction = 0
-		}
-	}
-	strength := 1 - fraction*(1-minimum)
-	var result uint32
-	for _, shift := range []uint{0, 8, 16} {
-		value := float64((rgb >> shift) & 255)
-		base := float64((bg >> shift) & 255)
-		result |= uint32(base+(value-base)*strength) << shift
-	}
+func (t watchTheme) colour(hex string) uintptr {
+	result := watchRGB(hex, 0x9299A1)
 	// GDI COLORREF is BGR, while the editable palette uses ordinary #RRGGBB.
 	return uintptr((result&255)<<16 | result&0xff00 | (result>>16)&255)
 }
 
-func (t watchTheme) rowColour(phase string, age time.Duration, disabled, trustIdle bool) uintptr {
-	hex := t.Waiting
-	if disabled {
-		hex = t.Metadata
-	} else {
-		switch phase {
-		case "working":
-			hex = t.Working
-		case "finished":
-			hex = t.Finished
-		case "error":
-			hex = t.Error
-		case "idle":
-			if trustIdle {
-				hex = t.Finished
-			}
-		}
+func (t watchTheme) rowColour(phase string) uintptr {
+	hex := t.Metadata
+	switch phase {
+	case "waiting":
+		hex = t.Waiting
+	case "working":
+		hex = t.Working
+	case "finished":
+		hex = t.Finished
+	case "error":
+		hex = t.Error
 	}
-	return t.colour(hex, age)
+	return t.colour(hex)
 }

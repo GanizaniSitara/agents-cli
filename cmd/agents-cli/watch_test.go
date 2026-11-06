@@ -102,7 +102,7 @@ func TestWatchPanelKeepsSessionSlotsWithinGroups(t *testing.T) {
 	w := newWatchTracker(time.Second)
 	now := time.Unix(100, 0)
 	for _, pid := range []uint32{30, 10, 20} {
-		s := watchSample{Session: Session{PID: pid, State: "idle"}}
+		s := watchSample{Session: Session{PID: pid, State: "prompt"}}
 		w.observe(s, now)
 		w.observe(s, now.Add(time.Second))
 	}
@@ -154,30 +154,30 @@ func TestWatchPanelGroupsIncludeUnknownAndStopped(t *testing.T) {
 			}
 		}
 	}
-	check([]uint32{5, 6, 3, 4, 2, 1})
+	check([]uint32{5, 4, 2, 1, 3, 6})
 	// Refreshing the agent child identity in the same console must not move
 	// its row when its group remains unchanged.
 	s := samples[4]
 	s.Desktop = "Desktop 2"
 	s.AgentPID = 99
 	w.observe(s, now.Add(2*time.Second))
-	check([]uint32{5, 6, 3, 4, 2, 1})
-	// A change inside the same group preserves its place; a new arrival
-	// joins the end of its new group, even if it was discovered earlier.
+	check([]uint32{5, 4, 2, 1, 3, 6})
+	// Unknown becoming error moves to the error group, behind its existing
+	// row. New needs-input arrivals likewise join after existing input rows.
 	s = samples[2]
 	s.Desktop = "Desktop 2"
 	s.State = "error"
 	s.Phase = "error"
 	w.observe(s, now.Add(2*time.Second))
-	check([]uint32{5, 6, 3, 4, 2, 1})
+	check([]uint32{5, 4, 3, 2, 1, 6})
 	s = samples[0]
 	s.Desktop = "Desktop 2"
 	s.State = "prompt"
 	s.Phase = "waiting"
 	w.observe(s, now.Add(3*time.Second))
-	check([]uint32{5, 6, 1, 3, 4, 2})
+	check([]uint32{5, 1, 4, 3, 2, 6})
 	// An unreadable or failed session stays a real row, not just a count.
 	w.dismiss(4)
 	w.prune(map[uint32]bool{1: true, 2: true, 3: true, 5: true, 6: true})
-	check([]uint32{5, 6, 1, 3, 2})
+	check([]uint32{5, 1, 3, 2, 6})
 }

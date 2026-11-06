@@ -125,16 +125,19 @@ func (w *watchTracker) rows() []watchEntry {
 // Group priority changes only when the session changes group. Within a group,
 // arrival order stays stable through state, age and screen-content updates.
 func watchPanelGroup(s watchSample) int {
-	if s.State == "unknown" || s.State == "error" || s.Phase == "unknown" || s.Phase == "error" {
+	if s.State == "error" || s.Phase == "error" {
 		return 1
 	}
-	if s.State == "busy" || s.Phase == "working" {
-		return 3
+	if s.State == "prompt" || s.Phase == "waiting" {
+		return 0
 	}
 	if s.Phase == "finished" {
 		return 2
 	}
-	return 0 // waiting and ambiguous idle both need the owner's attention
+	if s.State == "busy" || s.Phase == "working" {
+		return 3
+	}
+	return 4 // idle/check and unavailable belong below confirmed states
 }
 
 func (w *watchTracker) panelRows() []watchEntry {

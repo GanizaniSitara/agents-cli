@@ -46,8 +46,8 @@ Hide puts the panel in the tray. The tray tooltip shows the stopped count;
 click it to reopen without taking focus. Stopped and unknown sessions on the
 current desktop have individual rows with their desktop number; other desktops
 have stopped, working and unknown counts. Current-desktop work has a summary count.
-Fixed groups are
-needs input (including ambiguous idle), unknown or error, finished, then working.
+Fixed groups are confirmed needs input, error, finished, working, then
+idle/check or unavailable. Ambiguous idle can never outrank a confirmed input wait.
 Rows keep their place within a group; a session moves only when its group changes,
 joining the end of its new group. New sessions append within their group.
 Click a session to bring its window forward, or × to dismiss its row until the
@@ -58,17 +58,18 @@ reopen the panel without activation. Age ticks, background-desktop changes and
 working counts do not reopen it.
 Only an explicit session-row click can activate another window.
 
-The trial palette uses amber for owner input, green for explicit completion,
-red for visible quota/error or failed console reads, and dim grey for working.
-Tool/desktop labels stay grey. Rows fade gradually over ten minutes, keeping
-60 percent of their starting contrast. Settings can disable the trial colours
-or change ambiguous idle from cautious amber to green. Edit
-`%LOCALAPPDATA%\agents-cli\watch\theme.json` to adjust the hex colours and fade;
-opening Settings reloads the palette (restart for a changed background).
+Confirmed input waits have a filled strong amber band with dark text and a
+bold NEEDS INPUT label. Errors are red, explicit completion is green, working
+is plain neutral, and idle/check or unavailable states are muted grey. The
+panel has a one-line colour key at the bottom. Age appears only as a number;
+no row or label fades. The earlier trial-colour/idle switches were removed so
+their meanings cannot conflict. The existing theme.json palette remains editable;
+legacy fade settings are ignored. Settings reloads the palette (restart for a
+changed background).
 
 An empty composer alone cannot reliably distinguish a completed answer from a
-natural-language question, so ambiguous idle is amber by default for all tools.
-Known input/approval prompts are amber; explicit completion banners are green.
+natural-language question, so ambiguous idle is labelled idle/check in grey.
+Only known input/approval prompts receive the amber highlight.
 An unchanged screen alone is not evidence of a hung model. Reader failure is
 shown in red, and unknown screens have their own rows as well as a header count.
 
