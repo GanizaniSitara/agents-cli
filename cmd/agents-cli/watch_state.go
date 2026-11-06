@@ -9,6 +9,8 @@ type watchSample struct {
 	Session
 	HWND      uintptr `json:"hwnd"`
 	Signature string  `json:"signature"`
+	DesktopID string  `json:"desktop_id"`
+	Desktop   string  `json:"desktop"`
 }
 
 type watchEntry struct {
@@ -18,11 +20,13 @@ type watchEntry struct {
 	Busy      bool        `json:"-"`
 	Stopped   bool        `json:"-"`
 	Dismissed bool        `json:"-"`
+	Order     uint64      `json:"-"`
 }
 
 type watchTracker struct {
-	stable  time.Duration
-	entries map[uint32]*watchEntry
+	stable    time.Duration
+	entries   map[uint32]*watchEntry
+	nextOrder uint64
 }
 
 func newWatchTracker(stable time.Duration) *watchTracker {
@@ -38,7 +42,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	old := e.Sample
 	e.Sample = s
 	if s.State == "busy" {
-		e.Busy, e.Stopped, e.Dismissed = true, false, false
+		e.Busy, e.Stopped = true, false
 		e.Candidate = time.Time{}
 		return false
 	}
@@ -58,6 +62,11 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		return false
 	}
 	e.Stopped, e.Since = true, e.Candidate
+	e.Dismissed = false
+	if e.Order == 0 {
+		w.nextOrder++
+		e.Order = w.nextOrder
+	}
 	notify := e.Busy
 	e.Busy = false
 	return notify
@@ -84,6 +93,19 @@ func (w *watchTracker) rows() []watchEntry {
 			rows = append(rows, *e)
 		}
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Since.Before(rows[j].Since) })
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Order < rows[j].Order })
+	return rows
+}
+
+// A working session retains its admitted panel slot. This prevents a stream
+// of stop/resume transitions from moving click targets beneath the pointer.
+func (w *watchTracker) panelRows() []watchEntry {
+	rows := []watchEntry{}
+	for _, e := range w.entries {
+		if e.Order > 0 && !e.Dismissed {
+			rows = append(rows, *e)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Order < rows[j].Order })
 	return rows
 }

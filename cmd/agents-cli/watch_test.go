@@ -81,3 +81,28 @@ func TestWatchBaselineUnknownChangingAndPIDReuse(t *testing.T) {
 		t.Fatal("closed window retained")
 	}
 }
+
+func TestWatchPanelKeepsSessionSlots(t *testing.T) {
+	w := newWatchTracker(time.Second)
+	now := time.Unix(100, 0)
+	for _, pid := range []uint32{30, 10, 20} {
+		s := watchSample{Session: Session{PID: pid, State: "idle"}}
+		w.observe(s, now)
+		w.observe(s, now.Add(time.Second))
+	}
+	w.observe(watchSample{Session: Session{PID: 10, State: "busy"}}, now.Add(2*time.Second))
+	rows := w.panelRows()
+	for i, pid := range []uint32{30, 10, 20} {
+		if rows[i].Sample.PID != pid {
+			t.Fatal("sessions reshuffled")
+		}
+	}
+	if rows[1].Sample.State != "busy" {
+		t.Fatal("working state did not update in place")
+	}
+	w.dismiss(10)
+	rows = w.panelRows()
+	if len(rows) != 2 || rows[0].Sample.PID != 30 || rows[1].Sample.PID != 20 {
+		t.Fatal("dismiss reshuffled surviving rows")
+	}
+}

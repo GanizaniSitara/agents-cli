@@ -30,6 +30,13 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "watch" || os.Args[1] == "_watch-worker") {
+		if err := runWatch(os.Args[1:]); err != nil {
+			emitError(err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := runWithDeadline(os.Args[1:], run); err != nil {
 		emitError(err)
 		os.Exit(1)
@@ -107,6 +114,9 @@ func printHelp() {
   adopt <pid> --tool T [--name L]           register a session the scan cannot classify
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
   stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
+  watch start|run [--monitor N] [--stable 2s]  low-priority taskbar/tray watcher
+  watch list|stop                          stopped windows / stop only the watcher
+  watch monitors|desktops                  available screens and virtual desktops
   version
 
 ls, tail, send and key accept --timeout D for a hard overall deadline, including

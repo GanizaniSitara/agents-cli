@@ -272,16 +272,26 @@ func doPeek(pid uint32, above int) *peekResult {
 	if top < 0 {
 		top = 0
 	}
-	buf := make([]uint16, width)
-	for y := top; y <= int(info.Window.Bottom); y++ {
-		var read uint32
-		at := uint32(uint16(y))<<16 | uint32(uint16(0))
-		if ok, _, e := pReadConsoleOutputCharacterW.Call(uintptr(h), uintptr(unsafe.Pointer(&buf[0])), uintptr(width), uintptr(at), uintptr(unsafe.Pointer(&read))); ok == 0 {
-			r.Error = fmt.Sprintf("ReadConsoleOutputCharacter row %d: %v", y, e)
-			return r
+	// Read the visible rectangle in one bounded syscall, rather than one RPC
+	// per row. This matters when the watcher samples dozens of consoles.
+	count := width * (int(info.Window.Bottom) - top + 1)
+	if count <= 0 || count > 1<<20 {
+		r.Error = "console rectangle is outside the read limit"
+		return r
+	}
+	buf := make([]uint16, count)
+	var read uint32
+	at := uint32(uint16(top)) << 16
+	if ok, _, e := pReadConsoleOutputCharacterW.Call(uintptr(h), uintptr(unsafe.Pointer(&buf[0])), uintptr(count), uintptr(at), uintptr(unsafe.Pointer(&read))); ok == 0 {
+		r.Error = fmt.Sprintf("ReadConsoleOutputCharacter: %v", e)
+		return r
+	}
+	for pos := 0; pos < int(read); pos += width {
+		end := pos + width
+		if end > int(read) {
+			end = int(read)
 		}
-		line := windows.UTF16ToString(buf[:read])
-		r.Lines = append(r.Lines, cleanConsoleLine(line))
+		r.Lines = append(r.Lines, cleanConsoleLine(windows.UTF16ToString(buf[pos:end])))
 	}
 	return r
 }

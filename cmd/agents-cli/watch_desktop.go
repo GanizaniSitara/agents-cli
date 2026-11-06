@@ -1,0 +1,112 @@
+package main
+
+import (
+	"fmt"
+	"runtime"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
+)
+
+type watchDesktop struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Explorer's ordered GUID list supplies the same numbering as Task View.
+// No shell/window movement is involved in this read-only lookup.
+func watchDesktops() []watchDesktop {
+	single := []watchDesktop{{ID: "single-desktop", Name: "Desktop 1"}}
+	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops`, registry.QUERY_VALUE)
+	if err != nil {
+		return single
+	}
+	defer key.Close()
+	b, _, err := key.GetBinaryValue("VirtualDesktopIDs")
+	if err != nil {
+		return single
+	}
+	var out []watchDesktop
+	for i := 0; i+16 <= len(b); i += 16 {
+		var id windows.GUID
+		copy(unsafe.Slice((*byte)(unsafe.Pointer(&id)), 16), b[i:i+16])
+		out = append(out, watchDesktop{ID: id.String(), Name: fmt.Sprintf("Desktop %d", i/16+1)})
+	}
+	if len(out) == 0 {
+		return single
+	}
+	return out
+}
+
+func (s watchSettings) monitorsDesktop(id string) bool {
+	if len(s.ExcludedDesktops) > 0 && id == "" {
+		return false
+	}
+	for _, excluded := range s.ExcludedDesktops {
+		if excluded == id {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *watchSettings) toggleDesktop(id string) {
+	for i, excluded := range s.ExcludedDesktops {
+		if excluded == id {
+			s.ExcludedDesktops = append(s.ExcludedDesktops[:i], s.ExcludedDesktops[i+1:]...)
+			return
+		}
+	}
+	s.ExcludedDesktops = append(s.ExcludedDesktops, id)
+}
+
+// The public IVirtualDesktopManager is stable across Windows 10/11. Keep COM
+// apartment calls on the worker's locked OS thread; the worker watchdog also
+// bounds an unresponsive Explorer COM server.
+type watchDesktopManager struct{ VTable *[6]uintptr }
+
+func openWatchDesktopManager() (*watchDesktopManager, func()) {
+	runtime.LockOSThread()
+	ole := windows.NewLazySystemDLL("ole32.dll")
+	hr, _, _ := ole.NewProc("CoInitializeEx").Call(0, 0)
+	if int32(hr) < 0 {
+		runtime.UnlockOSThread()
+		return nil, func() {}
+	}
+	cleanup := func() { ole.NewProc("CoUninitialize").Call(); runtime.UnlockOSThread() }
+	clsid, _ := windows.GUIDFromString("{AA509086-5CA9-4C25-8F95-589D3C07B48A}")
+	iid, _ := windows.GUIDFromString("{A5CD92FF-29BE-454C-8D04-D82879FB3F1B}")
+	var manager *watchDesktopManager
+	hr, _, _ = ole.NewProc("CoCreateInstance").Call(uintptr(unsafe.Pointer(&clsid)), 0, 1, uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&manager)))
+	if int32(hr) < 0 {
+		cleanup()
+		return nil, func() {}
+	}
+	return manager, func() {
+		syscall.SyscallN(manager.VTable[2], uintptr(unsafe.Pointer(manager)))
+		cleanup()
+	}
+}
+
+func windowWatchDesktop(manager *watchDesktopManager, hwnd uintptr, desktops []watchDesktop) (string, string) {
+	if len(desktops) == 1 && desktops[0].ID == "single-desktop" {
+		return desktops[0].ID, desktops[0].Name
+	}
+	if manager == nil {
+		return "", "Desktop unknown"
+	}
+	var id windows.GUID
+	hr, _, _ := syscall.SyscallN(manager.VTable[4], uintptr(unsafe.Pointer(manager)), hwnd, uintptr(unsafe.Pointer(&id)))
+	if int32(hr) < 0 {
+		return "", "Desktop unknown"
+	}
+	idString := id.String()
+	for _, d := range desktops {
+		if d.ID == idString {
+			return idString, d.Name
+		}
+	}
+	return idString, "Desktop unknown"
+}

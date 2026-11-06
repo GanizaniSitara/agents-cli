@@ -23,6 +23,55 @@ agents-cli stops [--since 7d] [--scrub]
 agents-cli version
 ```
 
+## Stopped-window watcher
+
+Copy the same executable to any Windows PC; the watcher needs no installer,
+admin rights, scripts, task files, ringmaster, or provider credentials.
+
+```
+agents-cli watch start
+agents-cli watch list
+agents-cli watch stop
+```
+
+`start` detaches a low-priority watcher with a small nonactivating panel and a
+tray icon. `run` keeps it attached to the command lifetime for debugging.
+`--monitor N` chooses a physical monitor on launch; `watch monitors` lists them.
+Settings in the panel remembers the monitor and individually enabled virtual
+desktops. All desktops are monitored by default. Each session shows its desktop;
+excluded desktops neither appear nor flash. Monitor and desktop choices are
+separate. A disconnected monitor falls back to the primary screen.
+
+Hide puts the panel in the tray. The tray tooltip shows the stopped count;
+click it to reopen without taking focus. Session rows keep their admitted order;
+resumed sessions stay in their slots as dim working rows. New rows append.
+Click a session to bring its window forward, or × to dismiss its row until the
+next working-to-stopped cycle. Scroll to reach rows beyond the six-row viewport.
+Only an explicit session-row click can activate another window.
+
+The watcher reuses the CLI's state classifier. Two matching stopped samples,
+two seconds apart, suppress brief pauses and normally notify within about four
+seconds. `--stable D` changes that threshold. Startup-idle sessions are listed
+without flashing. Working-to-idle/prompt transitions flash only that window's
+taskbar button until it is foreground, and append one JSON line with name,
+time and wait reason. Unknown/unreadable screens never count as completion;
+`watch list` includes coverage counts so unsupported states remain visible.
+
+One persistent detached reader handles the consoles; it does not repeatedly
+spawn `ls`. Console accessibility events invalidate idle-screen snapshots,
+busy windows are sampled every two seconds, and a ten-second reread covers
+missed events. Discovery refreshes every fifteen seconds. A four-second worker
+watchdog bounds Windows calls; a six-second parent heartbeat restarts a failed
+reader with backoff. Muted sessions are excluded before reading. Windows
+Terminal message-only ConPTY handles cannot be flashed and are skipped; use
+classic console windows for taskbar notification. Copilot uses the existing
+footer/composer detector, including menus and permission waits.
+
+Local status, settings and event log live in
+`%LOCALAPPDATA%\agents-cli\watch`; `--state-dir DIR` overrides it. No screen text
+is saved. Session names can contain private information, so keep these files
+local. No launch-on-login entry is installed; run `watch start` after sign-in.
+
 `agents-cli mute <ref>` persistently excludes that session from screen polling.
 `ls` keeps its metadata row with `polling_muted: true` and `state: "muted"`,
 without reading its console; `tail` and `wait` refuse until `unmute <ref>`.
