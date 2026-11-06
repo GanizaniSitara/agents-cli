@@ -204,6 +204,11 @@ func (c copilotConsole) send(s *Session, text string, enter bool) (bool, error) 
 
 func copilotMenu(lines []string) bool {
 	tail := trimBlankTail(lines)
+	// Trust/permission dialogs draw their navigation footer inside a box.
+	// Skip only structural trailing borders, never transcript or composer text.
+	for len(tail) > 0 && strings.Trim(strings.TrimSpace(tail[len(tail)-1]), "─━╭╮╰╯┌┐└┘│") == "" {
+		tail = tail[:len(tail)-1]
+	}
 	if len(tail) == 0 {
 		return false
 	}
