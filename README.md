@@ -43,8 +43,11 @@ excluded desktops neither appear nor flash. Monitor and desktop choices are
 separate. A disconnected monitor falls back to the primary screen.
 
 Hide puts the panel in the tray. The tray tooltip shows the stopped count;
-click it to reopen without taking focus. Session rows keep their admitted order;
-resumed sessions stay in their slots as dim working rows. New rows append.
+click it to reopen without taking focus. All sessions, including stopped and
+unknown sessions, have list rows with their desktop number. Fixed groups are
+needs input (including ambiguous idle), unknown or error, finished, then working.
+Rows keep their place within a group; a session moves only when its group changes,
+joining the end of its new group. New sessions append within their group.
 Click a session to bring its window forward, or × to dismiss its row until the
 next working-to-stopped cycle. Scroll to reach rows beyond the six-row viewport.
 Only an explicit session-row click can activate another window.
@@ -61,7 +64,7 @@ An empty composer alone cannot reliably distinguish a completed answer from a
 natural-language question, so ambiguous idle is amber by default for all tools.
 Known input/approval prompts are amber; explicit completion banners are green.
 An unchanged screen alone is not evidence of a hung model. Reader failure is
-shown in red, and unknown screen coverage remains visible in the header.
+shown in red, and unknown screens have their own rows as well as a header count.
 
 Each row shows visible agent counts and running counts when available; unknown
 counts say "not shown" rather than zero. A visible positive running count keeps
@@ -80,7 +83,8 @@ seconds. `--stable D` changes that threshold. Startup-idle sessions are listed
 without flashing. Working-to-idle/prompt transitions flash only that window's
 taskbar button until it is foreground, and append one JSON line with name,
 time and wait reason. Unknown/unreadable screens never count as completion;
-`watch list` includes coverage counts so unsupported states remain visible.
+`watch list` includes grouped `sessions` rows and coverage counts as well as the
+separate `stopped` list, so unsupported states remain visible by name and desktop.
 
 One persistent detached reader handles the consoles; it does not repeatedly
 spawn `ls`. Console accessibility events invalidate idle-screen snapshots,

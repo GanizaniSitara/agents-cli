@@ -48,11 +48,13 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	e := w.entries[s.PID]
 	if e == nil || e.Sample.Started != s.Started || e.Sample.AgentPID != s.AgentPID || e.Sample.HWND != s.HWND {
 		e = &watchEntry{}
-		w.nextOrder++
-		e.Order = w.nextOrder
 		w.entries[s.PID] = e
 	}
 	old := e.Sample
+	if e.Order == 0 || watchPanelGroup(old) != watchPanelGroup(s) {
+		w.nextOrder++
+		e.Order = w.nextOrder
+	}
 	if e.Changed.IsZero() || old.State != s.State || old.Phase != s.Phase {
 		e.Changed = now
 	}
@@ -79,10 +81,6 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	}
 	e.Stopped, e.Since = true, e.Candidate
 	e.Dismissed = false
-	if e.Order == 0 {
-		w.nextOrder++
-		e.Order = w.nextOrder
-	}
 	notify := e.Busy
 	e.Busy = false
 	return notify
@@ -113,8 +111,21 @@ func (w *watchTracker) rows() []watchEntry {
 	return rows
 }
 
-// A working session retains its admitted panel slot. This prevents a stream
-// of stop/resume transitions from moving click targets beneath the pointer.
+// Group priority changes only when the session changes group. Within a group,
+// arrival order stays stable through state, age and screen-content updates.
+func watchPanelGroup(s watchSample) int {
+	if s.State == "unknown" || s.State == "error" || s.Phase == "unknown" || s.Phase == "error" {
+		return 1
+	}
+	if s.State == "busy" || s.Phase == "working" {
+		return 3
+	}
+	if s.Phase == "finished" {
+		return 2
+	}
+	return 0 // waiting and ambiguous idle both need the owner's attention
+}
+
 func (w *watchTracker) panelRows() []watchEntry {
 	rows := []watchEntry{}
 	for _, e := range w.entries {
@@ -122,6 +133,12 @@ func (w *watchTracker) panelRows() []watchEntry {
 			rows = append(rows, *e)
 		}
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Order < rows[j].Order })
+	sort.Slice(rows, func(i, j int) bool {
+		a, b := watchPanelGroup(rows[i].Sample), watchPanelGroup(rows[j].Sample)
+		if a != b {
+			return a < b
+		}
+		return rows[i].Order < rows[j].Order
+	})
 	return rows
 }

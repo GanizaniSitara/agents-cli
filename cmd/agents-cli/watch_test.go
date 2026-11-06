@@ -98,7 +98,7 @@ func TestWatchBaselineUnknownChangingAndPIDReuse(t *testing.T) {
 	}
 }
 
-func TestWatchPanelKeepsSessionSlots(t *testing.T) {
+func TestWatchPanelKeepsSessionSlotsWithinGroups(t *testing.T) {
 	w := newWatchTracker(time.Second)
 	now := time.Unix(100, 0)
 	for _, pid := range []uint32{30, 10, 20} {
@@ -108,17 +108,69 @@ func TestWatchPanelKeepsSessionSlots(t *testing.T) {
 	}
 	w.observe(watchSample{Session: Session{PID: 10, State: "busy"}}, now.Add(2*time.Second))
 	rows := w.panelRows()
-	for i, pid := range []uint32{30, 10, 20} {
+	for i, pid := range []uint32{30, 20, 10} {
 		if rows[i].Sample.PID != pid {
 			t.Fatal("sessions reshuffled")
 		}
 	}
-	if rows[1].Sample.State != "busy" {
-		t.Fatal("working state did not update in place")
+	if rows[2].Sample.State != "busy" {
+		t.Fatal("working session did not move to working group")
 	}
 	w.dismiss(10)
 	rows = w.panelRows()
 	if len(rows) != 2 || rows[0].Sample.PID != 30 || rows[1].Sample.PID != 20 {
 		t.Fatal("dismiss reshuffled surviving rows")
 	}
+}
+
+func TestWatchPanelGroupsIncludeUnknownAndStopped(t *testing.T) {
+	w := newWatchTracker(time.Second)
+	now := time.Unix(100, 0)
+	samples := []watchSample{
+		{Session: Session{PID: 1, State: "busy"}, Phase: "working"},
+		{Session: Session{PID: 2, State: "idle"}, Phase: "finished"},
+		{Session: Session{PID: 3, State: "unknown"}, Phase: "unknown"},
+		{Session: Session{PID: 4, State: "error"}, Phase: "error"},
+		{Session: Session{PID: 5, State: "prompt"}, Phase: "waiting"},
+		{Session: Session{PID: 6, State: "idle"}, Phase: "idle"},
+	}
+	for _, s := range samples {
+		s.Desktop = "Desktop 2"
+		w.observe(s, now)
+		w.observe(s, now.Add(time.Second))
+	}
+	check := func(want []uint32) {
+		t.Helper()
+		rows := w.panelRows()
+		if len(rows) != len(want) {
+			t.Fatalf("rows: got %d want %d", len(rows), len(want))
+		}
+		for i, pid := range want {
+			if rows[i].Sample.PID != pid {
+				t.Fatalf("row %d: got %d want %d", i, rows[i].Sample.PID, pid)
+			}
+			if rows[i].Sample.Desktop != "Desktop 2" {
+				t.Fatal("desktop lost")
+			}
+		}
+	}
+	check([]uint32{5, 6, 3, 4, 2, 1})
+	// A change inside the same group preserves its place; a new arrival
+	// joins the end of its new group, even if it was discovered earlier.
+	s := samples[2]
+	s.Desktop = "Desktop 2"
+	s.State = "error"
+	s.Phase = "error"
+	w.observe(s, now.Add(2*time.Second))
+	check([]uint32{5, 6, 3, 4, 2, 1})
+	s = samples[0]
+	s.Desktop = "Desktop 2"
+	s.State = "prompt"
+	s.Phase = "waiting"
+	w.observe(s, now.Add(3*time.Second))
+	check([]uint32{5, 6, 1, 3, 4, 2})
+	// An unreadable or failed session stays a real row, not just a count.
+	w.dismiss(4)
+	w.prune(map[uint32]bool{1: true, 2: true, 3: true, 5: true, 6: true})
+	check([]uint32{5, 6, 1, 3, 2})
 }

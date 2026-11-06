@@ -291,7 +291,7 @@ func watchPanel(a *watchApp) error {
 					}
 					colour := theme.rowColour(phase, age, settings.ColoursOff, settings.TrustIdle)
 					x := int32(12)
-					meta := strings.Replace(row.Sample.Desktop, "Desktop ", "D", 1)
+					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
 					watchSegment(dc, row.Sample.Tool+" · "+meta+" · ", &x, top+3, 328, theme.colour(theme.Metadata, age))
 					watchSegment(dc, fmt.Sprintf("%s · %s", status, age.Round(time.Second)), &x, top+3, 328, colour)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
