@@ -43,13 +43,19 @@ excluded desktops neither appear nor flash. Monitor and desktop choices are
 separate. A disconnected monitor falls back to the primary screen.
 
 Hide puts the panel in the tray. The tray tooltip shows the stopped count;
-click it to reopen without taking focus. All sessions, including stopped and
-unknown sessions, have list rows with their desktop number. Fixed groups are
+click it to reopen without taking focus. Stopped and unknown sessions on the
+current desktop have individual rows with their desktop number; other desktops
+have stopped, working and unknown counts. Current-desktop work has a summary count.
+Fixed groups are
 needs input (including ambiguous idle), unknown or error, finished, then working.
 Rows keep their place within a group; a session moves only when its group changes,
 joining the end of its new group. New sessions append within their group.
 Click a session to bring its window forward, or × to dismiss its row until the
-next working-to-stopped cycle. Scroll to reach rows beyond the six-row viewport.
+next working-to-stopped cycle. The panel grows to fit the stopped rows within the
+chosen monitor's work area; scroll when they exceed the available height.
+After Hide, a new or changed stopped/unknown status on the current desktop can
+reopen the panel without activation. Age ticks, background-desktop changes and
+working counts do not reopen it.
 Only an explicit session-row click can activate another window.
 
 The trial palette uses amber for owner input, green for explicit completion,
