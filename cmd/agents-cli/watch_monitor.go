@@ -89,7 +89,13 @@ func saveWatchSettings(dir string, s watchSettings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "settings.json"), b, 0600)
+	// Readers must see the previous or the new desktop filter, never a
+	// partially written JSON file that would momentarily enable all desktops.
+	tmp := filepath.Join(dir, "settings.tmp")
+	if err := os.WriteFile(tmp, b, 0600); err != nil {
+		return err
+	}
+	return windows.MoveFileEx(windows.StringToUTF16Ptr(tmp), windows.StringToUTF16Ptr(filepath.Join(dir, "settings.json")), windows.MOVEFILE_REPLACE_EXISTING)
 }
 
 // NOTIFYICONDATAW, full Win7+ layout (pointer aligned on both x86 and x64).
