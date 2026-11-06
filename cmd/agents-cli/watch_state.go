@@ -7,13 +7,16 @@ import (
 
 type watchSample struct {
 	Session
-	HWND      uintptr     `json:"hwnd"`
-	Signature string      `json:"signature"`
-	DesktopID string      `json:"desktop_id"`
-	Desktop   string      `json:"desktop"`
-	Agents    watchAgents `json:"agents"`
-	Phase     string      `json:"phase"`
-	Reason    string      `json:"reason,omitempty"`
+	HWND          uintptr     `json:"hwnd"`
+	Signature     string      `json:"signature"`
+	DesktopID     string      `json:"desktop_id"`
+	Desktop       string      `json:"desktop"`
+	Agents        watchAgents `json:"agents"`
+	Phase         string      `json:"phase"`
+	Reason        string      `json:"reason,omitempty"`
+	RootStarted   string      `json:"root_started"`
+	WindowPID     uint32      `json:"window_pid"`
+	WindowStarted string      `json:"window_started"`
 }
 
 type watchEntry struct {
@@ -47,8 +50,8 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		}
 	}
 	e := w.entries[s.PID]
-	if e == nil || e.Sample.Started != s.Started || e.Sample.AgentPID != s.AgentPID || e.Sample.HWND != s.HWND {
-		if e != nil && e.Sample.Started == s.Started && e.Sample.HWND == s.HWND {
+	if e == nil || e.Sample.Started != s.Started || e.Sample.RootStarted != s.RootStarted || e.Sample.AgentPID != s.AgentPID || e.Sample.HWND != s.HWND {
+		if e != nil && e.Sample.Started == s.Started && e.Sample.RootStarted == s.RootStarted && e.Sample.HWND == s.HWND {
 			// Child discovery can change without replacing the console window.
 			// Reset stop tracking, but keep its place within the same group.
 			e = &watchEntry{Sample: e.Sample, Order: e.Order}

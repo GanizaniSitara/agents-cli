@@ -61,6 +61,19 @@ After Hide, a new or changed stopped/unknown status on the current desktop can
 reopen the panel without activation. Age ticks, background-desktop changes and
 working counts do not reopen it.
 Only an explicit session-row click can activate another window.
+Row clicks select the last fully painted row on mouse press. The panel holds
+its position and painted rows until release, so a new input wait or a height
+change cannot redirect the click. Closed/reused processes and changed window
+owners/session targets are rejected instead of guessing. Caption differences are
+logged, rather than assuming a title change means a different window; animated
+title prefixes are ignored when comparing captions.
+
+`%LOCALAPPDATA%\agents-cli\watch\clicks.jsonl` records each row action or rejection:
+press/release position, painted label, PID/HWND, native title, process identity,
+activation result and foreground immediately after the request. It keeps one
+previous file; each file is limited to 256 KiB. These private diagnostics may
+contain session names and window titles. An activation request is not proof the
+desktop switch has completed; the live activation check remains an owner check.
 
 Confirmed input waits have a filled strong amber band with dark text and a
 bold NEEDS INPUT label. Errors are red, explicit completion is green, working

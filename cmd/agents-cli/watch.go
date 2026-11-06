@@ -241,11 +241,12 @@ func watchWorker() error {
 			if entry, ok := adoptedFor(adopted, s.PID, started); ok && entry.PollingMuted {
 				continue
 			}
-			if startTime(s.PID).Format(time.RFC3339) != normalizeWatchStart(s.Started) {
+			rootStarted := startTime(s.PID)
+			if rootStarted.IsZero() || rootStarted.Format(time.RFC3339) != normalizeWatchStart(s.Started) {
 				continue
 			}
 			previous := cache[s.PID]
-			if hooked && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
+			if hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s
@@ -254,7 +255,7 @@ func watchWorker() error {
 			}
 			r := doPeek(s.PID, 0)
 			if r.Error != "" {
-				if previous.sample.HWND != 0 && previous.sample.Started == s.Started {
+				if previous.sample.HWND != 0 && previous.sample.Started == s.Started && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) {
 					failed := previous.sample
 					failed.State = "error"
 					failed.Phase = "error"
@@ -274,18 +275,21 @@ func watchWorker() error {
 			s.Title = r.Title
 			digest := sha256.Sum256([]byte(strings.Join(r.Lines, "\n")))
 			signature := hex.EncodeToString(digest[:8])
-			if previous.sample.Started == s.Started && previous.sample.HWND == hwnd && previous.sample.Signature == signature {
+			if previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND == hwnd && previous.sample.Signature == signature {
 				s.State = previous.sample.State
 			} else {
 				s.State = guessState(s.Tool, r.Lines)
 			}
 			desktopID, desktop := previous.sample.DesktopID, previous.sample.Desktop
-			if previous.sample.HWND != hwnd || time.Since(previous.desktopRead) >= 5*time.Second {
+			if previous.sample.RootStarted != rootStarted.Format(time.RFC3339Nano) || previous.sample.HWND != hwnd || time.Since(previous.desktopRead) >= 5*time.Second {
 				desktopID, desktop = windowWatchDesktop(manager, hwnd, desktops)
 				previous.desktopRead = time.Now()
 			}
 			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop}
-			if previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
+			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
+			sample.WindowPID = watchWindowPID(hwnd)
+			sample.WindowStarted = startTime(sample.WindowPID).Format(time.RFC3339Nano)
+			if previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
 				sample.Phase, sample.Reason, sample.Agents = previous.sample.Phase, previous.sample.Reason, previous.sample.Agents
 			} else {
 				sample.Phase, sample.Reason = watchPhase(s.Tool, r.Lines, s.State)

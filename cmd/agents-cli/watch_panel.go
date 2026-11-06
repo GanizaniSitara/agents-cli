@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -62,12 +61,17 @@ func watchPanel(a *watchApp) error {
 	var hwnd uintptr
 	var rows []watchEntry
 	var summaries []watchPanelSummary
+	var painted watchPanelFrame
+	var pressed watchPanelPress
 	capacity := 1
 	currentDesktop := watchCurrentDesktop()
 	var previousStates map[uint32]string
 	wakeReady := false
 	var tray watchTrayData
 	resize := func() {
+		if pressed.Active {
+			return
+		} // keep the panel still through mouse-up
 		area := selectWatchMonitor(monitors, settings.Monitor).Work
 		n := len(rows)
 		capacity = watchPanelCapacity(area.Bottom-area.Top, len(summaries))
@@ -124,6 +128,19 @@ func watchPanel(a *watchApp) error {
 					return 0
 				}
 			}
+			// A nonactivating window may not receive mouse-up outside its
+			// visible area. Cancel that abandoned press without activating.
+			if pressed.Active && time.Since(pressed.Time) >= time.Second {
+				buttons, _, _ := watchUser.NewProc("GetAsyncKeyState").Call(1)
+				if buttons&0x8000 == 0 {
+					p := pressed
+					pressed.Active = false
+					watchUser.NewProc("ReleaseCapture").Call()
+					if p.Kind == "row" {
+						a.logClick(p, -1, watchReadTarget(p.Row.Sample), "release-not-delivered", false, false)
+					}
+				}
+			}
 			a.mu.Lock()
 			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
@@ -160,20 +177,18 @@ func watchPanel(a *watchApp) error {
 			if offset >= len(rows) {
 				offset = 0
 			}
-			if !settings.Hidden {
-				var key strings.Builder
-				fmt.Fprintf(&key, "%d/%d/%d/", stoppedCount, unknownCount, time.Now().Unix()/10)
-				for _, row := range rows {
-					fmt.Fprintf(&key, "%d/%s/%s/%s/%s/", row.Sample.PID, row.Sample.State, row.Sample.Desktop, row.Sample.Phase, row.Sample.Agents.label())
-				}
-				fmt.Fprintf(&key, "%s/%v", currentDesktop, summaries)
-				if key.String() != lastRender {
-					lastRender = key.String()
+			if !settings.Hidden && !pressed.Active {
+				key := watchPanelRenderKey(rows, summaries, offset, capacity, currentDesktop, stoppedCount, unknownCount, time.Now().Unix()/10)
+				if key != lastRender {
+					lastRender = key
 					resize()
 				}
 			}
 			return 0
 		case 0x20a: // WM_MOUSEWHEEL, scroll a bounded viewport
+			if pressed.Active {
+				return 0
+			}
 			if int16(wp>>16) < 0 {
 				if offset+capacity < len(rows) {
 					offset++
@@ -183,8 +198,45 @@ func watchPanel(a *watchApp) error {
 			}
 			watchUser.NewProc("InvalidateRect").Call(window, 0, 1)
 			return 0
-		case 0x202: // WM_LBUTTONUP: the only route to foreground activation
-			x, y := int(int16(lp)), int(int16(lp>>16))
+		case 0x201: // WM_LBUTTONDOWN: select the last fully painted target
+			pressed = painted.hit(int(int16(lp)), int(int16(lp>>16)))
+			if pressed.Active {
+				pressed.Time = time.Now()
+				pressed.Screen = watchPoint{int32(pressed.X), int32(pressed.Y)}
+				watchUser.NewProc("ClientToScreen").Call(window, uintptr(unsafe.Pointer(&pressed.Screen)))
+				watchUser.NewProc("SetCapture").Call(window)
+			}
+			return 0
+		case 0x215, 0x1f: // capture lost / cancel mode: never activate
+			if pressed.Active {
+				p := pressed
+				pressed.Active = false
+				watchUser.NewProc("ReleaseCapture").Call()
+				if p.Kind == "row" {
+					a.logClick(p, -1, watchReadTarget(p.Row.Sample), "cancelled", false, false)
+				}
+				resize()
+			}
+			return 0
+		case 0x202: // WM_LBUTTONUP: use the saved press, never re-hit-test
+			p := pressed
+			pressed.Active = false
+			watchUser.NewProc("ReleaseCapture").Call()
+			if !p.Active {
+				return 0
+			}
+			defer resize()
+			releaseY := int(int16(lp >> 16))
+			point := watchPoint{int32(int16(lp)), int32(releaseY)}
+			watchUser.NewProc("ClientToScreen").Call(window, uintptr(unsafe.Pointer(&point)))
+			dx, dy := point.X-p.Screen.X, point.Y-p.Screen.Y
+			if dx > 8 || dx < -8 || dy > 8 || dy < -8 {
+				if p.Kind == "row" {
+					a.logClick(p, releaseY, watchReadTarget(p.Row.Sample), "drag-cancelled", false, false)
+				}
+				return 0
+			}
+			x, y := p.X, p.Y
 			if y < 34 {
 				if x >= 316 {
 					settings.Hidden = true
@@ -201,7 +253,7 @@ func watchPanel(a *watchApp) error {
 				resize()
 				return 0
 			}
-			if menu {
+			if p.Kind == "menu" {
 				i := (y - 34) / 44
 				if i >= 0 && i < len(monitors) {
 					settings.Monitor = monitors[i].Device
@@ -218,8 +270,8 @@ func watchPanel(a *watchApp) error {
 			}
 			// Desktop summaries only change the panel view. Never fall through
 			// to the session activation path, including for non-toggle summaries.
-			if section := watchPanelSummaryIndex(y, len(rows), capacity, len(summaries)); section >= 0 {
-				if summary := summaries[section]; summary.Toggle {
+			if p.Kind == "summary" {
+				if summary := p.Summary; summary.Toggle {
 					a.mu.Lock()
 					if a.expanded == nil {
 						a.expanded = map[string]bool{}
@@ -233,12 +285,20 @@ func watchPanel(a *watchApp) error {
 				}
 				return 0
 			}
-			i := offset + (y-34)/watchRowHeight
-			if i < 0 || i >= len(rows) || (y-34)/watchRowHeight >= capacity {
+			if p.Kind != "row" {
 				return 0
 			}
-			row := rows[i]
-			if startTime(row.Sample.PID).Format(time.RFC3339) != normalizeWatchStart(row.Sample.Started) {
+			row := p.Row
+			state := watchReadTarget(row.Sample)
+			problem := watchTargetProblem(row.Sample, state)
+			a.mu.Lock()
+			current := a.tracker.entries[row.Sample.PID]
+			if current == nil || !watchSameClickSession(row.Sample, current.Sample) {
+				problem = "session-identity-changed"
+			}
+			a.mu.Unlock()
+			if problem != "" {
+				a.logClick(p, releaseY, state, problem, false, false)
 				return 0
 			}
 			if x >= 330 {
@@ -248,6 +308,7 @@ func watchPanel(a *watchApp) error {
 				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
 				a.mu.Unlock()
 				watchFlash(row.Sample.HWND, false)
+				a.logClick(p, releaseY, state, "dismissed", false, false)
 				resize()
 				return 0
 			}
@@ -256,11 +317,23 @@ func watchPanel(a *watchApp) error {
 			watchFlash(row.Sample.HWND, false)
 			watchUser.NewProc("ShowWindowAsync").Call(row.Sample.HWND, 9)
 			watchUser.NewProc("SwitchToThisWindow").Call(row.Sample.HWND, 1)
-			watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
+			set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
+			a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
 			return 0
 		case 0x0f: // WM_PAINT
+			// A frame snapshot is valid for hit-testing only after every pixel
+			// has been painted, including when Windows exposes a partial region.
+			watchUser.NewProc("InvalidateRect").Call(window, 0, 1)
 			var ps watchPaint
 			dc, _, _ := watchUser.NewProc("BeginPaint").Call(window, uintptr(unsafe.Pointer(&ps)))
+			frame := painted
+			if !pressed.Active {
+				frame = newWatchPanelFrame(rows, summaries, offset, capacity, menu)
+				frame.Generation = painted.Generation + 1
+				var rect watchRect
+				watchUser.NewProc("GetWindowRect").Call(window, uintptr(unsafe.Pointer(&rect)))
+				frame.PanelTop = rect.Top
+			}
 			watchGDI.NewProc("SetBkMode").Call(dc, 1)
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
@@ -280,7 +353,7 @@ func watchPanel(a *watchApp) error {
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			watchText(dc, "Settings", 249, 8, 312, 30)
 			watchText(dc, "Hide", 324, 8, 358, 30)
-			if menu {
+			if frame.Menu {
 				selected := selectWatchMonitor(monitors, settings.Monitor)
 				for i, m := range monitors {
 					prefix := "   "
@@ -301,13 +374,8 @@ func watchPanel(a *watchApp) error {
 				top := int32(34 + (len(monitors)+len(desktops))*44)
 				watchText(dc, "Done · choices are remembered", 12, top+8, 350, top+35)
 			} else {
-				end := offset + capacity
-				if end > len(rows) {
-					end = len(rows)
-				}
-				for i := offset; i < end; i++ {
-					row := rows[i]
-					top := int32(34 + (i-offset)*watchRowHeight)
+				for i, row := range frame.Rows {
+					top := int32(34 + i*watchRowHeight)
 					age := time.Since(row.Changed)
 					phase := row.Sample.Phase
 					if phase == "" {
@@ -335,21 +403,24 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SelectObject").Call(dc, font)
 					watchText(dc, age.Round(time.Second).String(), 250, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
-					watchText(dc, firstNonEmpty(row.Sample.Name, row.Sample.Title, fmt.Sprint(row.Sample.PID)), 12, top+22, 328, top+40)
+					watchText(dc, watchRowLabel(row.Sample), 12, top+22, 328, top+40)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
 					watchText(dc, row.Sample.Tool+" · "+meta+" · "+row.Sample.Agents.label(), 12, top+38, 328, top+55)
 					watchText(dc, "×", 336, top+9, 358, top+34)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
-				for i, summary := range summaries {
-					top := int32(34 + (end-offset)*watchRowHeight + i*28)
+				for i, summary := range frame.Summaries {
+					top := int32(34 + len(frame.Rows)*watchRowHeight + i*28)
 					watchGDI.NewProc("SetTextColor").Call(dc, theme.colour(theme.Metadata))
 					watchText(dc, summary.Text, 12, top+4, 350, top+26)
 				}
 			}
 			watchGDI.NewProc("SelectObject").Call(dc, old)
 			watchUser.NewProc("EndPaint").Call(window, uintptr(unsafe.Pointer(&ps)))
+			if dc != 0 {
+				painted = frame
+			}
 			return 0
 		case 2:
 			watchUser.NewProc("PostQuitMessage").Call(0)
