@@ -52,6 +52,7 @@ func watchPanel(a *watchApp) error {
 	monitors := watchMonitors()
 	desktops := watchDesktops()
 	stoppedCount := 0
+	unknownCount := 0
 	lastCount := -1
 	lastRender := ""
 	offset := 0
@@ -104,6 +105,10 @@ func watchPanel(a *watchApp) error {
 			a.mu.Lock()
 			rows = a.tracker.panelRows()
 			stoppedCount = len(a.tracker.rows())
+			unknownCount = 0
+			for _, states := range a.coverage {
+				unknownCount += states["unknown"]
+			}
 			a.mu.Unlock()
 			if stoppedCount != lastCount {
 				tray.update(stoppedCount, 1)
@@ -114,7 +119,7 @@ func watchPanel(a *watchApp) error {
 			}
 			if !settings.Hidden {
 				var key strings.Builder
-				fmt.Fprintf(&key, "%d/%d/", stoppedCount, time.Now().Unix()/10)
+				fmt.Fprintf(&key, "%d/%d/%d/", stoppedCount, unknownCount, time.Now().Unix()/10)
 				for _, row := range rows {
 					fmt.Fprintf(&key, "%d/%s/%s/", row.Sample.PID, row.Sample.State, row.Sample.Desktop)
 				}
@@ -199,6 +204,9 @@ func watchPanel(a *watchApp) error {
 			font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
 			old, _, _ := watchGDI.NewProc("SelectObject").Call(dc, font)
 			header := fmt.Sprintf("Agents · %d stopped", stoppedCount)
+			if unknownCount > 0 {
+				header = fmt.Sprintf("%d stopped · %d unknown", stoppedCount, unknownCount)
+			}
 			a.mu.Lock()
 			problem := a.problem
 			a.mu.Unlock()
