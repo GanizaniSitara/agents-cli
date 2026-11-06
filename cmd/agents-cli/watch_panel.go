@@ -332,8 +332,9 @@ func watchPanel(a *watchApp) error {
 				}
 				top := int32(34 + (end-offset)*watchRowHeight + len(summaries)*28)
 				x := int32(12)
-				watchFill(dc, watchRect{8, top + 4, 83, top + 24}, theme.rowColour("waiting"))
+				watchFill(dc, watchRect{8, top + 4, 16 + watchTextWidth(dc, "Needs input"), top + 24}, theme.rowColour("waiting"))
 				watchSegment(dc, "Needs input", &x, top+4, 350, theme.colour("#191919"))
+				x += 8
 				for _, item := range []struct{ label, phase string }{{" · Error", "error"}, {" · Finished", "finished"}, {" · Working", "working"}, {" · Check", "unknown"}} {
 					watchSegment(dc, item.label, &x, top+4, 350, theme.rowColour(item.phase))
 				}
@@ -398,8 +399,12 @@ func watchFill(dc uintptr, rect watchRect, colour uintptr) {
 func watchSegment(dc uintptr, text string, x *int32, top, right int32, colour uintptr) {
 	watchGDI.NewProc("SetTextColor").Call(dc, colour)
 	watchText(dc, text, *x, top, right, top+20)
+	*x += watchTextWidth(dc, text)
+}
+
+func watchTextWidth(dc uintptr, text string) int32 {
 	u := windows.StringToUTF16(text)
 	var size struct{ X, Y int32 }
 	watchGDI.NewProc("GetTextExtentPoint32W").Call(dc, uintptr(unsafe.Pointer(&u[0])), uintptr(len(u)-1), uintptr(unsafe.Pointer(&size)))
-	*x += size.X
+	return size.X
 }
