@@ -329,6 +329,11 @@ func guessState(tool string, lines []string) string {
 	if tool == "copilot" {
 		return copilotState(lines)
 	}
+	if tool == "vibe" {
+		if state := vibeState(lines); state != "" {
+			return state
+		}
+	}
 	// TUIs draw at the top of a tall window and leave the rest blank, so the
 	// trailing blank rows carry no signal.
 	tail := trimBlankTail(lines)
