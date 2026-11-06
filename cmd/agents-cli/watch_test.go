@@ -1,9 +1,25 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestWatchWorkerHeartbeatBoundsStuckRead(t *testing.T) {
+	// Reuse TECH-262's detached child fixture. It hangs before any console read;
+	// the watcher's independent heartbeat must kill it and return promptly.
+	t.Setenv("AGENTS_CLI_TEST_HELPER_HANG", "1")
+	a := &watchApp{stop: make(chan struct{}), dir: t.TempDir(), tracker: newWatchTracker(time.Second)}
+	started := time.Now()
+	err := a.readWorker()
+	if err == nil || !strings.Contains(err.Error(), "heartbeat timed out") {
+		t.Fatalf("missing timeout: %v", err)
+	}
+	if time.Since(started) > 9*time.Second {
+		t.Fatal("stuck reader outlived watchdog budget")
+	}
+}
 
 func TestWatchStableTransitions(t *testing.T) {
 	now := time.Unix(100, 0)
