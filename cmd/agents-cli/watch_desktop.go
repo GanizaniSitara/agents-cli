@@ -15,6 +15,32 @@ type watchDesktop struct {
 	Name string `json:"name"`
 }
 
+func watchCurrentDesktop() string {
+	var session uint32
+	k32.NewProc("ProcessIdToSessionId").Call(uintptr(windows.GetCurrentProcessId()), uintptr(unsafe.Pointer(&session)))
+	paths := []string{
+		fmt.Sprintf(`Software\Microsoft\Windows\CurrentVersion\Explorer\SessionInfo\%d\VirtualDesktops`, session),
+		`Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops`,
+	}
+	for _, path := range paths {
+		key, err := registry.OpenKey(registry.CURRENT_USER, path, registry.QUERY_VALUE)
+		if err != nil {
+			continue
+		}
+		b, _, err := key.GetBinaryValue("CurrentVirtualDesktop")
+		key.Close()
+		if err == nil && len(b) == 16 {
+			var id windows.GUID
+			copy(unsafe.Slice((*byte)(unsafe.Pointer(&id)), 16), b)
+			return id.String()
+		}
+	}
+	if desktops := watchDesktops(); len(desktops) == 1 {
+		return desktops[0].ID
+	}
+	return ""
+}
+
 // Explorer's ordered GUID list supplies the same numbering as Task View.
 // No shell/window movement is involved in this read-only lookup.
 func watchDesktops() []watchDesktop {

@@ -61,17 +61,30 @@ func watchPanel(a *watchApp) error {
 	offset := 0
 	var hwnd uintptr
 	var rows []watchEntry
+	var summaries []string
+	capacity := 1
+	currentDesktop := watchCurrentDesktop()
+	var previousStates map[uint32]string
+	wakeReady := false
 	var tray watchTrayData
 	resize := func() {
 		area := selectWatchMonitor(monitors, settings.Monitor).Work
 		n := len(rows)
-		if n > 6 {
-			n = 6
+		capacity = watchPanelCapacity(area.Bottom-area.Top, len(summaries))
+		if n > capacity {
+			n = capacity
+		}
+		maxOffset := len(rows) - capacity
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if offset > maxOffset {
+			offset = maxOffset
 		}
 		if menu {
 			n = len(monitors) + len(desktops) + 3
 		}
-		height := int32(34 + n*watchRowHeight)
+		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
 			height = int32(34 + n*44)
 		}
@@ -109,13 +122,32 @@ func watchPanel(a *watchApp) error {
 				}
 			}
 			a.mu.Lock()
-			rows = a.tracker.panelRows()
-			stoppedCount = len(a.tracker.rows())
+			allRows := a.tracker.panelRows()
+			newDesktop := watchCurrentDesktop()
+			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops)
+			stoppedCount = 0
 			unknownCount = 0
-			for _, states := range a.coverage {
-				unknownCount += states["unknown"]
+			for _, row := range rows {
+				if row.Stopped {
+					stoppedCount++
+				}
+				if row.Sample.State == "unknown" {
+					unknownCount++
+				}
 			}
 			a.mu.Unlock()
+			// Only relevant status changes reopen the panel. Age ticks, working
+			// screen redraws and background desktop changes cannot wake it.
+			if wakeReady && newDesktop == currentDesktop && watchPanelNeedsWake(previousStates, rows) && settings.Hidden {
+				settings.Hidden = false
+				_ = saveWatchSettings(a.dir, settings)
+				watchUser.NewProc("ShowWindow").Call(window, 4)
+			}
+			previousStates = watchPanelStates(rows)
+			currentDesktop = newDesktop
+			if len(allRows) > 0 {
+				wakeReady = true
+			}
 			if stoppedCount != lastCount {
 				tray.update(stoppedCount, 1)
 				lastCount = stoppedCount
@@ -129,6 +161,7 @@ func watchPanel(a *watchApp) error {
 				for _, row := range rows {
 					fmt.Fprintf(&key, "%d/%s/%s/%s/%s/", row.Sample.PID, row.Sample.State, row.Sample.Desktop, row.Sample.Phase, row.Sample.Agents.label())
 				}
+				fmt.Fprintf(&key, "%s/%v", currentDesktop, summaries)
 				if key.String() != lastRender {
 					lastRender = key.String()
 					resize()
@@ -137,7 +170,7 @@ func watchPanel(a *watchApp) error {
 			return 0
 		case 0x20a: // WM_MOUSEWHEEL, scroll a bounded viewport
 			if int16(wp>>16) < 0 {
-				if offset+6 < len(rows) {
+				if offset+capacity < len(rows) {
 					offset++
 				}
 			} else if offset > 0 {
@@ -189,7 +222,7 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			i := offset + (y-34)/watchRowHeight
-			if i < 0 || i >= len(rows) {
+			if i < 0 || i >= len(rows) || (y-34)/watchRowHeight >= capacity {
 				return 0
 			}
 			row := rows[i]
@@ -200,7 +233,7 @@ func watchPanel(a *watchApp) error {
 				a.mu.Lock()
 				a.tracker.dismiss(row.Sample.PID)
 				a.save()
-				rows = a.tracker.panelRows()
+				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops)
 				a.mu.Unlock()
 				watchFlash(row.Sample.HWND, false)
 				resize()
@@ -267,7 +300,7 @@ func watchPanel(a *watchApp) error {
 				top += 88
 				watchText(dc, "Done · choices are remembered", 12, top+8, 350, top+35)
 			} else {
-				end := offset + 6
+				end := offset + capacity
 				if end > len(rows) {
 					end = len(rows)
 				}
@@ -300,6 +333,11 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, row.Sample.Agents.label(), 12, top+38, 328, top+55)
 					watchText(dc, "×", 336, top+9, 358, top+34)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
+				}
+				for i, summary := range summaries {
+					top := int32(34 + (end-offset)*watchRowHeight + i*28)
+					watchGDI.NewProc("SetTextColor").Call(dc, theme.colour(theme.Metadata, 0))
+					watchText(dc, summary, 12, top+4, 350, top+26)
 				}
 			}
 			watchGDI.NewProc("SelectObject").Call(dc, old)

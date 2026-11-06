@@ -28,14 +28,17 @@ type watchBatch struct {
 }
 
 type watchReceipt struct {
-	PID           uint32                    `json:"pid"`
-	Started       string                    `json:"started"`
-	Updated       time.Time                 `json:"updated"`
-	Rows          []watchEntry              `json:"stopped"`
-	Sessions      []watchEntry              `json:"sessions"`
-	Error         string                    `json:"error,omitempty"`
-	ConsoleEvents uint64                    `json:"console_events"`
-	Coverage      map[string]map[string]int `json:"coverage"`
+	PID            uint32                    `json:"pid"`
+	Started        string                    `json:"started"`
+	Updated        time.Time                 `json:"updated"`
+	Rows           []watchEntry              `json:"stopped"`
+	Sessions       []watchEntry              `json:"sessions"`
+	Error          string                    `json:"error,omitempty"`
+	ConsoleEvents  uint64                    `json:"console_events"`
+	Coverage       map[string]map[string]int `json:"coverage"`
+	CurrentDesktop string                    `json:"current_desktop"`
+	PanelRows      []watchEntry              `json:"panel_rows"`
+	PanelSummary   []string                  `json:"panel_summary"`
 }
 
 type watchApp struct {
@@ -318,6 +321,8 @@ func normalizeWatchStart(v string) string {
 
 func (a *watchApp) save() {
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
+	r.CurrentDesktop = watchCurrentDesktop()
+	r.PanelRows, r.PanelSummary = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops())
 	b, _ := json.MarshalIndent(r, "", "  ")
 	tmp := filepath.Join(a.dir, "status.tmp")
 	if err := os.WriteFile(tmp, b, 0600); err == nil {
