@@ -49,6 +49,7 @@ type watchApp struct {
 	stop          chan struct{}
 	consoleEvents uint64
 	coverage      map[string]map[string]int
+	flashes       watchFlashController
 }
 
 func watchDirectory(p parsed) (string, error) {
@@ -422,14 +423,11 @@ func (a *watchApp) readWorker() error {
 				}
 				a.coverage[s.Tool][s.State]++
 				if a.tracker.observe(s, time.Now()) {
-					watchFlash(s.HWND, true)
 					a.log(s)
-				}
-				if s.State == "busy" {
-					watchFlash(s.HWND, false)
 				}
 			}
 			a.tracker.prune(alive)
+			a.flashes.update(a.tracker.entries, watchCurrentDesktop(), watchFlash)
 			a.save()
 			a.mu.Unlock()
 		}

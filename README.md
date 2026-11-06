@@ -87,7 +87,11 @@ The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four
 seconds. `--stable D` changes that threshold. Startup-idle sessions are listed
 without flashing. Working-to-idle/prompt transitions flash only that window's
-taskbar button until it is foreground, and append one JSON line with name,
+taskbar button when its desktop is being viewed, until it is foreground.
+Off-desktop stops remain in the panel information without taskbar flashing;
+switching to their desktop starts their pending flashes. Switching away clears
+their flashes, including flags left by older watcher builds. Unknown desktop
+identity never starts a flash. Stops append one JSON line with name,
 time and wait reason. Unknown/unreadable screens never count as completion;
 `watch list` includes grouped `sessions` rows and coverage counts as well as the
 separate `stopped` list, so unsupported states remain visible by name and desktop.

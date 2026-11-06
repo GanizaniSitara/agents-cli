@@ -124,6 +124,7 @@ func watchPanel(a *watchApp) error {
 			a.mu.Lock()
 			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
+			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops)
 			stoppedCount = 0
 			unknownCount = 0

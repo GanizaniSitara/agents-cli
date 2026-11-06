@@ -22,6 +22,7 @@ type watchEntry struct {
 	Candidate time.Time   `json:"-"`
 	Busy      bool        `json:"-"`
 	Stopped   bool        `json:"-"`
+	Attention bool        `json:"-"`
 	Dismissed bool        `json:"-"`
 	Order     uint64      `json:"-"`
 	Changed   time.Time   `json:"changed"`
@@ -67,12 +68,14 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	e.Sample = s
 	if s.State == "busy" {
 		e.Busy, e.Stopped = true, false
+		e.Attention = false
 		e.Candidate = time.Time{}
 		return false
 	}
 	if s.State != "idle" && s.State != "prompt" && s.State != "error" {
 		e.Candidate = time.Time{}
 		e.Stopped = false
+		e.Attention = false
 		return false
 	}
 	if e.Stopped {
@@ -88,6 +91,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	e.Stopped, e.Since = true, e.Candidate
 	e.Dismissed = false
 	notify := e.Busy
+	e.Attention = notify
 	e.Busy = false
 	return notify
 }
@@ -95,6 +99,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 func (w *watchTracker) dismiss(pid uint32) {
 	if e := w.entries[pid]; e != nil {
 		e.Dismissed = true
+		e.Attention = false
 	}
 }
 
