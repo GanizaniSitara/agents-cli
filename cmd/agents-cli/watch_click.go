@@ -152,7 +152,11 @@ type watchClickRecord struct {
 	CaptionMatchesSample   bool      `json:"caption_matches_sample"`
 	Source                 string    `json:"source"`
 	RootStarted            string    `json:"root_started"`
+	LiveRootStarted        string    `json:"live_root_started"`
 	WindowPID              uint32    `json:"window_pid"`
+	ExpectedWindowPID      uint32    `json:"expected_window_pid"`
+	WindowStarted          string    `json:"window_started"`
+	ExpectedWindowStarted  string    `json:"expected_window_started"`
 	Outcome                string    `json:"outcome"`
 	ActivationRequested    bool      `json:"activation_requested"`
 	SetForegroundSucceeded bool      `json:"set_foreground_succeeded"`
@@ -165,7 +169,20 @@ type watchClickRecord struct {
 
 func (a *watchApp) logClick(p watchPanelPress, releaseY int, state watchTargetState, outcome string, attempted, succeeded bool) {
 	foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
-	_ = watchAppendClick(a.dir, watchClickRecord{Time: time.Now(), PressTime: p.Time, Y: p.Y, ReleaseY: releaseY, ScreenY: p.Screen.Y, RowIndex: p.RowIndex, Label: watchRowLabel(p.Row.Sample), PID: p.Row.Sample.PID, HWND: p.Row.Sample.HWND, WindowTitle: state.WindowTitle, SampleTitle: p.Row.Sample.Title, CaptionMatchesSample: strings.EqualFold(watchComparableTitle(p.Row.Sample.Title), watchComparableTitle(state.WindowTitle)), Source: p.Row.Sample.Source, RootStarted: p.Row.Sample.RootStarted, WindowPID: state.WindowPID, Outcome: outcome, ActivationRequested: attempted, SetForegroundSucceeded: succeeded, ForegroundAfter: foreground, ForegroundTitle: watchWindowTitle(foreground), ForegroundPID: watchWindowPID(foreground), PaintGeneration: p.Generation, PaintedPanelTop: p.PanelTop})
+	_ = watchAppendClick(a.dir, watchClickRecord{
+		Time: time.Now(), PressTime: p.Time,
+		Y: p.Y, ReleaseY: releaseY, ScreenY: p.Screen.Y, RowIndex: p.RowIndex,
+		Label: watchRowLabel(p.Row.Sample), PID: p.Row.Sample.PID, HWND: p.Row.Sample.HWND,
+		WindowTitle: state.WindowTitle, SampleTitle: p.Row.Sample.Title,
+		CaptionMatchesSample: strings.EqualFold(watchComparableTitle(p.Row.Sample.Title), watchComparableTitle(state.WindowTitle)),
+		Source:               p.Row.Sample.Source,
+		RootStarted:          p.Row.Sample.RootStarted, LiveRootStarted: state.RootStarted.Format(time.RFC3339Nano),
+		WindowPID: state.WindowPID, ExpectedWindowPID: p.Row.Sample.WindowPID,
+		WindowStarted: state.WindowStarted.Format(time.RFC3339Nano), ExpectedWindowStarted: p.Row.Sample.WindowStarted,
+		Outcome: outcome, ActivationRequested: attempted, SetForegroundSucceeded: succeeded,
+		ForegroundAfter: foreground, ForegroundTitle: watchWindowTitle(foreground), ForegroundPID: watchWindowPID(foreground),
+		PaintGeneration: p.Generation, PaintedPanelTop: p.PanelTop,
+	})
 }
 
 const watchClickLogLimit = 256 * 1024

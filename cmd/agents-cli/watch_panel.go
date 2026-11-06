@@ -223,6 +223,14 @@ func watchPanel(a *watchApp) error {
 			pressed.Active = false
 			watchUser.NewProc("ReleaseCapture").Call()
 			if !p.Active {
+				// Diagnose a missed down event without ever using release to
+				// choose an activation target.
+				candidate := painted.hit(int(int16(lp)), int(int16(lp>>16)))
+				if candidate.Kind == "row" {
+					candidate.Screen = watchPoint{int32(candidate.X), int32(candidate.Y)}
+					watchUser.NewProc("ClientToScreen").Call(window, uintptr(unsafe.Pointer(&candidate.Screen)))
+					a.logClick(candidate, candidate.Y, watchReadTarget(candidate.Row.Sample), "release-without-press", false, false)
+				}
 				return 0
 			}
 			defer resize()
@@ -293,7 +301,7 @@ func watchPanel(a *watchApp) error {
 			problem := watchTargetProblem(row.Sample, state)
 			a.mu.Lock()
 			current := a.tracker.entries[row.Sample.PID]
-			if current == nil || !watchSameClickSession(row.Sample, current.Sample) {
+			if problem == "" && (current == nil || !watchSameClickSession(row.Sample, current.Sample)) {
 				problem = "session-identity-changed"
 			}
 			a.mu.Unlock()
