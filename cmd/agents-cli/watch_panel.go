@@ -17,7 +17,6 @@ var watchUser = windows.NewLazySystemDLL("user32.dll")
 var watchGDI = windows.NewLazySystemDLL("gdi32.dll")
 
 const watchRowHeight = 56
-const watchKeyHeight = 28
 
 type watchRect struct{ Left, Top, Right, Bottom int32 }
 type watchPoint struct{ X, Y int32 }
@@ -85,7 +84,7 @@ func watchPanel(a *watchApp) error {
 		if menu {
 			n = len(monitors) + len(desktops) + 1
 		}
-		height := int32(34 + n*watchRowHeight + len(summaries)*28 + watchKeyHeight)
+		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
 			height = int32(34 + n*44)
 		}
@@ -330,14 +329,6 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SetTextColor").Call(dc, theme.colour(theme.Metadata))
 					watchText(dc, summary, 12, top+4, 350, top+26)
 				}
-				top := int32(34 + (end-offset)*watchRowHeight + len(summaries)*28)
-				x := int32(12)
-				watchFill(dc, watchRect{8, top + 4, 16 + watchTextWidth(dc, "Needs input"), top + 24}, theme.rowColour("waiting"))
-				watchSegment(dc, "Needs input", &x, top+4, 350, theme.colour("#191919"))
-				x += 8
-				for _, item := range []struct{ label, phase string }{{" · Error", "error"}, {" · Finished", "finished"}, {" · Working", "working"}, {" · Check", "unknown"}} {
-					watchSegment(dc, item.label, &x, top+4, 350, theme.rowColour(item.phase))
-				}
 			}
 			watchGDI.NewProc("SelectObject").Call(dc, old)
 			watchUser.NewProc("EndPaint").Call(window, uintptr(unsafe.Pointer(&ps)))
@@ -394,17 +385,4 @@ func watchFill(dc uintptr, rect watchRect, colour uintptr) {
 	brush, _, _ := watchGDI.NewProc("CreateSolidBrush").Call(colour)
 	watchUser.NewProc("FillRect").Call(dc, uintptr(unsafe.Pointer(&rect)), brush)
 	watchGDI.NewProc("DeleteObject").Call(brush)
-}
-
-func watchSegment(dc uintptr, text string, x *int32, top, right int32, colour uintptr) {
-	watchGDI.NewProc("SetTextColor").Call(dc, colour)
-	watchText(dc, text, *x, top, right, top+20)
-	*x += watchTextWidth(dc, text)
-}
-
-func watchTextWidth(dc uintptr, text string) int32 {
-	u := windows.StringToUTF16(text)
-	var size struct{ X, Y int32 }
-	watchGDI.NewProc("GetTextExtentPoint32W").Call(dc, uintptr(unsafe.Pointer(&u[0])), uintptr(len(u)-1), uintptr(unsafe.Pointer(&size)))
-	return size.X
 }

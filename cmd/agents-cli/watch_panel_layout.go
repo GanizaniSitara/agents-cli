@@ -49,7 +49,7 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 }
 
 func watchPanelCapacity(workHeight int32, summaryCount int) int {
-	n := (int(workHeight) - 24 - 34 - watchKeyHeight - summaryCount*28) / watchRowHeight
+	n := (int(workHeight) - 24 - 34 - summaryCount*28) / watchRowHeight
 	if n < 1 {
 		return 1
 	}

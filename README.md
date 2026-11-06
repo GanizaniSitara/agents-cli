@@ -60,8 +60,8 @@ Only an explicit session-row click can activate another window.
 
 Confirmed input waits have a filled strong amber band with dark text and a
 bold NEEDS INPUT label. Errors are red, explicit completion is green, working
-is plain neutral, and idle/check or unavailable states are muted grey. The
-panel has a one-line colour key at the bottom. Age appears only as a number;
+is plain neutral, and idle/check or unavailable states are muted grey.
+Age appears only as a number;
 no row or label fades. The earlier trial-colour/idle switches were removed so
 their meanings cannot conflict. The existing theme.json palette remains editable;
 legacy fade settings are ignored. Settings reloads the palette (restart for a

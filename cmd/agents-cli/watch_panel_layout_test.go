@@ -23,7 +23,7 @@ func TestWatchPanelFitsTwelveAndBoundsScrolling(t *testing.T) {
 	if n := watchPanelCapacity(1600, 2); n < 12 {
 		t.Fatalf("only %d rows", n)
 	}
-	if n := watchPanelCapacity(600, 2); 34+n*watchRowHeight+2*28+watchKeyHeight+24 > 600 {
+	if n := watchPanelCapacity(600, 2); 34+n*watchRowHeight+2*28+24 > 600 {
 		t.Fatal("panel exceeds work area")
 	}
 }
