@@ -358,6 +358,9 @@ func guessState(tool string, lines []string) string {
 	if spinnerRe.MatchString(joined) {
 		return "busy"
 	}
+	if state := framedDraftState(tool, tail); state != "" {
+		return state
+	}
 	for _, l := range tail {
 		if idleRe.MatchString(strings.TrimSpace(l)) {
 			return "idle"
