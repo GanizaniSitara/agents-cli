@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="176" viewBox="0 0 400 176">
+<rect width="400" height="176" rx="8" fill="#20252b"/>
+<g font-family="Segoe UI, sans-serif" fill="#edf0f2" font-size="13">
+<text x="14" y="25" font-weight="600">Agents · 3 stopped</text><text x="338" y="25">Hide</text>
+<path d="M12 38H388 M12 80H388 M12 122H388" stroke="#424951"/>
+<text x="14" y="57">COPILOT · finished · 12s</text><text x="14" y="73" fill="#b7c1ca">Feature review</text><text x="373" y="62">×</text>
+<text x="14" y="99">CLAUDE · needs input · 48s</text><text x="14" y="115" fill="#b7c1ca">Tests and release</text><text x="373" y="104">×</text>
+<text x="14" y="141">CODEX · finished · 1m</text><text x="14" y="157" fill="#b7c1ca">Documentation</text><text x="373" y="146">×</text>
+</g></svg>
