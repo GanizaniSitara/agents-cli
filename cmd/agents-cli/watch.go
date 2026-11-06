@@ -104,7 +104,7 @@ func runWatch(args []string) error {
 		}
 		rows := []map[string]interface{}{}
 		for _, row := range r.Rows {
-			rows = append(rows, map[string]interface{}{"pid": row.Sample.PID, "tool": row.Sample.Tool, "name": firstNonEmpty(row.Sample.Name, row.Sample.Title), "desktop": row.Sample.Desktop, "waiting_on": watchReason(row.Sample.State), "stopped_for": time.Since(row.Since).Round(time.Second).String()})
+			rows = append(rows, map[string]interface{}{"pid": row.Sample.PID, "tool": row.Sample.Tool, "name": firstNonEmpty(row.Sample.Name, row.Sample.Title), "desktop": row.Sample.Desktop, "waiting_on": firstNonEmpty(row.Sample.Reason, watchReason(row.Sample.State)), "stopped_for": time.Since(row.Since).Round(time.Second).String(), "agents": row.Sample.Agents, "phase": row.Sample.Phase})
 		}
 		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "error": r.Error, "coverage": r.Coverage})
 		return nil
@@ -238,7 +238,7 @@ func watchWorker() error {
 				continue
 			}
 			previous := cache[s.PID]
-			if hooked && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
+			if hooked && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s
@@ -247,6 +247,16 @@ func watchWorker() error {
 			}
 			r := doPeek(s.PID, 0)
 			if r.Error != "" {
+				if previous.sample.HWND != 0 && previous.sample.Started == s.Started {
+					failed := previous.sample
+					failed.State = "error"
+					failed.Phase = "error"
+					failed.Reason = "console read failed"
+					failed.Signature = r.Error
+					previous.sample = failed
+					cache[s.PID] = previous
+					batch.Samples = append(batch.Samples, failed)
+				}
 				continue
 			}
 			hwnd, _, _ := k32.NewProc("GetConsoleWindow").Call()
@@ -268,6 +278,22 @@ func watchWorker() error {
 				previous.desktopRead = time.Now()
 			}
 			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop}
+			if previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
+				sample.Phase, sample.Reason, sample.Agents = previous.sample.Phase, previous.sample.Reason, previous.sample.Agents
+			} else {
+				sample.Phase, sample.Reason = watchPhase(s.Tool, r.Lines, s.State)
+				sample.Agents = watchAgentDetails(s.Tool, r.Lines)
+			}
+			if sample.Phase == "error" {
+				sample.State = "error"
+			}
+			if sample.Agents.Running != nil && *sample.Agents.Running > 0 {
+				sample.State = "busy"
+				if sample.Phase != "error" {
+					sample.Phase = "working"
+					sample.Reason = "sub-agents running"
+				}
+			}
 			cache[s.PID] = cachedScreen{sample: sample, desktopRead: previous.desktopRead, readAt: time.Now()}
 			batch.Samples = append(batch.Samples, sample)
 		}
@@ -410,10 +436,13 @@ func (a *watchApp) log(s watchSample) {
 		return
 	}
 	defer f.Close()
-	_ = json.NewEncoder(f).Encode(map[string]interface{}{"time": time.Now().Format(time.RFC3339), "pid": s.PID, "name": firstNonEmpty(s.Name, s.Title, strconv.Itoa(int(s.PID))), "waiting_on": watchReason(s.State)})
+	_ = json.NewEncoder(f).Encode(map[string]interface{}{"time": time.Now().Format(time.RFC3339), "pid": s.PID, "name": firstNonEmpty(s.Name, s.Title, strconv.Itoa(int(s.PID))), "waiting_on": firstNonEmpty(s.Reason, watchReason(s.State))})
 }
 
 func watchReason(state string) string {
+	if state == "error" {
+		return "error"
+	}
 	if state == "prompt" {
 		return "needs input"
 	}

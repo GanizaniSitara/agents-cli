@@ -26,6 +26,8 @@ type watchSettings struct {
 	Monitor          string   `json:"monitor"`
 	Hidden           bool     `json:"hidden"`
 	ExcludedDesktops []string `json:"excluded_desktops,omitempty"`
+	ColoursOff       bool     `json:"colours_off,omitempty"`
+	TrustIdle        bool     `json:"trust_idle,omitempty"`
 }
 
 func watchMonitors() []watchMonitor {

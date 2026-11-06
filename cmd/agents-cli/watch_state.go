@@ -7,10 +7,13 @@ import (
 
 type watchSample struct {
 	Session
-	HWND      uintptr `json:"hwnd"`
-	Signature string  `json:"signature"`
-	DesktopID string  `json:"desktop_id"`
-	Desktop   string  `json:"desktop"`
+	HWND      uintptr     `json:"hwnd"`
+	Signature string      `json:"signature"`
+	DesktopID string      `json:"desktop_id"`
+	Desktop   string      `json:"desktop"`
+	Agents    watchAgents `json:"agents"`
+	Phase     string      `json:"phase"`
+	Reason    string      `json:"reason,omitempty"`
 }
 
 type watchEntry struct {
@@ -21,6 +24,7 @@ type watchEntry struct {
 	Stopped   bool        `json:"-"`
 	Dismissed bool        `json:"-"`
 	Order     uint64      `json:"-"`
+	Changed   time.Time   `json:"changed"`
 }
 
 type watchTracker struct {
@@ -34,19 +38,31 @@ func newWatchTracker(stable time.Duration) *watchTracker {
 }
 
 func (w *watchTracker) observe(s watchSample, now time.Time) bool {
+	if s.Agents.Running != nil && *s.Agents.Running > 0 {
+		s.State = "busy"
+		if s.Phase != "error" {
+			s.Phase = "working"
+			s.Reason = "sub-agents running"
+		}
+	}
 	e := w.entries[s.PID]
 	if e == nil || e.Sample.Started != s.Started || e.Sample.AgentPID != s.AgentPID || e.Sample.HWND != s.HWND {
 		e = &watchEntry{}
+		w.nextOrder++
+		e.Order = w.nextOrder
 		w.entries[s.PID] = e
 	}
 	old := e.Sample
+	if e.Changed.IsZero() || old.State != s.State || old.Phase != s.Phase {
+		e.Changed = now
+	}
 	e.Sample = s
 	if s.State == "busy" {
 		e.Busy, e.Stopped = true, false
 		e.Candidate = time.Time{}
 		return false
 	}
-	if s.State != "idle" && s.State != "prompt" {
+	if s.State != "idle" && s.State != "prompt" && s.State != "error" {
 		e.Candidate = time.Time{}
 		e.Stopped = false
 		return false

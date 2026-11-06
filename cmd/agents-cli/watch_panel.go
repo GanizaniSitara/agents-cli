@@ -16,6 +16,8 @@ import (
 var watchUser = windows.NewLazySystemDLL("user32.dll")
 var watchGDI = windows.NewLazySystemDLL("gdi32.dll")
 
+const watchRowHeight = 56
+
 type watchRect struct{ Left, Top, Right, Bottom int32 }
 type watchPoint struct{ X, Y int32 }
 type watchMessage struct {
@@ -48,6 +50,7 @@ func watchPanel(a *watchApp) error {
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	name := windows.StringToUTF16Ptr("AgentsCLIWatchPanel")
 	settings := loadWatchSettings(a.dir)
+	theme := loadWatchTheme(a.dir)
 	menu := false
 	monitors := watchMonitors()
 	desktops := watchDesktops()
@@ -66,9 +69,12 @@ func watchPanel(a *watchApp) error {
 			n = 6
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 1
+			n = len(monitors) + len(desktops) + 3
 		}
-		height := int32(34 + n*44)
+		height := int32(34 + n*watchRowHeight)
+		if menu {
+			height = int32(34 + n*44)
+		}
 		width := int32(360)
 		flags := uintptr(0x10)
 		if !settings.Hidden {
@@ -77,7 +83,7 @@ func watchPanel(a *watchApp) error {
 		watchUser.NewProc("SetWindowPos").Call(hwnd, ^uintptr(0), uintptr(area.Right-width-12), uintptr(area.Bottom-height-12), uintptr(width), uintptr(height), flags)
 		watchUser.NewProc("InvalidateRect").Call(hwnd, 0, 1)
 	}
-	brush, _, _ := watchGDI.NewProc("CreateSolidBrush").Call(0x2b2520)
+	brush, _, _ := watchGDI.NewProc("CreateSolidBrush").Call(theme.colour(theme.Background, 0))
 	defer watchGDI.NewProc("DeleteObject").Call(brush)
 	proc := syscall.NewCallback(func(window uintptr, msg uint32, wp, lp uintptr) uintptr {
 		switch msg {
@@ -121,7 +127,7 @@ func watchPanel(a *watchApp) error {
 				var key strings.Builder
 				fmt.Fprintf(&key, "%d/%d/%d/", stoppedCount, unknownCount, time.Now().Unix()/10)
 				for _, row := range rows {
-					fmt.Fprintf(&key, "%d/%s/%s/", row.Sample.PID, row.Sample.State, row.Sample.Desktop)
+					fmt.Fprintf(&key, "%d/%s/%s/%s/%s/", row.Sample.PID, row.Sample.State, row.Sample.Desktop, row.Sample.Phase, row.Sample.Agents.label())
 				}
 				if key.String() != lastRender {
 					lastRender = key.String()
@@ -150,6 +156,7 @@ func watchPanel(a *watchApp) error {
 				}
 				if x >= 245 {
 					menu = !menu
+					theme = loadWatchTheme(a.dir)
 					monitors = watchMonitors()
 					desktops = watchDesktops()
 				}
@@ -166,12 +173,22 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
+				} else if i == len(monitors)+len(desktops) {
+					settings.ColoursOff = !settings.ColoursOff
+					_ = saveWatchSettings(a.dir, settings)
+					resize()
+					return 0
+				} else if i == len(monitors)+len(desktops)+1 {
+					settings.TrustIdle = !settings.TrustIdle
+					_ = saveWatchSettings(a.dir, settings)
+					resize()
+					return 0
 				}
 				menu = false
 				resize()
 				return 0
 			}
-			i := offset + (y-34)/44
+			i := offset + (y-34)/watchRowHeight
 			if i < 0 || i >= len(rows) {
 				return 0
 			}
@@ -212,8 +229,10 @@ func watchPanel(a *watchApp) error {
 			a.mu.Unlock()
 			if problem != "" {
 				header = "Agents · reader retrying"
+				watchGDI.NewProc("SetTextColor").Call(dc, theme.rowColour("error", 0, settings.ColoursOff, settings.TrustIdle))
 			}
 			watchText(dc, header, 12, 8, 240, 30)
+			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			watchText(dc, "Settings", 249, 8, 312, 30)
 			watchText(dc, "Hide", 324, 8, 358, 30)
 			if menu {
@@ -235,6 +254,17 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
 				}
 				top := int32(34 + (len(monitors)+len(desktops))*44)
+				colours := "on"
+				if settings.ColoursOff {
+					colours = "off"
+				}
+				watchText(dc, "Trial colours: "+colours+" · click to toggle", 12, top+8, 350, top+35)
+				idle := "cautious amber"
+				if settings.TrustIdle {
+					idle = "green"
+				}
+				watchText(dc, "Idle colour: "+idle, 12, top+44+8, 350, top+44+35)
+				top += 88
 				watchText(dc, "Done · choices are remembered", 12, top+8, 350, top+35)
 			} else {
 				end := offset + 6
@@ -243,18 +273,31 @@ func watchPanel(a *watchApp) error {
 				}
 				for i := offset; i < end; i++ {
 					row := rows[i]
-					top := int32(34 + (i-offset)*44)
-					age := time.Since(row.Since).Round(time.Second)
-					status := watchReason(row.Sample.State)
-					if !row.Stopped {
-						status = "working"
-						if row.Sample.State != "busy" {
-							status = "state unavailable"
+					top := int32(34 + (i-offset)*watchRowHeight)
+					age := time.Since(row.Changed)
+					phase := row.Sample.Phase
+					if phase == "" {
+						phase = "idle"
+						if row.Sample.State == "busy" {
+							phase = "working"
 						}
-						watchGDI.NewProc("SetTextColor").Call(dc, 0xb0a89f)
+						if row.Sample.State == "prompt" {
+							phase = "waiting"
+						}
 					}
-					watchText(dc, fmt.Sprintf("%s · %s · %s · %s", row.Sample.Tool, row.Sample.Desktop, status, age), 12, top+3, 328, top+23)
+					status := firstNonEmpty(row.Sample.Reason, phase)
+					if phase == "idle" && settings.TrustIdle {
+						status = "idle"
+					}
+					colour := theme.rowColour(phase, age, settings.ColoursOff, settings.TrustIdle)
+					x := int32(12)
+					meta := strings.Replace(row.Sample.Desktop, "Desktop ", "D", 1)
+					watchSegment(dc, row.Sample.Tool+" · "+meta+" · ", &x, top+3, 328, theme.colour(theme.Metadata, age))
+					watchSegment(dc, fmt.Sprintf("%s · %s", status, age.Round(time.Second)), &x, top+3, 328, colour)
+					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					watchText(dc, firstNonEmpty(row.Sample.Name, row.Sample.Title, fmt.Sprint(row.Sample.PID)), 12, top+22, 328, top+42)
+					watchGDI.NewProc("SetTextColor").Call(dc, theme.colour(theme.Metadata, age))
+					watchText(dc, row.Sample.Agents.label(), 12, top+38, 328, top+55)
 					watchText(dc, "×", 336, top+9, 358, top+34)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
@@ -308,4 +351,13 @@ func watchText(dc uintptr, text string, left, top, right, bottom int32) {
 	r := watchRect{left, top, right, bottom}
 	u := windows.StringToUTF16(text)
 	watchUser.NewProc("DrawTextW").Call(dc, uintptr(unsafe.Pointer(&u[0])), uintptr(len(u)-1), uintptr(unsafe.Pointer(&r)), 0x20|0x8000|0x100) // single line, ellipsis, no & mnemonics
+}
+
+func watchSegment(dc uintptr, text string, x *int32, top, right int32, colour uintptr) {
+	watchGDI.NewProc("SetTextColor").Call(dc, colour)
+	watchText(dc, text, *x, top, right, top+20)
+	u := windows.StringToUTF16(text)
+	var size struct{ X, Y int32 }
+	watchGDI.NewProc("GetTextExtentPoint32W").Call(dc, uintptr(unsafe.Pointer(&u[0])), uintptr(len(u)-1), uintptr(unsafe.Pointer(&size)))
+	*x += size.X
 }

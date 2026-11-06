@@ -49,6 +49,31 @@ Click a session to bring its window forward, or × to dismiss its row until the
 next working-to-stopped cycle. Scroll to reach rows beyond the six-row viewport.
 Only an explicit session-row click can activate another window.
 
+The trial palette uses amber for owner input, green for explicit completion,
+red for visible quota/error or failed console reads, and dim grey for working.
+Tool/desktop labels stay grey. Rows fade gradually over ten minutes, keeping
+60 percent of their starting contrast. Settings can disable the trial colours
+or change ambiguous idle from cautious amber to green. Edit
+`%LOCALAPPDATA%\agents-cli\watch\theme.json` to adjust the hex colours and fade;
+opening Settings reloads the palette (restart for a changed background).
+
+An empty composer alone cannot reliably distinguish a completed answer from a
+natural-language question, so ambiguous idle is amber by default for all tools.
+Known input/approval prompts are amber; explicit completion banners are green.
+An unchanged screen alone is not evidence of a hung model. Reader failure is
+shown in red, and unknown screen coverage remains visible in the header.
+
+Each row shows visible agent counts and running counts when available; unknown
+counts say "not shown" rather than zero. A visible positive running count keeps
+the session working even when the main composer is idle. Claude footer totals
+do not imply that every listed agent is running. Codex's standard footer does
+not expose an aggregate sub-agent count; historical waiting/spawned rows are
+not live status. Copilot exposes background tasks through `/tasks`; explicitly
+labelled agent rows or running-count summaries can be read when visible. The
+watcher never opens these views or prompts a model. agy/Vibe counts are not
+currently exposed by the supported screen parser. Hidden or off-screen agents
+cannot be inferred from these screen-only observations.
+
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four
 seconds. `--stable D` changes that threshold. Startup-idle sessions are listed
