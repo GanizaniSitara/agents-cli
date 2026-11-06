@@ -61,7 +61,7 @@ func watchPanel(a *watchApp) error {
 	offset := 0
 	var hwnd uintptr
 	var rows []watchEntry
-	var summaries []string
+	var summaries []watchPanelSummary
 	capacity := 1
 	currentDesktop := watchCurrentDesktop()
 	var previousStates map[uint32]string
@@ -128,7 +128,8 @@ func watchPanel(a *watchApp) error {
 			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
 			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
-			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops)
+			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
+			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0
 			unknownCount = 0
 			for _, row := range rows {
@@ -142,12 +143,12 @@ func watchPanel(a *watchApp) error {
 			a.mu.Unlock()
 			// Only relevant status changes reopen the panel. Age ticks, working
 			// screen redraws and background desktop changes cannot wake it.
-			if wakeReady && newDesktop == currentDesktop && watchPanelNeedsWake(previousStates, rows) && settings.Hidden {
+			if wakeReady && newDesktop == currentDesktop && watchPanelNeedsWake(previousStates, wakeRows) && settings.Hidden {
 				settings.Hidden = false
 				_ = saveWatchSettings(a.dir, settings)
 				watchUser.NewProc("ShowWindow").Call(window, 4)
 			}
-			previousStates = watchPanelStates(rows)
+			previousStates = watchPanelStates(wakeRows)
 			currentDesktop = newDesktop
 			if len(allRows) > 0 {
 				wakeReady = true
@@ -215,6 +216,23 @@ func watchPanel(a *watchApp) error {
 				resize()
 				return 0
 			}
+			// Desktop summaries only change the panel view. Never fall through
+			// to the session activation path, including for non-toggle summaries.
+			if section := watchPanelSummaryIndex(y, len(rows), capacity, len(summaries)); section >= 0 {
+				if summary := summaries[section]; summary.Toggle {
+					a.mu.Lock()
+					if a.expanded == nil {
+						a.expanded = map[string]bool{}
+					}
+					a.expanded[summary.DesktopID] = !a.expanded[summary.DesktopID]
+					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
+					a.save()
+					a.mu.Unlock()
+					offset = 0
+					resize()
+				}
+				return 0
+			}
 			i := offset + (y-34)/watchRowHeight
 			if i < 0 || i >= len(rows) || (y-34)/watchRowHeight >= capacity {
 				return 0
@@ -227,7 +245,7 @@ func watchPanel(a *watchApp) error {
 				a.mu.Lock()
 				a.tracker.dismiss(row.Sample.PID)
 				a.save()
-				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops)
+				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
 				a.mu.Unlock()
 				watchFlash(row.Sample.HWND, false)
 				resize()
@@ -327,7 +345,7 @@ func watchPanel(a *watchApp) error {
 				for i, summary := range summaries {
 					top := int32(34 + (end-offset)*watchRowHeight + i*28)
 					watchGDI.NewProc("SetTextColor").Call(dc, theme.colour(theme.Metadata))
-					watchText(dc, summary, 12, top+4, 350, top+26)
+					watchText(dc, summary.Text, 12, top+4, 350, top+26)
 				}
 			}
 			watchGDI.NewProc("SelectObject").Call(dc, old)

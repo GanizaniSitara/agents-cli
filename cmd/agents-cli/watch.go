@@ -39,6 +39,7 @@ type watchReceipt struct {
 	CurrentDesktop string                    `json:"current_desktop"`
 	PanelRows      []watchEntry              `json:"panel_rows"`
 	PanelSummary   []string                  `json:"panel_summary"`
+	PanelSections  []watchPanelSummary       `json:"panel_sections"`
 }
 
 type watchApp struct {
@@ -50,6 +51,7 @@ type watchApp struct {
 	consoleEvents uint64
 	coverage      map[string]map[string]int
 	flashes       watchFlashController
+	expanded      map[string]bool
 }
 
 func watchDirectory(p parsed) (string, error) {
@@ -323,7 +325,10 @@ func normalizeWatchStart(v string) string {
 func (a *watchApp) save() {
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
 	r.CurrentDesktop = watchCurrentDesktop()
-	r.PanelRows, r.PanelSummary = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops())
+	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops(), a.expanded)
+	for _, summary := range r.PanelSections {
+		r.PanelSummary = append(r.PanelSummary, summary.Text)
+	}
 	b, _ := json.MarshalIndent(r, "", "  ")
 	tmp := filepath.Join(a.dir, "status.tmp")
 	if err := os.WriteFile(tmp, b, 0600); err == nil {

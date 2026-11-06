@@ -45,7 +45,11 @@ separate. A disconnected monitor falls back to the primary screen.
 Hide puts the panel in the tray. The tray tooltip shows the stopped count;
 click it to reopen without taking focus. Stopped and unknown sessions on the
 current desktop have individual rows with their desktop number; other desktops
-have stopped, working and unknown counts. Current-desktop work has a summary count.
+have stopped, working and unknown counts. Click a desktop's summary to expand or
+collapse its sessions inside the panel, without switching desktop or activating
+a window. Expanded rows use the same style and desktop labels, with needs input
+and stops ahead of working sessions. Click a session row to go to that window
+on its desktop. Current-desktop work has a summary count.
 Fixed groups are confirmed needs input, error, finished, working, then
 idle/check or unavailable. Ambiguous idle can never outrank a confirmed input wait.
 Rows keep their place within a group; a session moves only when its group changes,
