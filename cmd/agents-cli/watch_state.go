@@ -47,7 +47,13 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	}
 	e := w.entries[s.PID]
 	if e == nil || e.Sample.Started != s.Started || e.Sample.AgentPID != s.AgentPID || e.Sample.HWND != s.HWND {
-		e = &watchEntry{}
+		if e != nil && e.Sample.Started == s.Started && e.Sample.HWND == s.HWND {
+			// Child discovery can change without replacing the console window.
+			// Reset stop tracking, but keep its place within the same group.
+			e = &watchEntry{Sample: e.Sample, Order: e.Order}
+		} else {
+			e = &watchEntry{}
+		}
 		w.entries[s.PID] = e
 	}
 	old := e.Sample

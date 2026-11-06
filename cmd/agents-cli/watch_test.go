@@ -155,9 +155,16 @@ func TestWatchPanelGroupsIncludeUnknownAndStopped(t *testing.T) {
 		}
 	}
 	check([]uint32{5, 6, 3, 4, 2, 1})
+	// Refreshing the agent child identity in the same console must not move
+	// its row when its group remains unchanged.
+	s := samples[4]
+	s.Desktop = "Desktop 2"
+	s.AgentPID = 99
+	w.observe(s, now.Add(2*time.Second))
+	check([]uint32{5, 6, 3, 4, 2, 1})
 	// A change inside the same group preserves its place; a new arrival
 	// joins the end of its new group, even if it was discovered earlier.
-	s := samples[2]
+	s = samples[2]
 	s.Desktop = "Desktop 2"
 	s.State = "error"
 	s.Phase = "error"
