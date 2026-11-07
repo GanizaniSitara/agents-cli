@@ -69,7 +69,7 @@ func (t watchTheme) rowColour(phase string) uintptr {
 	switch phase {
 	case "idle", "unknown":
 		hex = t.Idle
-	case "waiting":
+	case "waiting", "question":
 		hex = t.Waiting
 	case "working":
 		hex = t.Working
@@ -85,6 +85,8 @@ func watchProminentStatus(phase string) string {
 	switch phase {
 	case "waiting":
 		return "NEEDS INPUT"
+	case "question":
+		return "QUESTION"
 	case "idle":
 		return "IDLE"
 	case "unknown":

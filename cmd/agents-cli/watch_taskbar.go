@@ -136,7 +136,7 @@ func watchTaskbarState(entry *watchEntry, current string) uint32 {
 	switch {
 	case s.State == "error" || s.Phase == "error":
 		return 4
-	case s.State == "prompt" || s.Phase == "waiting":
+	case s.State == "prompt" || s.Phase == "waiting" || s.Phase == "question":
 		return 8
 	case s.Phase == "finished":
 		return 2

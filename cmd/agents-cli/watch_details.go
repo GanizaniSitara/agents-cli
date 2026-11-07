@@ -21,6 +21,7 @@ var (
 	agentSummary     = regexp.MustCompile(`(?i)\bagents?:?\s+(\d+)\s*\(\s*(\d+)\s+running\s*\)`)
 	quotaAlert       = regexp.MustCompile(`(?i)^(?:you(?:'ve|’ve) (?:hit|reached) (?:your |the )?(?:usage|rate|weekly|monthly|session|token|credit) limit|you(?:'re|’re) out of (?:usage|credits|tokens)|(?:usage|rate|weekly|monthly|session|token|credit) limit (?:reached|exceeded)|quota (?:exceeded|exhausted)|out of quota|insufficient credits)`)
 	completionBanner = regexp.MustCompile(`(?i)^(?:task (?:complete|completed)|all done|completed successfully|work complete)[.!]?$`)
+	ownerQuestion    = regexp.MustCompile(`(?i)\b(?:do you|would you|could you|can you|should (?:i|we)|shall (?:i|we)|which|what|how|when|where|who|does (?:that|this)|is (?:it|that|this)|are you)\b[^?]*\?`)
 )
 
 func watchContext(lines []string) string {
@@ -144,6 +145,9 @@ func watchPhase(tool string, lines []string, state string) (string, string) {
 	if state == "busy" {
 		return "working", ""
 	}
+	if tool == "codex" && (state == "idle" || state == "prompt") && watchCodexQuestion(lines) {
+		return "question", "question to answer"
+	}
 	if state == "prompt" {
 		return "waiting", "needs input"
 	}
@@ -154,6 +158,43 @@ func watchPhase(tool string, lines []string, state string) (string, string) {
 		return "idle", "idle / check"
 	}
 	return "unknown", "state unavailable"
+}
+
+// Questions must belong to the latest visible assistant reply, above a live
+// composer. A question in a command, past turn or input draft is not a signal.
+func watchCodexQuestion(lines []string) bool {
+	if codexComposerState(lines) == "" {
+		return false
+	}
+	tail := trimBlankTail(lines)
+	end := -1
+	for i := len(tail) - 2; i >= 0; i-- {
+		if strings.HasPrefix(strings.TrimSpace(tail[i]), "›") {
+			end = i
+			break
+		}
+	}
+	if end < 0 {
+		return false
+	}
+	start := -1
+	for i := 0; i < end; i++ {
+		text := strings.TrimSpace(tail[i])
+		if strings.HasPrefix(text, "›") {
+			start = -1
+		}
+		if strings.HasPrefix(text, "• ") {
+			if strings.HasPrefix(text, "• Ran ") || strings.HasPrefix(text, "• Model changed ") {
+				start = -1
+				continue
+			}
+			start = i
+		}
+	}
+	if start < 0 {
+		return false
+	}
+	return ownerQuestion.MatchString(strings.Join(tail[start:end], " "))
 }
 
 func watchLastOutput(lines []string) string {
