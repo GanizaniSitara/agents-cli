@@ -410,7 +410,7 @@ func watchPanel(a *watchApp) error {
 						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour(phase))
 						colour, metadata = theme.colour("#191919"), theme.colour("#493713")
 						status = prominent
-						if inputFont != 0 && phase != "idle" {
+						if inputFont != 0 && phase != "idle" && phase != "question" {
 							watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 						}
 					}
@@ -420,15 +420,19 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, age.Round(time.Second).String(), 150, top+3, 224, top+22)
 					watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
-					if inputFont != 0 {
+					descriptionTop := top + 22
+					if phase == "idle" || phase == "question" || phase == "working" {
+						descriptionTop = top + 16
+					}
+					if inputFont != 0 && phase != "working" {
 						watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 					}
-					watchText(dc, watchRowLabel(row.Sample), 12, top+22, 328, top+40)
+					watchText(dc, watchRowLabel(row.Sample), 12, descriptionTop, 328, descriptionTop+18)
 					watchGDI.NewProc("SelectObject").Call(dc, font)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
-					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, top+38, 270, top+55)
-					watchText(dc, row.Sample.Tool, 276, top+38, 350, top+55)
+					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 270, descriptionTop+35)
+					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 350, descriptionTop+35)
 					watchText(dc, "x", 336, top+9, 358, top+34)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
