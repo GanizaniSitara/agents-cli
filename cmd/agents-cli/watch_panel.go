@@ -410,7 +410,7 @@ func watchPanel(a *watchApp) error {
 						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour(phase))
 						colour, metadata = theme.colour("#191919"), theme.colour("#493713")
 						status = prominent
-						if inputFont != 0 {
+						if inputFont != 0 && phase != "idle" {
 							watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 						}
 					}
