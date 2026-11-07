@@ -410,7 +410,7 @@ func watchPanel(a *watchApp) error {
 						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour(phase))
 						colour, metadata = theme.colour("#191919"), theme.colour("#493713")
 						status = prominent
-						if inputFont != 0 && phase != "idle" && phase != "question" {
+						if inputFont != 0 && phase != "idle" && phase != "question" && phase != "review" {
 							watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 						}
 					}
@@ -421,7 +421,7 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					descriptionTop := top + 22
-					if phase == "idle" || phase == "question" || phase == "working" {
+					if phase == "idle" || phase == "question" || phase == "review" || phase == "working" {
 						descriptionTop = top + 16
 					}
 					if inputFont != 0 && phase != "working" {

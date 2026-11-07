@@ -25,7 +25,7 @@ func (c *watchFlashController) update(entries map[uint32]*watchEntry, current st
 		if changed && onDesktop && entry.Stopped && !entry.Dismissed {
 			entry.Attention = true
 		}
-		waiting := s.State == "prompt" || s.Phase == "waiting" || s.Phase == "question"
+		waiting := s.State == "prompt" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review"
 		on := onDesktop && waiting && entry.Stopped && !entry.Dismissed && entry.Attention
 		previous, known := c.applied[s.HWND]
 		if !known || previous != on {

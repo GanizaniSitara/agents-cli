@@ -132,7 +132,7 @@ func watchPanelGroup(s watchSample) int {
 	if s.State == "error" || s.Phase == "error" {
 		return 1
 	}
-	if s.State == "prompt" || s.Phase == "waiting" || s.Phase == "question" {
+	if s.State == "prompt" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review" {
 		return 0
 	}
 	if s.Phase == "finished" {

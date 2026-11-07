@@ -151,6 +151,9 @@ func watchPhase(tool string, lines []string, state string) (string, string) {
 	if state == "prompt" {
 		return "waiting", "needs input"
 	}
+	if tool == "codex" && state == "idle" && ownerReview.MatchString(watchCodexReply(lines)) {
+		return "review", "review / check requested"
+	}
 	if state == "idle" {
 		if completionBanner.MatchString(watchLastOutput(tail)) {
 			return "finished", "finished"
@@ -163,8 +166,14 @@ func watchPhase(tool string, lines []string, state string) (string, string) {
 // Questions must belong to the latest visible assistant reply, above a live
 // composer. A question in a command, past turn or input draft is not a signal.
 func watchCodexQuestion(lines []string) bool {
+	return ownerQuestion.MatchString(watchCodexReply(lines))
+}
+
+var ownerReview = regexp.MustCompile(`(?im)^\s*(?:•\s*)?(?:try\s*:|(?:please\s+)?(?:review|check|verify|test|try)\s+|(?:ready|available)\s+for\s+(?:your\s+)?(?:review|checking|testing)\b)`)
+
+func watchCodexReply(lines []string) string {
 	if codexComposerState(lines) == "" {
-		return false
+		return ""
 	}
 	tail := trimBlankTail(lines)
 	end := -1
@@ -175,7 +184,7 @@ func watchCodexQuestion(lines []string) bool {
 		}
 	}
 	if end < 0 {
-		return false
+		return ""
 	}
 	start := -1
 	for i := 0; i < end; i++ {
@@ -183,7 +192,7 @@ func watchCodexQuestion(lines []string) bool {
 		if strings.HasPrefix(text, "›") {
 			start = -1
 		}
-		if strings.HasPrefix(text, "• ") {
+		if strings.HasPrefix(tail[i], "• ") {
 			if strings.HasPrefix(text, "• Ran ") || strings.HasPrefix(text, "• Model changed ") {
 				start = -1
 				continue
@@ -192,9 +201,9 @@ func watchCodexQuestion(lines []string) bool {
 		}
 	}
 	if start < 0 {
-		return false
+		return ""
 	}
-	return ownerQuestion.MatchString(strings.Join(tail[start:end], " "))
+	return strings.Join(tail[start:end], "\n")
 }
 
 func watchLastOutput(lines []string) string {
