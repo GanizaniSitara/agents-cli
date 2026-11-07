@@ -351,7 +351,11 @@ func guessState(tool string, lines []string) string {
 	if len(tail) > 18 {
 		tail = tail[len(tail)-18:]
 	}
-	joined := strings.Join(tail, "\n")
+	signals := tail
+	if tool == "codex" {
+		signals = withoutCodexDraft(tail)
+	}
+	joined := strings.Join(signals, "\n")
 	if promptRe.MatchString(joined) {
 		return "prompt"
 	}

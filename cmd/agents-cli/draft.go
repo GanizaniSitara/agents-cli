@@ -39,14 +39,24 @@ func codexComposerState(lines []string) string {
 	for i := len(tail) - 2; i >= 0; i-- {
 		text := strings.TrimSpace(tail[i])
 		if strings.HasPrefix(text, "›") {
-			if idleRe.MatchString(text) {
-				return "idle"
-			}
-			return "prompt"
+			return "idle"
 		}
 		if text != "" && !strings.HasPrefix(tail[i], "  ") {
 			return ""
 		}
 	}
 	return ""
+}
+
+// User draft text is not evidence of an approval prompt or running turn.
+func withoutCodexDraft(lines []string) []string {
+	if codexComposerState(lines) == "" {
+		return lines
+	}
+	for i := len(lines) - 2; i >= 0; i-- {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "›") {
+			return lines[:i]
+		}
+	}
+	return lines
 }

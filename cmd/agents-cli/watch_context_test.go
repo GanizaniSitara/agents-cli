@@ -4,7 +4,7 @@ import "testing"
 
 func TestCodexWrappedLiveDraft(t *testing.T) {
 	lines := []string{"  Worked for 2m 52s", "• Model changed to gpt-6-astra medium", "", "› I'm having a frustrating experience", "  figure it out please.", "", "  GPT-6-Astra medium · ~ · Context 36% left · Complete JPMT-215 workbook task"}
-	if got := guessState("codex", lines); got != "prompt" {
+	if got := guessState("codex", lines); got != "idle" {
 		t.Fatalf("live draft: %s", got)
 	}
 	if got := watchContext(lines); got != "36% left" {
