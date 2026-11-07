@@ -56,15 +56,7 @@ func watchPanel(a *watchApp) error {
 	taskbar, releaseTaskbar := openWatchTaskbar()
 	defer releaseTaskbar()
 	taskbarSignals := watchTaskbarController{}
-	idleIcons := watchIdleIcons{}
-	defer idleIcons.close()
-	setTaskbar := func(hwnd uintptr, state uint32) bool {
-		if state == watchTaskbarIdle {
-			return taskbar.set(hwnd, 0) && idleIcons.set(hwnd, true)
-		}
-		return idleIcons.set(hwnd, false) && taskbar.set(hwnd, state)
-	}
-	defer taskbarSignals.update(nil, "", setTaskbar)
+	defer taskbarSignals.update(nil, "", taskbar.set)
 	stoppedCount := 0
 	unknownCount := 0
 	lastCount := -1
@@ -157,7 +149,7 @@ func watchPanel(a *watchApp) error {
 			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
 			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
-			taskbarSignals.update(a.tracker.entries, newDesktop, setTaskbar)
+			taskbarSignals.update(a.tracker.entries, newDesktop, taskbar.set)
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
 			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0

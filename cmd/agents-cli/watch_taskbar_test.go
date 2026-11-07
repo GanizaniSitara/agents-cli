@@ -4,7 +4,7 @@ import "testing"
 
 func TestTaskbarNeedsInputAndFinishedStates(t *testing.T) {
 	entry := &watchEntry{Sample: watchSample{HWND: 11, DesktopID: "one", Phase: "waiting"}, Stopped: true}
-	for phase, want := range map[string]uint32{"waiting": 8, "finished": 2, "error": 4, "idle": watchTaskbarIdle, "unknown": 0} {
+	for phase, want := range map[string]uint32{"waiting": 8, "finished": 2, "error": 4, "idle": 0, "unknown": 0} {
 		entry.Sample.Phase = phase
 		if got := watchTaskbarState(entry, "one"); got != want {
 			t.Fatalf("%s: %d", phase, got)
@@ -28,7 +28,7 @@ func TestTaskbarAppliesOnlyChangesAndClears(t *testing.T) {
 	}
 	entry.Sample.Phase = "idle"
 	c.update(entries, "one", set)
-	if len(calls) != 2 || calls[1] != watchTaskbarIdle {
+	if len(calls) != 2 || calls[1] != 0 {
 		t.Fatal(calls)
 	}
 	entry.Sample.Phase = "finished"
