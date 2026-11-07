@@ -420,10 +420,15 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, age.Round(time.Second).String(), 150, top+3, 224, top+22)
 					watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
+					if inputFont != 0 {
+						watchGDI.NewProc("SelectObject").Call(dc, inputFont)
+					}
 					watchText(dc, watchRowLabel(row.Sample), 12, top+22, 328, top+40)
+					watchGDI.NewProc("SelectObject").Call(dc, font)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
-					watchText(dc, row.Sample.Tool+" | "+meta+" | "+row.Sample.Agents.label(), 12, top+38, 328, top+55)
+					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, top+38, 270, top+55)
+					watchText(dc, row.Sample.Tool, 276, top+38, 350, top+55)
 					watchText(dc, "x", 336, top+9, 358, top+34)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
