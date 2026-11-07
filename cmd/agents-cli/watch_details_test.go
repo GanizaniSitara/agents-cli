@@ -70,11 +70,22 @@ func TestWatchFixedStateColours(t *testing.T) {
 		seen[colour] = phase
 	}
 	if theme.rowColour("unknown") != theme.rowColour("idle") {
-		t.Fatal("uncertain states must be muted grey")
+		t.Fatal("unknown and idle use the same blue treatment")
 	}
 	// Colour conversion has no age argument: persisted fade fields cannot
 	// make the same state change appearance as its age counter advances.
 	if theme.colour(theme.Waiting) != theme.rowColour("waiting") {
 		t.Fatal("waiting colour changed")
+	}
+}
+
+func TestWatchStatusesShareInputTileFormat(t *testing.T) {
+	for phase, label := range map[string]string{"waiting": "NEEDS INPUT", "idle": "IDLE", "unknown": "UNKNOWN", "finished": "FINISHED", "error": "ERROR"} {
+		if got := watchProminentStatus(phase); got != label {
+			t.Fatalf("%s: got %q, want %q", phase, got, label)
+		}
+	}
+	if watchProminentStatus("working") != "" {
+		t.Fatal("working should retain its quiet row")
 	}
 }

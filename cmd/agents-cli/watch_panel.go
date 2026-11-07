@@ -398,10 +398,10 @@ func watchPanel(a *watchApp) error {
 					status := firstNonEmpty(row.Sample.Reason, phase)
 					colour := theme.rowColour(phase)
 					metadata := theme.colour(theme.Metadata)
-					if phase == "waiting" {
-						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour("waiting"))
+					if prominent := watchProminentStatus(phase); prominent != "" {
+						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour(phase))
 						colour, metadata = theme.colour("#191919"), theme.colour("#493713")
-						status = "NEEDS INPUT"
+						status = prominent
 						if inputFont != 0 {
 							watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 						}

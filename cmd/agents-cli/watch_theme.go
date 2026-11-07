@@ -9,6 +9,7 @@ import (
 )
 
 type watchTheme struct {
+	Idle       string `json:"idle"`
 	Waiting    string `json:"waiting"`
 	Finished   string `json:"finished"`
 	Error      string `json:"error"`
@@ -18,7 +19,7 @@ type watchTheme struct {
 }
 
 func defaultWatchTheme() watchTheme {
-	return watchTheme{Waiting: "#FFC247", Finished: "#88C58E", Error: "#ED7373", Working: "#D4D9DE", Metadata: "#9299A1", Background: "#20252B"}
+	return watchTheme{Idle: "#54B7FF", Waiting: "#FFC247", Finished: "#88C58E", Error: "#ED7373", Working: "#D4D9DE", Metadata: "#9299A1", Background: "#20252B"}
 }
 
 func loadWatchTheme(dir string) watchTheme {
@@ -66,6 +67,8 @@ func (t watchTheme) colour(hex string) uintptr {
 func (t watchTheme) rowColour(phase string) uintptr {
 	hex := t.Metadata
 	switch phase {
+	case "idle", "unknown":
+		hex = t.Idle
 	case "waiting":
 		hex = t.Waiting
 	case "working":
@@ -76,4 +79,20 @@ func (t watchTheme) rowColour(phase string) uintptr {
 		hex = t.Error
 	}
 	return t.colour(hex)
+}
+
+func watchProminentStatus(phase string) string {
+	switch phase {
+	case "waiting":
+		return "NEEDS INPUT"
+	case "idle":
+		return "IDLE"
+	case "unknown":
+		return "UNKNOWN"
+	case "finished":
+		return "FINISHED"
+	case "error":
+		return "ERROR"
+	}
+	return ""
 }
