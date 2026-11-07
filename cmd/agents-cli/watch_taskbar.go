@@ -11,6 +11,83 @@ import (
 // There is no arbitrary RGB/blue progress-fill state.
 type watchTaskbarCOM struct{ VTable *[21]uintptr }
 
+const watchTaskbarIdle = 16 // internal marker, never passed as a Windows flag
+
+type watchIdleIcons struct {
+	icon      uintptr
+	originals map[uintptr][2]uintptr
+}
+
+func watchIconMessage(hwnd uintptr, message uint32, which, icon uintptr) (uintptr, bool) {
+	var result uintptr
+	ok, _, _ := watchUser.NewProc("SendMessageTimeoutW").Call(hwnd, uintptr(message), which, icon, 3, 100, uintptr(unsafe.Pointer(&result)))
+	return result, ok != 0
+}
+
+func (c *watchIdleIcons) set(hwnd uintptr, on bool) bool {
+	if c.originals == nil {
+		c.originals = map[uintptr][2]uintptr{}
+	}
+	if !on {
+		original, ok := c.originals[hwnd]
+		if !ok {
+			return true
+		}
+		restored := true
+		for which, icon := range original {
+			current, read := watchIconMessage(hwnd, 0x7f, uintptr(which), 0)
+			if read && current == c.icon {
+				_, ok := watchIconMessage(hwnd, 0x80, uintptr(which), icon)
+				restored = restored && ok
+			}
+		}
+		if restored {
+			delete(c.originals, hwnd)
+		}
+		return restored
+	}
+	if _, ok := c.originals[hwnd]; ok {
+		return true
+	}
+	if c.icon == 0 {
+		// A solid blue native bitmap icon, with no text/font/emoji dependency.
+		mask := make([]byte, 32)
+		pixels := make([]byte, 16*16*4)
+		for i := 0; i < len(pixels); i += 4 {
+			pixels[i], pixels[i+1], pixels[i+2], pixels[i+3] = 0xff, 0xb7, 0x54, 0xff
+		}
+		c.icon, _, _ = watchUser.NewProc("CreateIcon").Call(0, 16, 16, 1, 32, uintptr(unsafe.Pointer(&mask[0])), uintptr(unsafe.Pointer(&pixels[0])))
+		if c.icon == 0 {
+			return false
+		}
+	}
+	var original [2]uintptr
+	for which := range original {
+		value, ok := watchIconMessage(hwnd, 0x7f, uintptr(which), 0)
+		if !ok {
+			return false
+		}
+		original[which] = value
+	}
+	c.originals[hwnd] = original
+	for which := range original {
+		if _, ok := watchIconMessage(hwnd, 0x80, uintptr(which), c.icon); !ok {
+			c.set(hwnd, false)
+			return false
+		}
+	}
+	return true
+}
+
+func (c *watchIdleIcons) close() {
+	for hwnd := range c.originals {
+		c.set(hwnd, false)
+	}
+	if c.icon != 0 {
+		watchUser.NewProc("DestroyIcon").Call(c.icon)
+	}
+}
+
 func openWatchTaskbar() (*watchTaskbarCOM, func()) {
 	ole := windows.NewLazySystemDLL("ole32.dll")
 	hr, _, _ := ole.NewProc("CoInitializeEx").Call(0, 0)
@@ -63,6 +140,8 @@ func watchTaskbarState(entry *watchEntry, current string) uint32 {
 		return 8
 	case s.Phase == "finished":
 		return 2
+	case s.State == "idle" || s.Phase == "idle":
+		return watchTaskbarIdle
 	}
 	return 0
 }
