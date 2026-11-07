@@ -5,8 +5,8 @@ import "testing"
 func TestWatchFlashFollowsViewedDesktop(t *testing.T) {
 	c := watchFlashController{}
 	entries := map[uint32]*watchEntry{
-		1: {Sample: watchSample{HWND: 11, DesktopID: "one"}, Stopped: true},
-		2: {Sample: watchSample{HWND: 22, DesktopID: "two"}, Stopped: true, Attention: true},
+		1: {Sample: watchSample{HWND: 11, DesktopID: "one", Phase: "waiting"}, Stopped: true},
+		2: {Sample: watchSample{HWND: 22, DesktopID: "two", Phase: "waiting"}, Stopped: true, Attention: true},
 	}
 	actions := map[uintptr]bool{}
 	flash := func(hwnd uintptr, on bool) { actions[hwnd] = on }
@@ -54,7 +54,7 @@ func TestWatchFlashFollowsViewedDesktop(t *testing.T) {
 
 func TestWatchFlashClearsResumedRemovedAndUnknownDesktop(t *testing.T) {
 	c := watchFlashController{}
-	entry := &watchEntry{Sample: watchSample{HWND: 11, DesktopID: "one"}, Stopped: true, Attention: true}
+	entry := &watchEntry{Sample: watchSample{HWND: 11, DesktopID: "one", Phase: "waiting"}, Stopped: true, Attention: true}
 	entries := map[uint32]*watchEntry{1: entry}
 	actions := map[uintptr]bool{}
 	flash := func(hwnd uintptr, on bool) { actions[hwnd] = on }
@@ -78,5 +78,24 @@ func TestWatchFlashClearsResumedRemovedAndUnknownDesktop(t *testing.T) {
 	c.update(nil, "one", flash)
 	if actions[11] {
 		t.Fatal("removed window flash not cleared")
+	}
+}
+
+func TestIdleAndFinishedNeverFlash(t *testing.T) {
+	c := watchFlashController{}
+	entry := &watchEntry{Sample: watchSample{HWND: 11, DesktopID: "one", Phase: "waiting"}, Stopped: true, Attention: true}
+	entries := map[uint32]*watchEntry{1: entry}
+	on := false
+	flash := func(_ uintptr, value bool) { on = value }
+	c.update(entries, "one", flash)
+	if !on {
+		t.Fatal("needs input did not flash")
+	}
+	for _, phase := range []string{"idle", "finished", "unknown", "error"} {
+		entry.Sample.Phase = phase
+		c.update(entries, "one", flash)
+		if on {
+			t.Fatalf("%s flashed", phase)
+		}
 	}
 }

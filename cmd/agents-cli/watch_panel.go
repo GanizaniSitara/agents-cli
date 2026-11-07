@@ -53,6 +53,10 @@ func watchPanel(a *watchApp) error {
 	menu := false
 	monitors := watchMonitors()
 	desktops := watchDesktops()
+	taskbar, releaseTaskbar := openWatchTaskbar()
+	defer releaseTaskbar()
+	taskbarSignals := watchTaskbarController{}
+	defer taskbarSignals.update(nil, "", taskbar.set)
 	stoppedCount := 0
 	unknownCount := 0
 	lastCount := -1
@@ -145,6 +149,7 @@ func watchPanel(a *watchApp) error {
 			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
 			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
+			taskbarSignals.update(a.tracker.entries, newDesktop, taskbar.set)
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
 			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0
@@ -412,8 +417,8 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					watchText(dc, status, 12, top+2, 145, top+22)
 					watchGDI.NewProc("SelectObject").Call(dc, font)
-					watchText(dc, row.Sample.Context, 150, top+3, 224, top+22)
-					watchText(dc, age.Round(time.Second).String(), 230, top+3, 328, top+22)
+					watchText(dc, age.Round(time.Second).String(), 150, top+3, 224, top+22)
+					watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					watchText(dc, watchRowLabel(row.Sample), 12, top+22, 328, top+40)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
