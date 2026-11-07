@@ -21,7 +21,7 @@ var (
 	agentSummary     = regexp.MustCompile(`(?i)\bagents?:?\s+(\d+)\s*\(\s*(\d+)\s+running\s*\)`)
 	quotaAlert       = regexp.MustCompile(`(?i)^(?:you(?:'ve|’ve) (?:hit|reached) (?:your |the )?(?:usage|rate|weekly|monthly|session|token|credit) limit|you(?:'re|’re) out of (?:usage|credits|tokens)|(?:usage|rate|weekly|monthly|session|token|credit) limit (?:reached|exceeded)|quota (?:exceeded|exhausted)|out of quota|insufficient credits)`)
 	completionBanner = regexp.MustCompile(`(?i)^(?:task (?:complete|completed)|all done|completed successfully|work complete)[.!]?$`)
-	ownerQuestion    = regexp.MustCompile(`(?i)\b(?:do you|would you|could you|can you|should (?:i|we)|shall (?:i|we)|which|what|how|when|where|who|does (?:that|this)|is (?:it|that|this)|are you)\b[^?]*\?`)
+	ownerQuestion    = regexp.MustCompile(`(?i)\b(?:do you|would you|could (?:you|i|we)|can (?:you|i|we)|may (?:i|we)|should (?:i|we)|shall (?:i|we)|which|what|how|when|where|who|does (?:that|this)|is (?:it|that|this)|are you)\b[^?]*\?`)
 )
 
 func watchContext(lines []string) string {
