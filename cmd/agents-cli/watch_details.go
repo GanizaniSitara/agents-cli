@@ -14,6 +14,7 @@ type watchAgents struct {
 }
 
 var (
+	contextRemaining = regexp.MustCompile(`(?i)\b(?:context|ctx)\s+(\d{1,3})%\s+left\b|\b(\d{1,3})%\s+(?:context|ctx)\s+left\b`)
 	agentFraction    = regexp.MustCompile(`(?i)\b(\d+)\s*/\s*(\d+)\s+(?:sub-?agents?|agents?)\s+running\b`)
 	agentTotal       = regexp.MustCompile(`(?i)\b(\d+)\s+(?:sub-?agents?|agents?)\b`)
 	agentRunning     = regexp.MustCompile(`(?i)\b(\d+)\s+(?:sub-?agents?|agents?)\s+(?:still\s+)?running\b|\b(\d+)\s+running\s+(?:sub-?agents?|agents?)\b`)
@@ -21,6 +22,26 @@ var (
 	quotaAlert       = regexp.MustCompile(`(?i)^(?:you(?:'ve|’ve) (?:hit|reached) (?:your |the )?(?:usage|rate|weekly|monthly|session|token|credit) limit|you(?:'re|’re) out of (?:usage|credits|tokens)|(?:usage|rate|weekly|monthly|session|token|credit) limit (?:reached|exceeded)|quota (?:exceeded|exhausted)|out of quota|insufficient credits)`)
 	completionBanner = regexp.MustCompile(`(?i)^(?:task (?:complete|completed)|all done|completed successfully|work complete)[.!]?$`)
 )
+
+func watchContext(lines []string) string {
+	tail := trimBlankTail(lines)
+	for i := len(tail) - 1; i >= 0 && i >= len(tail)-3; i-- {
+		text := strings.TrimSpace(tail[i])
+		if strings.HasPrefix(text, "›") || strings.HasPrefix(text, "❯") || strings.HasPrefix(text, ">") {
+			continue
+		}
+		if !strings.Contains(text, " · ") && !strings.Contains(text, " | ") {
+			continue
+		}
+		if match := contextRemaining.FindStringSubmatch(text); match != nil {
+			value := firstNonEmpty(match[1], match[2])
+			if n, _ := strconv.Atoi(value); n <= 100 {
+				return value + "% left"
+			}
+		}
+	}
+	return ""
+}
 
 func agentNumber(s string) *int { n, _ := strconv.Atoi(s); return &n }
 

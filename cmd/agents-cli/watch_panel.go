@@ -407,9 +407,10 @@ func watchPanel(a *watchApp) error {
 						}
 					}
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
-					watchText(dc, status, 12, top+2, 240, top+22)
+					watchText(dc, status, 12, top+2, 145, top+22)
 					watchGDI.NewProc("SelectObject").Call(dc, font)
-					watchText(dc, age.Round(time.Second).String(), 250, top+3, 328, top+22)
+					watchText(dc, row.Sample.Context, 150, top+3, 224, top+22)
+					watchText(dc, age.Round(time.Second).String(), 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					watchText(dc, watchRowLabel(row.Sample), 12, top+22, 328, top+40)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)

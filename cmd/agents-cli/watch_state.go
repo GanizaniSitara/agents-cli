@@ -14,6 +14,7 @@ type watchSample struct {
 	Agents        watchAgents `json:"agents"`
 	Phase         string      `json:"phase"`
 	Reason        string      `json:"reason,omitempty"`
+	Context       string      `json:"context,omitempty"`
 	RootStarted   string      `json:"root_started"`
 	WindowPID     uint32      `json:"window_pid"`
 	WindowStarted string      `json:"window_started"`

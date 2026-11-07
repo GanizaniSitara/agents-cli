@@ -285,7 +285,7 @@ func watchWorker() error {
 				desktopID, desktop = windowWatchDesktop(manager, hwnd, desktops)
 				previous.desktopRead = time.Now()
 			}
-			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop}
+			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop, Context: watchContext(r.Lines)}
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
 			sample.WindowPID = watchWindowPID(hwnd)
 			sample.WindowStarted = startTime(sample.WindowPID).Format(time.RFC3339Nano)
