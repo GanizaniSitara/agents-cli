@@ -73,7 +73,7 @@ func monitorLabel(m watchMonitor) string {
 	if h > w {
 		orientation = "portrait"
 	}
-	return fmt.Sprintf("Monitor %d · %s · %d × %d", m.Number, orientation, w, h)
+	return fmt.Sprintf("Monitor %d | %s | %d x %d", m.Number, orientation, w, h)
 }
 
 func loadWatchSettings(dir string) watchSettings {
@@ -118,7 +118,7 @@ func (n *watchTrayData) update(count int, op uintptr) bool {
 	n.Size = uint32(unsafe.Sizeof(*n))
 	n.Flags = 1 | 2 | 4 // callback, icon, tooltip; never balloon/sound
 	n.Tip = [128]uint16{}
-	copy(n.Tip[:], windows.StringToUTF16(fmt.Sprintf("Agents · %d stopped · click to open", count)))
+	copy(n.Tip[:], windows.StringToUTF16(fmt.Sprintf("Agents | %d stopped | click to open", count)))
 	ok, _, _ := windows.NewLazySystemDLL("shell32.dll").NewProc("Shell_NotifyIconW").Call(op, uintptr(unsafe.Pointer(n)))
 	return ok != 0
 }

@@ -11,10 +11,10 @@ func TestWatchPanelCurrentDesktopAndSummary(t *testing.T) {
 		{Sample: watchSample{Session: Session{PID: 5, State: "unknown"}}},
 	}
 	rows, summaries := watchPanelLayout(entries, "one", []watchDesktop{{ID: "one", Name: "Desktop 1"}, {ID: "two", Name: "Desktop 2"}}, nil)
-	if len(rows) != 1 || rows[0].Sample.PID != 1 {
+	if len(rows) != 2 || rows[0].Sample.PID != 1 || rows[1].Sample.PID != 2 {
 		t.Fatalf("current desktop rows: %+v", rows)
 	}
-	if len(summaries) != 3 || summaries[1].Text != "▸ Desktop 2 · 1 stopped · 1 working" {
+	if len(summaries) != 2 || summaries[0].Text != "[+] Desktop 2 | 1 stopped | 1 working" {
 		t.Fatalf("summaries: %v", summaries)
 	}
 }
@@ -81,6 +81,21 @@ func TestWatchPanelFitsTwelveAndBoundsScrolling(t *testing.T) {
 	}
 	if n := watchPanelCapacity(600, 2); 34+n*watchRowHeight+2*28+24 > 600 {
 		t.Fatal("panel exceeds work area")
+	}
+}
+
+func TestWatchRunningRowsStayBelowStoppedAndUnknown(t *testing.T) {
+	entries := []watchEntry{
+		{Sample: watchSample{Session: Session{PID: 1, State: "busy"}, DesktopID: "one", Phase: "working"}},
+		{Sample: watchSample{Session: Session{PID: 2, State: "unknown"}, DesktopID: "one"}},
+		{Sample: watchSample{Session: Session{PID: 3, State: "prompt"}, DesktopID: "one"}, Stopped: true},
+	}
+	rows, summaries := watchPanelLayout(entries, "one", []watchDesktop{{ID: "one", Name: "Desktop 1"}}, nil)
+	if len(rows) != 3 || rows[0].Sample.PID != 3 || rows[1].Sample.PID != 2 || rows[2].Sample.PID != 1 {
+		t.Fatalf("running row misplaced: %+v", rows)
+	}
+	if len(summaries) != 0 {
+		t.Fatal("current running sessions should have named rows, not duplicate summary")
 	}
 }
 

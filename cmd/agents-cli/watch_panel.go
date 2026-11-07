@@ -346,15 +346,15 @@ func watchPanel(a *watchApp) error {
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
 			old, _, _ := watchGDI.NewProc("SelectObject").Call(dc, font)
-			header := fmt.Sprintf("Agents · %d stopped", stoppedCount)
+			header := fmt.Sprintf("Agents | %d stopped", stoppedCount)
 			if unknownCount > 0 {
-				header = fmt.Sprintf("%d stopped · %d unknown", stoppedCount, unknownCount)
+				header = fmt.Sprintf("%d stopped | %d unknown", stoppedCount, unknownCount)
 			}
 			a.mu.Lock()
 			problem := a.problem
 			a.mu.Unlock()
 			if problem != "" {
-				header = "Agents · reader retrying"
+				header = "Agents | reader retrying"
 				watchGDI.NewProc("SetTextColor").Call(dc, theme.rowColour("error"))
 			}
 			watchText(dc, header, 12, 8, 240, 30)
@@ -366,21 +366,21 @@ func watchPanel(a *watchApp) error {
 				for i, m := range monitors {
 					prefix := "   "
 					if m.Device == selected.Device {
-						prefix = "✓ "
+						prefix = "[x] "
 					}
 					top := int32(34 + i*44)
 					watchText(dc, prefix+monitorLabel(m), 12, top+8, 350, top+35)
 				}
 				for i, d := range desktops {
-					prefix := "☐ "
+					prefix := "[ ] "
 					if settings.monitorsDesktop(d.ID) {
-						prefix = "☑ "
+						prefix = "[x] "
 					}
 					top := int32(34 + (len(monitors)+i)*44)
 					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
 				}
 				top := int32(34 + (len(monitors)+len(desktops))*44)
-				watchText(dc, "Done · choices are remembered", 12, top+8, 350, top+35)
+				watchText(dc, "Done | choices are remembered", 12, top+8, 350, top+35)
 			} else {
 				for i, row := range frame.Rows {
 					top := int32(34 + i*watchRowHeight)
@@ -396,6 +396,9 @@ func watchPanel(a *watchApp) error {
 						}
 					}
 					status := firstNonEmpty(row.Sample.Reason, phase)
+					if phase == "working" {
+						status = "RUNNING"
+					}
 					colour := theme.rowColour(phase)
 					metadata := theme.colour(theme.Metadata)
 					if prominent := watchProminentStatus(phase); prominent != "" {
@@ -415,8 +418,8 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, watchRowLabel(row.Sample), 12, top+22, 328, top+40)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
-					watchText(dc, row.Sample.Tool+" · "+meta+" · "+row.Sample.Agents.label(), 12, top+38, 328, top+55)
-					watchText(dc, "×", 336, top+9, 358, top+34)
+					watchText(dc, row.Sample.Tool+" | "+meta+" | "+row.Sample.Agents.label(), 12, top+38, 328, top+55)
+					watchText(dc, "x", 336, top+9, 358, top+34)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {

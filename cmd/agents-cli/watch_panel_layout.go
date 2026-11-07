@@ -19,8 +19,8 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 	totals := map[string]*counts{}
 	for _, entry := range entries {
 		s := entry.Sample
-		if current != "" && s.DesktopID == current && s.State != "busy" && s.Phase != "working" {
-			if entry.Stopped || s.State == "unknown" || s.State == "error" {
+		if current != "" && s.DesktopID == current {
+			if entry.Stopped || s.State == "unknown" || s.State == "error" || s.State == "busy" || s.Phase == "working" {
 				rows = append(rows, entry)
 			}
 			continue
@@ -55,16 +55,16 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 		if c := totals[desktop.ID]; c != nil {
 			if desktop.ID == current {
 				if c.working > 0 {
-					summaries = append(summaries, watchPanelSummary{DesktopID: desktop.ID, Text: fmt.Sprintf("This desktop · %d working", c.working)})
+					summaries = append(summaries, watchPanelSummary{DesktopID: desktop.ID, Text: fmt.Sprintf("This desktop | %d working", c.working)})
 				}
 			} else {
-				text := fmt.Sprintf("%s · %d stopped · %d working", desktop.Name, c.stopped, c.working)
+				text := fmt.Sprintf("%s | %d stopped | %d working", desktop.Name, c.stopped, c.working)
 				if c.unknown > 0 {
-					text += fmt.Sprintf(" · %d unknown", c.unknown)
+					text += fmt.Sprintf(" | %d unknown", c.unknown)
 				}
-				prefix := "▸ "
+				prefix := "[+] "
 				if expanded[desktop.ID] {
-					prefix = "▾ "
+					prefix = "[-] "
 				}
 				summaries = append(summaries, watchPanelSummary{DesktopID: desktop.ID, Text: prefix + text, Expanded: expanded[desktop.ID], Toggle: desktop.ID != ""})
 			}

@@ -120,7 +120,7 @@ func (a watchAgents) label() string {
 	if a.Running != nil {
 		running = fmt.Sprint(*a.Running)
 	}
-	return fmt.Sprintf("agents: %s visible · %s running", total, running)
+	return fmt.Sprintf("agents: %s visible | %s running", total, running)
 }
 
 // Bare idle is deliberately distinct from an explicit completion. Each TUI
