@@ -67,16 +67,18 @@ func watchPanel(a *watchApp) error {
 	var summaries []watchPanelSummary
 	var painted watchPanelFrame
 	var pressed watchPanelPress
+	dragging := false
+	var dragOffset watchPoint
 	capacity := 1
 	currentDesktop := watchCurrentDesktop()
 	var previousStates map[uint32]string
 	wakeReady := false
 	var tray watchTrayData
 	resize := func() {
-		if pressed.Active {
+		if pressed.Active || dragging {
 			return
 		} // keep the panel still through mouse-up
-		area := selectWatchMonitor(monitors, settings.Monitor).Work
+		area := watchPositionMonitor(monitors, settings).Work
 		n := len(rows)
 		capacity = watchPanelCapacity(area.Bottom-area.Top, len(summaries))
 		if n > capacity {
@@ -90,7 +92,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 1
+			n = len(monitors) + len(desktops) + 2
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -101,8 +103,28 @@ func watchPanel(a *watchApp) error {
 		if !settings.Hidden {
 			flags |= 0x40
 		}
-		watchUser.NewProc("SetWindowPos").Call(hwnd, ^uintptr(0), uintptr(area.Right-width-12), uintptr(area.Bottom-height-12), uintptr(width), uintptr(height), flags)
+		position := watchPanelPosition(area, width, height, settings.Position)
+		watchUser.NewProc("SetWindowPos").Call(hwnd, ^uintptr(0), uintptr(position.X), uintptr(position.Y), uintptr(width), uintptr(height), flags)
 		watchUser.NewProc("InvalidateRect").Call(hwnd, 0, 1)
+	}
+	finishDrag := func() {
+		if !dragging {
+			return
+		}
+		dragging = false
+		watchUser.NewProc("KillTimer").Call(hwnd, 2)
+		watchUser.NewProc("ReleaseCapture").Call()
+		var rect watchRect
+		watchUser.NewProc("GetWindowRect").Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+		settings.Position = &watchPoint{rect.Left, rect.Top}
+		settings.Monitor = watchPositionMonitor(monitors, settings).Device
+		_ = saveWatchSettings(a.dir, settings)
+		resize()
+	}
+	moveDrag := func() {
+		var cursor watchPoint
+		watchUser.NewProc("GetCursorPos").Call(uintptr(unsafe.Pointer(&cursor)))
+		watchUser.NewProc("SetWindowPos").Call(hwnd, 0, uintptr(cursor.X-dragOffset.X), uintptr(cursor.Y-dragOffset.Y), 0, 0, 0x1|0x4|0x10)
 	}
 	brush, _, _ := watchGDI.NewProc("CreateSolidBrush").Call(theme.colour(theme.Background))
 	defer watchGDI.NewProc("DeleteObject").Call(brush)
@@ -126,6 +148,17 @@ func watchPanel(a *watchApp) error {
 		case 0x21:
 			return 3 // WM_MOUSEACTIVATE: deliver click, never focus panel
 		case 0x113: // WM_TIMER
+			if wp == 2 {
+				if dragging {
+					buttons, _, _ := watchUser.NewProc("GetAsyncKeyState").Call(1)
+					if buttons&0x8000 == 0 {
+						finishDrag()
+					} else {
+						moveDrag()
+					}
+				}
+				return 0
+			}
 			if token, err := os.ReadFile(filepath.Join(a.dir, "stop")); err == nil {
 				if string(token) == startTime(uint32(os.Getpid())).Format(time.RFC3339Nano) {
 					watchUser.NewProc("DestroyWindow").Call(window)
@@ -182,7 +215,7 @@ func watchPanel(a *watchApp) error {
 			if offset >= len(rows) {
 				offset = 0
 			}
-			if !settings.Hidden && !pressed.Active {
+			if !settings.Hidden && !pressed.Active && !dragging {
 				key := watchPanelRenderKey(rows, summaries, offset, capacity, currentDesktop, stoppedCount, unknownCount, time.Now().Unix()/10)
 				if key != lastRender {
 					lastRender = key
@@ -204,6 +237,14 @@ func watchPanel(a *watchApp) error {
 			watchUser.NewProc("InvalidateRect").Call(window, 0, 1)
 			return 0
 		case 0x201: // WM_LBUTTONDOWN: select the last fully painted target
+			x, y := int32(int16(lp)), int32(int16(lp>>16))
+			if x >= 0 && x < 245 && y >= 0 && y < 34 {
+				dragging = true
+				dragOffset = watchPoint{x, y}
+				watchUser.NewProc("SetCapture").Call(window)
+				watchUser.NewProc("SetTimer").Call(window, 2, 16, 0)
+				return 0
+			}
 			pressed = painted.hit(int(int16(lp)), int(int16(lp>>16)))
 			if pressed.Active {
 				pressed.Time = time.Now()
@@ -212,7 +253,15 @@ func watchPanel(a *watchApp) error {
 				watchUser.NewProc("SetCapture").Call(window)
 			}
 			return 0
+		case 0x200: // WM_MOUSEMOVE: header drag, without activating the window
+			if dragging && wp&1 != 0 {
+				point := watchPoint{int32(int16(lp)), int32(int16(lp >> 16))}
+				watchUser.NewProc("ClientToScreen").Call(window, uintptr(unsafe.Pointer(&point)))
+				watchUser.NewProc("SetWindowPos").Call(window, 0, uintptr(point.X-dragOffset.X), uintptr(point.Y-dragOffset.Y), 0, 0, 0x1|0x4|0x10)
+			}
+			return 0
 		case 0x215, 0x1f: // capture lost / cancel mode: never activate
+			finishDrag()
 			if pressed.Active {
 				p := pressed
 				pressed.Active = false
@@ -224,6 +273,10 @@ func watchPanel(a *watchApp) error {
 			}
 			return 0
 		case 0x202: // WM_LBUTTONUP: use the saved press, never re-hit-test
+			if dragging {
+				finishDrag()
+				return 0
+			}
 			p := pressed
 			pressed.Active = false
 			watchUser.NewProc("ReleaseCapture").Call()
@@ -270,12 +323,16 @@ func watchPanel(a *watchApp) error {
 				i := (y - 34) / 44
 				if i >= 0 && i < len(monitors) {
 					settings.Monitor = monitors[i].Device
+					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i >= len(monitors) && i < len(monitors)+len(desktops) {
 					settings.toggleDesktop(desktops[i-len(monitors)].ID)
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
+				} else if i == len(monitors)+len(desktops) {
+					settings.Position = nil
+					_ = saveWatchSettings(a.dir, settings)
 				}
 				menu = false
 				resize()
@@ -364,7 +421,11 @@ func watchPanel(a *watchApp) error {
 			}
 			watchText(dc, header, 12, 8, 240, 30)
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
-			watchText(dc, "Settings", 249, 8, 312, 30)
+			settingsLabel := "Settings"
+			if frame.Menu {
+				settingsLabel = "Back"
+			}
+			watchText(dc, settingsLabel, 249, 8, 312, 30)
 			watchText(dc, "Hide", 324, 8, 358, 30)
 			if frame.Menu {
 				selected := selectWatchMonitor(monitors, settings.Monitor)
@@ -385,6 +446,8 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
 				}
 				top := int32(34 + (len(monitors)+len(desktops))*44)
+				watchText(dc, "Reset location", 12, top+8, 350, top+35)
+				top += 44
 				watchText(dc, "Done | choices are remembered", 12, top+8, 350, top+35)
 			} else {
 				for i, row := range frame.Rows {

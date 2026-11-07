@@ -23,9 +23,41 @@ type watchMonitor struct {
 }
 
 type watchSettings struct {
-	Monitor          string   `json:"monitor"`
-	Hidden           bool     `json:"hidden"`
-	ExcludedDesktops []string `json:"excluded_desktops,omitempty"`
+	Position         *watchPoint `json:"position,omitempty"`
+	Monitor          string      `json:"monitor"`
+	Hidden           bool        `json:"hidden"`
+	ExcludedDesktops []string    `json:"excluded_desktops,omitempty"`
+}
+
+func watchPositionMonitor(monitors []watchMonitor, settings watchSettings) watchMonitor {
+	if p := settings.Position; p != nil {
+		for _, m := range monitors {
+			if p.X >= m.Work.Left && p.X < m.Work.Right && p.Y >= m.Work.Top && p.Y < m.Work.Bottom {
+				return m
+			}
+		}
+	}
+	return selectWatchMonitor(monitors, settings.Monitor)
+}
+
+func watchPanelPosition(area watchRect, width, height int32, saved *watchPoint) watchPoint {
+	p := watchPoint{area.Right - width - 12, area.Bottom - height - 12}
+	if saved != nil {
+		p = *saved
+	}
+	if p.X > area.Right-width {
+		p.X = area.Right - width
+	}
+	if p.Y > area.Bottom-height {
+		p.Y = area.Bottom - height
+	}
+	if p.X < area.Left {
+		p.X = area.Left
+	}
+	if p.Y < area.Top {
+		p.Y = area.Top
+	}
+	return p
 }
 
 func watchMonitors() []watchMonitor {
