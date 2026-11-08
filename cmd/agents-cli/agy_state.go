@@ -7,7 +7,7 @@ import (
 
 var (
 	agyRunningTask = regexp.MustCompile(`^\s*●\s+\[\d{2}:\d{2}:\d{2}\]\s+.+\s+running\s*$`)
-	agyLiveSpinner = regexp.MustCompile(`(?i)^\s*[\x{2800}-\x{28FF}]\s+(?:running command|thinking|generating|working)\b`)
+	agyLiveSpinner = regexp.MustCompile(`(?i)^\s*[\x{2800}-\x{28FF}]\s+(?:running command|reading file|thinking|generating|working)\b`)
 )
 
 // AGY keeps an idle composer while background commands run. Only the live

@@ -18,6 +18,7 @@ func TestAGYLiveStateRegions(t *testing.T) {
 		{"background command with idle composer", "busy", frame("The command is running in the background.", "  ● [21:05:35] python.exe example_job.py --input example running")},
 		{"foreground footer", "busy", append(frame("Do you want the old option?"), "esc to cancel    Gemini 3.8 Flash · medium")},
 		{"foreground spinner without footer", "busy", []string{"", "⣯  Running command..", "", ""}},
+		{"file spinner without footer", "busy", []string{"", "⣟  Reading file...", "", ""}},
 		{"spinner above composer", "busy", frame("⣽  Running command...")},
 		{"explicit patch question", "prompt", frame("Would you like me to apply this patch?")},
 		{"approval overrides foreground footer", "prompt", []string{"⣯ Running command...", "Allow this command?", "> Yes, once", "↑/↓ Navigate · enter Confirm"}},

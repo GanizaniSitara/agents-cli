@@ -66,7 +66,7 @@ func cmdTail(args []string) error {
 	if above < 0 || lines < 0 || (p.has("lines") && lines == 0) {
 		return errors.New("--above must be nonnegative and --lines must be positive")
 	}
-	s, _, err := lookup(p.pos[0])
+	s, processes, err := lookup(p.pos[0])
 	if err != nil {
 		return err
 	}
@@ -77,9 +77,10 @@ func cmdTail(args []string) error {
 	if err != nil {
 		return err
 	}
+	work := agyRuntimeWork(*s, processes, commandLine, startTime)
 	emit(map[string]interface{}{
 		"pid": s.PID, "tool": s.Tool, "name": s.Name, "title": r.Title,
-		"state": guessState(s.Tool, r.Lines), "lines": screenTail(r.Lines, lines),
+		"state": agyRuntimeState(guessState(s.Tool, r.Lines), work), "lines": screenTail(r.Lines, lines), "work_processes": work,
 	})
 	return nil
 }

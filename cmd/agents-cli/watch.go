@@ -234,6 +234,14 @@ func watchWorker() error {
 			}
 			nextDiscovery = time.Now().Add(15 * time.Second)
 		}
+		// One inexpensive process enumeration for all AGY rows, never parallel.
+		var runtimeProcesses procMap
+		for _, s := range sessions {
+			if s.Tool == "agy" && !s.PollingMuted {
+				runtimeProcesses, _ = snapshot()
+				break
+			}
+		}
 		for _, s := range sessions {
 			if !s.Alive || s.Kind != "window" || s.PollingMuted {
 				continue
@@ -247,13 +255,14 @@ func watchWorker() error {
 				continue
 			}
 			previous := cache[s.PID]
-			if hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
+			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s
 				batch.Samples = append(batch.Samples, sample)
 				continue
 			}
+			work := agyRuntimeWork(s, runtimeProcesses, commandLine, startTime)
 			r := doPeek(s.PID, 0)
 			if r.Error != "" {
 				if previous.sample.HWND != 0 && previous.sample.Started == s.Started && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) {
@@ -262,6 +271,10 @@ func watchWorker() error {
 					failed.Phase = "error"
 					failed.Reason = "console read failed"
 					failed.Signature = r.Error
+					failed.WorkProcesses = work
+					if work > 0 {
+						failed.State, failed.Phase, failed.Reason = "busy", "working", "child command active; console unavailable"
+					}
 					previous.sample = failed
 					cache[s.PID] = previous
 					batch.Samples = append(batch.Samples, failed)
@@ -276,7 +289,7 @@ func watchWorker() error {
 			s.Title = r.Title
 			digest := sha256.Sum256([]byte(strings.Join(r.Lines, "\n")))
 			signature := hex.EncodeToString(digest[:8])
-			if previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND == hwnd && previous.sample.Signature == signature {
+			if s.Tool != "agy" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND == hwnd && previous.sample.Signature == signature {
 				s.State = previous.sample.State
 			} else {
 				s.State = guessState(s.Tool, r.Lines)
@@ -290,7 +303,7 @@ func watchWorker() error {
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
 			sample.WindowPID = watchWindowPID(hwnd)
 			sample.WindowStarted = startTime(sample.WindowPID).Format(time.RFC3339Nano)
-			if previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
+			if s.Tool != "agy" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
 				sample.Phase, sample.Reason, sample.Agents = previous.sample.Phase, previous.sample.Reason, previous.sample.Agents
 			} else {
 				sample.Phase, sample.Reason = watchPhase(s.Tool, r.Lines, s.State)
@@ -298,6 +311,10 @@ func watchWorker() error {
 			}
 			if sample.Phase == "error" {
 				sample.State = "error"
+			}
+			sample.WorkProcesses = work
+			if agyRuntimeState(sample.State, work) != sample.State {
+				sample.State, sample.Phase, sample.Reason = "busy", "working", "child command active"
 			}
 			if sample.Agents.Running != nil && *sample.Agents.Running > 0 {
 				sample.State = "busy"

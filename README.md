@@ -108,6 +108,14 @@ working even when the composer is empty. A task count alone is not proof of
 running work, and background commands are not counted as sub-agents. Approval
 menus and explicit final questions remain input waits; old transcript wording
 does not determine the live state.
+The watcher also checks a bounded set of live AGY descendant commands, guarded
+by process creation times. Recognised shell/Python commands and noninteractive
+Codex children keep an idle or blank-screen session working; persistent MCP/stdio
+bridges are excluded. `work_processes` in status/tail is a process count, not a
+sub-agent count. Internal AGY agents without a visible signal or recognised
+child process remain unverifiable. Blank console reads receive one short retry;
+stale screen text is never used as proof of activity. AGY is reread every two
+seconds so a cached idle screen cannot hide newly started work.
 
 The executable and tray use the embedded terminal-and-agents icon in
 `cmd/agents-cli/agents.ico`; the checked-in Windows resource object lets normal

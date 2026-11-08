@@ -243,6 +243,21 @@ func openConsole(name string) (windows.Handle, error) {
 }
 
 func doPeek(pid uint32, above int) *peekResult {
+	return peekWithBlankRetry(func() *peekResult { return doPeekOnce(pid, above) }, time.Sleep)
+}
+
+// A console can be sampled between AGY's clear and repaint. Retry once with a
+// fresh attachment/active-buffer handle; never spin or use stale screen text.
+func peekWithBlankRetry(read func() *peekResult, sleep func(time.Duration)) *peekResult {
+	r := read()
+	if r.Error == "" && len(trimBlankTail(r.Lines)) == 0 {
+		sleep(20 * time.Millisecond)
+		return read()
+	}
+	return r
+}
+
+func doPeekOnce(pid uint32, above int) *peekResult {
 	r := &peekResult{Lines: []string{}}
 	if err := attach(pid); err != nil {
 		r.Error = err.Error()

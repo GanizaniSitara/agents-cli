@@ -199,6 +199,9 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 			}
 		}
 		refreshScreen(s, opts.withScreen, peek)
+		if opts.withScreen && !s.PollingMuted {
+			s.State = agyRuntimeState(s.State, agyRuntimeWork(*s, procs, commandLine, startTime))
+		}
 		out = append(out, *s)
 	}
 	sort.Slice(out, func(i, j int) bool {

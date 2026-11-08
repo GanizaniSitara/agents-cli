@@ -18,6 +18,7 @@ type watchSample struct {
 	RootStarted   string      `json:"root_started"`
 	WindowPID     uint32      `json:"window_pid"`
 	WindowStarted string      `json:"window_started"`
+	WorkProcesses int         `json:"work_processes,omitempty"`
 }
 
 type watchEntry struct {
