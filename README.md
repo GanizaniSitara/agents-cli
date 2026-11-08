@@ -102,6 +102,13 @@ agents are running, and Codex background terminals are not sub-agents. Copilot
 explicit agent summaries can be read when visible. The watcher never opens
 these views or prompts a model. agy/Vibe counts are not currently exposed.
 
+AGY state uses its live composer, progress footer and background-task strip.
+A timestamped task marked `running` below the composer keeps the session
+working even when the composer is empty. A task count alone is not proof of
+running work, and background commands are not counted as sub-agents. Approval
+menus and explicit final questions remain input waits; old transcript wording
+does not determine the live state.
+
 The executable and tray use the embedded terminal-and-agents icon in
 `cmd/agents-cli/agents.ico`; the checked-in Windows resource object lets normal
 Go builds include it without additional build tools.

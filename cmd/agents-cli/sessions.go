@@ -326,6 +326,9 @@ var (
 // running; a visible question means the TUI is waiting on a human; a bare
 // input prompt means idle. Anything else is honestly unknown.
 func guessState(tool string, lines []string) string {
+	if tool == "agy" {
+		return agyState(lines)
+	}
 	if tool == "copilot" {
 		return copilotState(lines)
 	}
