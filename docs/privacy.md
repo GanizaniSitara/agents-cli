@@ -48,7 +48,10 @@ GitHub-token, provider-key and AWS-key patterns. No matches were found in the
 249 historical blobs checked before this release. The current source fixture
 containing a builder username was anonymised; historical versions retain that
 old example path. Internal task IDs and development paths remain in engineering
-documentation. The repository stays private.
+documentation. A follow-up public-sharing check also reviewed commit identities
+(GitHub noreply addresses only), issues/comments and Actions artifacts (none).
+No blocker to publishing the reviewed repository was found. Historical example
+paths and internal task IDs are not removed from Git history.
 
 The release executable is checked separately for personal markers and absolute
 build paths, and the archive is checked against an explicit file allowlist.
