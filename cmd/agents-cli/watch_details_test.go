@@ -35,6 +35,27 @@ func TestVisibleAgentCountsAndRunningGate(t *testing.T) {
 	}
 }
 
+func TestRunningAgentLabelsPreserveUnknownCounts(t *testing.T) {
+	for _, tc := range []struct {
+		agents watchAgents
+		want   string
+	}{
+		{watchAgents{}, "agents: unknown"},
+		{watchAgents{Total: agentNumber("11")}, "agents: ?/11 running"},
+		{watchAgents{Running: agentNumber("0"), Total: agentNumber("11")}, "agents: 0/11 running"},
+		{watchAgents{Running: agentNumber("2"), Total: agentNumber("3")}, "agents: 2/3 running"},
+		{watchAgents{Running: agentNumber("2")}, "agents: 2 running"},
+	} {
+		if got := tc.agents.label(); got != tc.want {
+			t.Fatalf("got %q, want %q", got, tc.want)
+		}
+	}
+	a := watchAgentDetails("codex", []string{"Working (21s) · 5 background terminals running", "› Ask Codex to do anything", "GPT-6 · Context 28% left · ← for agents"})
+	if a.Running != nil || a.Total != nil {
+		t.Fatal("background terminals counted as agents")
+	}
+}
+
 func TestWatchTrialPhases(t *testing.T) {
 	if p, _ := watchPhase("claude", []string{"Task complete.", "Would you like me to continue?", "────────", "❯", "────────"}, "idle"); p != "idle" {
 		t.Fatal("an old completion banner hid a later question")

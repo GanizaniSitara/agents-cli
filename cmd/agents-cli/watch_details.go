@@ -112,16 +112,15 @@ func watchAgentDetails(tool string, lines []string) watchAgents {
 
 func (a watchAgents) label() string {
 	if a.Total == nil && a.Running == nil {
-		return "agents: not shown"
-	}
-	total, running := "?", "?"
-	if a.Total != nil {
-		total = fmt.Sprint(*a.Total)
+		return "agents: unknown"
 	}
 	if a.Running != nil {
-		running = fmt.Sprint(*a.Running)
+		if a.Total != nil {
+			return fmt.Sprintf("agents: %d/%d running", *a.Running, *a.Total)
+		}
+		return fmt.Sprintf("agents: %d running", *a.Running)
 	}
-	return fmt.Sprintf("agents: %s visible | %s running", total, running)
+	return fmt.Sprintf("agents: ?/%d running", *a.Total)
 }
 
 // Bare idle is deliberately distinct from an explicit completion. Each TUI

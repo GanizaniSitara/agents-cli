@@ -58,6 +58,7 @@ func watchPanel(a *watchApp) error {
 	taskbarSignals := watchTaskbarController{}
 	defer taskbarSignals.update(nil, "", taskbar.set)
 	stoppedCount := 0
+	runningCount := 0
 	unknownCount := 0
 	lastCount := -1
 	lastRender := ""
@@ -186,8 +187,12 @@ func watchPanel(a *watchApp) error {
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
 			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0
+			runningCount = 0
 			unknownCount = 0
 			for _, row := range rows {
+				if row.Sample.State == "busy" || row.Sample.Phase == "working" {
+					runningCount++
+				}
 				if row.Stopped {
 					stoppedCount++
 				}
@@ -408,9 +413,9 @@ func watchPanel(a *watchApp) error {
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
 			old, _, _ := watchGDI.NewProc("SelectObject").Call(dc, font)
-			header := fmt.Sprintf("Agents | %d stopped", stoppedCount)
+			header := fmt.Sprintf("%d running | %d stopped", runningCount, stoppedCount)
 			if unknownCount > 0 {
-				header = fmt.Sprintf("%d stopped | %d unknown", stoppedCount, unknownCount)
+				header += fmt.Sprintf(" | %d unknown", unknownCount)
 			}
 			a.mu.Lock()
 			problem := a.problem
