@@ -23,6 +23,7 @@ type watchMonitor struct {
 }
 
 type watchSettings struct {
+	Shortcuts        string      `json:"shortcuts,omitempty"`
 	Position         *watchPoint `json:"position,omitempty"`
 	Monitor          string      `json:"monitor"`
 	Hidden           bool        `json:"hidden"`

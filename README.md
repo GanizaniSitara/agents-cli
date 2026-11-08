@@ -105,6 +105,15 @@ The executable and tray use the embedded terminal-and-agents icon in
 `cmd/agents-cli/agents.ico`; the checked-in Windows resource object lets normal
 Go builds include it without additional build tools.
 
+Numbered global shortcuts select the first ten displayed session rows in panel
+order: Ctrl+Alt+Shift+1 through 9, then 0 for the tenth. Numbers appear at the
+right of each row and follow the visible rows when scrolling or reordering.
+Settings cycles between Ctrl+Alt+Shift (default), Ctrl+Alt, Ctrl+Shift, and Off;
+the choice is remembered. A global registration conflict disables the entire
+set and is shown in Settings. Application-local shortcut conflicts cannot be
+detected, so select a different combination or Off if an application needs it.
+Shortcuts work while the panel is hidden and pause while Settings is open.
+
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four
 seconds. `--stable D` changes that threshold. Startup-idle sessions are listed

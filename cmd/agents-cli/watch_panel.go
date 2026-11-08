@@ -63,6 +63,14 @@ func watchPanel(a *watchApp) error {
 	lastRender := ""
 	offset := 0
 	var hwnd uintptr
+	shortcutProblem := ""
+	unregisterShortcut := func(id uintptr) { watchUser.NewProc("UnregisterHotKey").Call(hwnd, id) }
+	applyShortcuts := func() {
+		shortcutProblem = watchRegisterShortcuts(settings.Shortcuts, func(id, modifiers, key uintptr) bool {
+			ok, _, _ := watchUser.NewProc("RegisterHotKey").Call(hwnd, id, modifiers, key)
+			return ok != 0
+		}, unregisterShortcut)
+	}
 	var rows []watchEntry
 	var summaries []watchPanelSummary
 	var painted watchPanelFrame
@@ -92,7 +100,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 2
+			n = len(monitors) + len(desktops) + 4
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -133,6 +141,12 @@ func watchPanel(a *watchApp) error {
 	defer watchGDI.NewProc("DeleteObject").Call(inputFont)
 	proc := syscall.NewCallback(func(window uintptr, msg uint32, wp, lp uintptr) uintptr {
 		switch msg {
+		case 0x312: // WM_HOTKEY: same targets and identity checks as explicit clicks
+			if p, ok := watchShortcutRow(painted, wp); ok && shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 && !pressed.Active && !dragging {
+				p.Time = time.Now()
+				a.activateWatchRow(p, p.Y)
+			}
+			return 0
 		case 0x8001: // tray callback: reopening never activates the panel
 			if lp == 0x202 || lp == 0x205 {
 				settings.Hidden = false
@@ -333,6 +347,14 @@ func watchPanel(a *watchApp) error {
 				} else if i == len(monitors)+len(desktops) {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
+				} else if i == len(monitors)+len(desktops)+1 {
+					settings.Shortcuts = watchNextShortcut(settings.Shortcuts)
+					applyShortcuts()
+					_ = saveWatchSettings(a.dir, settings)
+					resize()
+					return 0
+				} else if i == len(monitors)+len(desktops)+2 {
+					return 0
 				}
 				menu = false
 				resize()
@@ -382,13 +404,7 @@ func watchPanel(a *watchApp) error {
 				resize()
 				return 0
 			}
-			// SwitchToThisWindow follows the shell's user-requested window switch,
-			// including virtual desktops. No background path calls this API.
-			watchFlash(row.Sample.HWND, false)
-			watchUser.NewProc("ShowWindowAsync").Call(row.Sample.HWND, 9)
-			watchUser.NewProc("SwitchToThisWindow").Call(row.Sample.HWND, 1)
-			set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
-			a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
+			a.activateWatchRow(p, releaseY)
 			return 0
 		case 0x0f: // WM_PAINT
 			// A frame snapshot is valid for hit-testing only after every pixel
@@ -448,6 +464,14 @@ func watchPanel(a *watchApp) error {
 				top := int32(34 + (len(monitors)+len(desktops))*44)
 				watchText(dc, "Reset location", 12, top+8, 350, top+35)
 				top += 44
+				watchText(dc, "Shortcuts: "+watchShortcutChoice(settings.Shortcuts)+"  [change]", 12, top+8, 350, top+35)
+				top += 44
+				hint := "1-9, 0: shown rows | app shortcuts may clash"
+				if shortcutProblem != "" {
+					hint = shortcutProblem
+				}
+				watchText(dc, hint, 12, top+8, 350, top+35)
+				top += 44
 				watchText(dc, "Done | choices are remembered", 12, top+8, 350, top+35)
 			} else {
 				for i, row := range frame.Rows {
@@ -496,7 +520,10 @@ func watchPanel(a *watchApp) error {
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
 					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 270, descriptionTop+35)
 					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 350, descriptionTop+35)
-					watchText(dc, "x", 336, top+9, 358, top+34)
+					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
+						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
+					}
+					watchText(dc, "x", 336, top+26, 358, top+46)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {
@@ -530,6 +557,12 @@ func watchPanel(a *watchApp) error {
 		return fmt.Errorf("create panel: %v", err)
 	}
 	hwnd = window
+	applyShortcuts()
+	defer func() {
+		for i := 0; i < 10; i++ {
+			unregisterShortcut(watchHotkeyBase + uintptr(i))
+		}
+	}()
 	icon, _, _ := watchUser.NewProc("LoadIconW").Call(uintptr(instance), 1)
 	if icon == 0 {
 		icon, _, _ = watchUser.NewProc("LoadIconW").Call(0, 32512)
