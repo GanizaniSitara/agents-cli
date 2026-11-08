@@ -60,7 +60,7 @@ chosen monitor's work area; scroll when they exceed the available height.
 After Hide, a new or changed stopped/unknown status on the current desktop can
 reopen the panel without activation. Age ticks, background-desktop changes and
 working counts do not reopen it.
-Only an explicit session-row click can activate another window.
+Only an explicit session-row click or numbered session shortcut activates another window.
 Row clicks select the last fully painted row on mouse press. The panel holds
 its position and painted rows until release, so a new input wait or a height
 change cannot redirect the click. Closed/reused processes and changed window
@@ -77,7 +77,7 @@ desktop switch has completed; the live activation check remains an owner check.
 
 Confirmed input waits have a filled strong amber band with dark text and a
 bold NEEDS INPUT label. Errors are red, explicit completion is green, working
-is plain neutral, and idle/check or unavailable states are muted grey.
+is plain neutral, and idle/check or unavailable states have a blue background.
 Age appears only as a number;
 no row or label fades. The earlier trial-colour/idle switches were removed so
 their meanings cannot conflict. The existing theme.json palette remains editable;
@@ -85,8 +85,9 @@ legacy fade settings are ignored. Settings reloads the palette (restart for a
 changed background).
 
 An empty composer alone cannot reliably distinguish a completed answer from a
-natural-language question, so ambiguous idle is labelled idle/check in grey.
-Only known input/approval prompts receive the amber highlight.
+natural-language question, so ambiguous idle is labelled idle/check in blue.
+Recognised input/approval prompts, Codex questions and explicit review handoffs
+receive the amber highlight. These detections are heuristics.
 An unchanged screen alone is not evidence of a hung model. Reader failure is
 shown in red, and unknown screens have their own rows as well as a header count.
 
@@ -117,7 +118,7 @@ Shortcuts work while the panel is hidden and pause while Settings is open.
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four
 seconds. `--stable D` changes that threshold. Startup-idle sessions are listed
-without flashing. Working-to-idle/prompt transitions flash only that window's
+without flashing. Confirmed input/question/review transitions flash only that window's
 taskbar button when its desktop is being viewed, until it is foreground.
 Off-desktop stops remain in the panel information without taskbar flashing;
 switching to their desktop starts their pending flashes. Switching away clears

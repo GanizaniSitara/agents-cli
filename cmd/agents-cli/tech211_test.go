@@ -11,7 +11,7 @@ func tech211Procs() procMap {
 		1:  {PID: 1, PPID: 0, Name: "explorer.exe"},
 		2:  {PID: 2, PPID: 1, Name: "cmd.exe", Cmd: `cmd /k c:\temp\launch-tech-211-x.bat`},
 		3:  {PID: 3, PPID: 2, Name: "claude-console-filter.exe"},
-		4:  {PID: 4, PPID: 3, Name: "claude.exe", Cmd: `claude.exe --dangerously-skip-permissions --name "TECH-211" "read the task file at c:\users\admin\tasks\in-progress\tech-211-x.md"`},
+		4:  {PID: 4, PPID: 3, Name: "claude.exe", Cmd: `claude.exe --dangerously-skip-permissions --name "TECH-211" "read the task file at c:\users\example\tasks\in-progress\tech-211-x.md"`},
 		10: {PID: 10, PPID: 1, Name: "claude.exe", Cmd: "claude.exe daemon run"},
 		11: {PID: 11, PPID: 10, Name: "claude.exe", Cmd: `claude.exe --bg-pty-host \\.\pipe\x 11 5`},
 		12: {PID: 12, PPID: 11, Name: "claude.exe", Cmd: "claude.exe --session-id ba03e821-own"},
