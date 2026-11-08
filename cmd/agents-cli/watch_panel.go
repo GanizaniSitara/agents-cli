@@ -344,16 +344,16 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops) {
+				} else if i == len(monitors)+len(desktops)+2 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
-				} else if i == len(monitors)+len(desktops)+1 {
+				} else if i == len(monitors)+len(desktops) {
 					settings.Shortcuts = watchNextShortcut(settings.Shortcuts)
 					applyShortcuts()
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+2 {
+				} else if i == len(monitors)+len(desktops)+1 {
 					return 0
 				}
 				menu = false
@@ -462,8 +462,6 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
 				}
 				top := int32(34 + (len(monitors)+len(desktops))*44)
-				watchText(dc, "Reset location", 12, top+8, 350, top+35)
-				top += 44
 				watchText(dc, "Shortcuts: "+watchShortcutChoice(settings.Shortcuts)+"  [change]", 12, top+8, 350, top+35)
 				top += 44
 				hint := "1-9, 0: shown rows | app shortcuts may clash"
@@ -471,6 +469,8 @@ func watchPanel(a *watchApp) error {
 					hint = shortcutProblem
 				}
 				watchText(dc, hint, 12, top+8, 350, top+35)
+				top += 44
+				watchText(dc, "Reset location", 12, top+8, 350, top+35)
 				top += 44
 				watchText(dc, "Done | choices are remembered", 12, top+8, 350, top+35)
 			} else {
