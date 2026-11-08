@@ -90,16 +90,20 @@ Only known input/approval prompts receive the amber highlight.
 An unchanged screen alone is not evidence of a hung model. Reader failure is
 shown in red, and unknown screens have their own rows as well as a header count.
 
-Each row shows visible agent counts and running counts when available; unknown
-counts say "not shown" rather than zero. A visible positive running count keeps
-the session working even when the main composer is idle. Claude footer totals
-do not imply that every listed agent is running. Codex's standard footer does
-not expose an aggregate sub-agent count; historical waiting/spawned rows are
-not live status. Copilot exposes background tasks through `/tasks`; explicitly
-labelled agent rows or running-count summaries can be read when visible. The
-watcher never opens these views or prompts a model. agy/Vibe counts are not
-currently exposed by the supported screen parser. Hidden or off-screen agents
-cannot be inferred from these screen-only observations.
+Each row shows sub-agent counts as `agents: 2/3 running`. Claude and Codex
+counts use local child-session lifecycle records when the owning session can
+be verified. Completed children remain in the total but not the running count.
+Missing identities or ambiguous lifecycle records show unknown, not zero.
+Only lifecycle metadata is read; transcript text is not saved in watcher state.
+A positive running count keeps the session working even when its composer is
+idle. Screen counts remain a fallback: Claude footer totals do not imply all
+agents are running, and Codex background terminals are not sub-agents. Copilot
+explicit agent summaries can be read when visible. The watcher never opens
+these views or prompts a model. agy/Vibe counts are not currently exposed.
+
+The executable and tray use the embedded terminal-and-agents icon in
+`cmd/agents-cli/agents.ico`; the checked-in Windows resource object lets normal
+Go builds include it without additional build tools.
 
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four

@@ -52,6 +52,7 @@ type watchApp struct {
 	coverage      map[string]map[string]int
 	flashes       watchFlashController
 	expanded      map[string]bool
+	agentRecords  watchAgentRecords
 }
 
 func watchDirectory(p parsed) (string, error) {
@@ -415,6 +416,11 @@ func (a *watchApp) readWorker() error {
 				}
 			}
 			timer.Reset(6 * time.Second)
+			for i := range batch.Samples {
+				if counts, ok := a.agentRecords.counts(batch.Samples[i].Session); ok {
+					batch.Samples[i].Agents = counts
+				}
+			}
 			a.mu.Lock()
 			a.problem = batch.Error
 			a.consoleEvents = batch.ConsoleEvents

@@ -58,7 +58,6 @@ func watchPanel(a *watchApp) error {
 	taskbarSignals := watchTaskbarController{}
 	defer taskbarSignals.update(nil, "", taskbar.set)
 	stoppedCount := 0
-	runningCount := 0
 	unknownCount := 0
 	lastCount := -1
 	lastRender := ""
@@ -187,12 +186,8 @@ func watchPanel(a *watchApp) error {
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
 			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0
-			runningCount = 0
 			unknownCount = 0
 			for _, row := range rows {
-				if row.Sample.State == "busy" || row.Sample.Phase == "working" {
-					runningCount++
-				}
 				if row.Stopped {
 					stoppedCount++
 				}
@@ -413,9 +408,9 @@ func watchPanel(a *watchApp) error {
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
 			old, _, _ := watchGDI.NewProc("SelectObject").Call(dc, font)
-			header := fmt.Sprintf("%d running | %d stopped", runningCount, stoppedCount)
+			header := fmt.Sprintf("Agents | %d stopped", stoppedCount)
 			if unknownCount > 0 {
-				header += fmt.Sprintf(" | %d unknown", unknownCount)
+				header = fmt.Sprintf("%d stopped | %d unknown", stoppedCount, unknownCount)
 			}
 			a.mu.Lock()
 			problem := a.problem
@@ -535,7 +530,10 @@ func watchPanel(a *watchApp) error {
 		return fmt.Errorf("create panel: %v", err)
 	}
 	hwnd = window
-	icon, _, _ := watchUser.NewProc("LoadIconW").Call(0, 32512)
+	icon, _, _ := watchUser.NewProc("LoadIconW").Call(uintptr(instance), 1)
+	if icon == 0 {
+		icon, _, _ = watchUser.NewProc("LoadIconW").Call(0, 32512)
+	}
 	tray = watchTrayData{HWND: hwnd, ID: 1, Callback: 0x8001, Icon: icon}
 	if !tray.update(0, 0) {
 		return fmt.Errorf("cannot create watcher tray icon")
