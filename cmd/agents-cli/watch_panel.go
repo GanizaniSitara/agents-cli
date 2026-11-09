@@ -210,6 +210,8 @@ func watchPanel(a *watchApp) error {
 			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
 			taskbarSignals.update(a.tracker.entries, newDesktop, taskbar.set)
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
+			foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+			rows = watchActiveRows(rows, foreground)
 			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0
 			unknownCount = 0
@@ -574,7 +576,8 @@ func watchPanel(a *watchApp) error {
 		r, _, _ := watchUser.NewProc("DefWindowProcW").Call(window, uintptr(msg), wp, lp)
 		return r
 	})
-	class := watchClass{Proc: proc, Instance: uintptr(instance), Background: brush, Name: name}
+	arrow, _, _ := watchUser.NewProc("LoadCursorW").Call(0, 32512)
+	class := watchClass{Proc: proc, Instance: uintptr(instance), Cursor: arrow, Background: brush, Name: name}
 	class.Size = uint32(unsafe.Sizeof(class))
 	if r, _, err := watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class))); r == 0 {
 		return fmt.Errorf("register panel: %v", err)

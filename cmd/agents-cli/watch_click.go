@@ -138,33 +138,36 @@ func watchSameClickSession(pressed, current watchSample) bool {
 }
 
 type watchClickRecord struct {
-	Time                   time.Time `json:"time"`
-	PressTime              time.Time `json:"press_time"`
-	Y                      int       `json:"y"`
-	ReleaseY               int       `json:"release_y"`
-	ScreenY                int32     `json:"screen_y"`
-	RowIndex               int       `json:"row_index"`
-	Label                  string    `json:"label"`
-	PID                    uint32    `json:"pid"`
-	HWND                   uintptr   `json:"hwnd"`
-	WindowTitle            string    `json:"window_title"`
-	SampleTitle            string    `json:"sample_title"`
-	CaptionMatchesSample   bool      `json:"caption_matches_sample"`
-	Source                 string    `json:"source"`
-	RootStarted            string    `json:"root_started"`
-	LiveRootStarted        string    `json:"live_root_started"`
-	WindowPID              uint32    `json:"window_pid"`
-	ExpectedWindowPID      uint32    `json:"expected_window_pid"`
-	WindowStarted          string    `json:"window_started"`
-	ExpectedWindowStarted  string    `json:"expected_window_started"`
-	Outcome                string    `json:"outcome"`
-	ActivationRequested    bool      `json:"activation_requested"`
-	SetForegroundSucceeded bool      `json:"set_foreground_succeeded"`
-	ForegroundAfter        uintptr   `json:"foreground_after"`
-	ForegroundTitle        string    `json:"foreground_title"`
-	ForegroundPID          uint32    `json:"foreground_pid"`
-	PaintGeneration        uint64    `json:"paint_generation"`
-	PaintedPanelTop        int32     `json:"painted_panel_top"`
+	BoundsBefore           *watchRect `json:"bounds_before,omitempty"`
+	BoundsAfter            *watchRect `json:"bounds_after,omitempty"`
+	WasMinimized           bool       `json:"was_minimized,omitempty"`
+	Time                   time.Time  `json:"time"`
+	PressTime              time.Time  `json:"press_time"`
+	Y                      int        `json:"y"`
+	ReleaseY               int        `json:"release_y"`
+	ScreenY                int32      `json:"screen_y"`
+	RowIndex               int        `json:"row_index"`
+	Label                  string     `json:"label"`
+	PID                    uint32     `json:"pid"`
+	HWND                   uintptr    `json:"hwnd"`
+	WindowTitle            string     `json:"window_title"`
+	SampleTitle            string     `json:"sample_title"`
+	CaptionMatchesSample   bool       `json:"caption_matches_sample"`
+	Source                 string     `json:"source"`
+	RootStarted            string     `json:"root_started"`
+	LiveRootStarted        string     `json:"live_root_started"`
+	WindowPID              uint32     `json:"window_pid"`
+	ExpectedWindowPID      uint32     `json:"expected_window_pid"`
+	WindowStarted          string     `json:"window_started"`
+	ExpectedWindowStarted  string     `json:"expected_window_started"`
+	Outcome                string     `json:"outcome"`
+	ActivationRequested    bool       `json:"activation_requested"`
+	SetForegroundSucceeded bool       `json:"set_foreground_succeeded"`
+	ForegroundAfter        uintptr    `json:"foreground_after"`
+	ForegroundTitle        string     `json:"foreground_title"`
+	ForegroundPID          uint32     `json:"foreground_pid"`
+	PaintGeneration        uint64     `json:"paint_generation"`
+	PaintedPanelTop        int32      `json:"painted_panel_top"`
 }
 
 func (a *watchApp) logClick(p watchPanelPress, releaseY int, state watchTargetState, outcome string, attempted, succeeded bool) {

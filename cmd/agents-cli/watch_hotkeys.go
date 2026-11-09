@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+	"unsafe"
+)
 
 var watchShortcutChoices = []string{"Ctrl+Alt+Shift", "Ctrl+Alt", "Ctrl+Shift", "Off"}
 
@@ -145,16 +149,25 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 		return
 	}
 	// Only a session click or an explicit session shortcut calls this path.
+	var before watchRect
+	watchUser.NewProc("GetWindowRect").Call(row.Sample.HWND, uintptr(unsafe.Pointer(&before)))
+	wasMinimized, _, _ := watchUser.NewProc("IsIconic").Call(row.Sample.HWND)
 	watchFlash(row.Sample.HWND, false)
 	watchRestoreMinimized(row.Sample.HWND, func(hwnd uintptr) bool {
 		iconic, _, _ := watchUser.NewProc("IsIconic").Call(hwnd)
 		return iconic != 0
 	}, func(hwnd uintptr) { watchUser.NewProc("ShowWindowAsync").Call(hwnd, 9) })
-	// The shell switch is needed only for an explicitly selected other desktop.
-	// On this desktop SetForegroundWindow brings the window forward unchanged.
-	if row.Sample.DesktopID != "" && row.Sample.DesktopID != watchCurrentDesktop() {
-		watchUser.NewProc("SwitchToThisWindow").Call(row.Sample.HWND, 1)
-	}
+	// SwitchToThisWindow can post SC_RESTORE even for an existing window.
+	// Foreground activation alone lets the shell follow the explicit selection
+	// across desktops without an additional restore request.
 	set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
+	watchPulseWindow(row.Sample.HWND)
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		var after watchRect
+		watchUser.NewProc("GetWindowRect").Call(row.Sample.HWND, uintptr(unsafe.Pointer(&after)))
+		_ = watchAppendClick(a.dir, watchClickRecord{Time: time.Now(), PID: row.Sample.PID, HWND: row.Sample.HWND,
+			Outcome: "activation-geometry", BoundsBefore: &before, BoundsAfter: &after, WasMinimized: wasMinimized != 0})
+	}()
 }

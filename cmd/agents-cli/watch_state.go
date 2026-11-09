@@ -41,6 +41,20 @@ type watchTracker struct {
 	nextOrder uint64
 }
 
+// Focus is presentation, not proof that an agent is running. Preserve the
+// underlying state so leaving the window reveals any outstanding request.
+func watchActiveRows(rows []watchEntry, foreground uintptr) []watchEntry {
+	result := append([]watchEntry(nil), rows...)
+	for i := range result {
+		s := &result[i].Sample
+		if foreground != 0 && s.HWND == foreground && s.State != "busy" && s.Phase != "error" {
+			s.Phase, s.Reason = "active", "active window"
+			result[i].Stopped = false
+		}
+	}
+	return result
+}
+
 func newWatchTracker(stable time.Duration) *watchTracker {
 	return &watchTracker{stable: stable, entries: map[uint32]*watchEntry{}}
 }
