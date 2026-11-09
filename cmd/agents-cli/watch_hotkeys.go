@@ -44,6 +44,59 @@ func watchShortcutDigit(index int) string {
 
 const watchHotkeyBase = 0x4100
 
+const watchFirstRowHotkey = 0x4200
+
+var watchFirstRowChoices = []string{"Off", "Ctrl+Win+Z", "Ctrl+Alt+Shift+Z", "Ctrl+Alt+Z"}
+
+func watchFirstRowChoice(choice string) string {
+	for _, value := range watchFirstRowChoices {
+		if choice == value {
+			return value
+		}
+	}
+	return "Off"
+}
+
+func watchNextFirstRowShortcut(choice string) string {
+	for i, value := range watchFirstRowChoices {
+		if watchFirstRowChoice(choice) == value {
+			return watchFirstRowChoices[(i+1)%len(watchFirstRowChoices)]
+		}
+	}
+	return "Off"
+}
+
+func watchRegisterFirstRowShortcut(choice string, register func(id, modifiers, key uintptr) bool, unregister func(id uintptr)) string {
+	unregister(watchFirstRowHotkey) // never unregister the numbered set
+	var modifiers uintptr
+	switch watchFirstRowChoice(choice) {
+	case "Ctrl+Win+Z":
+		modifiers = 2 | 8
+	case "Ctrl+Alt+Shift+Z":
+		modifiers = 2 | 1 | 4
+	case "Ctrl+Alt+Z":
+		modifiers = 2 | 1
+	default:
+		return ""
+	}
+	if !register(watchFirstRowHotkey, modifiers|0x4000, 'Z') {
+		return "Unavailable: " + choice + "; row 1 shortcut off"
+	}
+	return ""
+}
+
+func watchFirstRowTarget(frame watchPanelFrame) (watchPanelPress, bool) {
+	return watchShortcutRow(frame, watchHotkeyBase)
+}
+
+// SW_RESTORE changes a visible maximized/snapped window's placement. Only a
+// genuinely minimized window needs its saved placement restored for activation.
+func watchRestoreMinimized(hwnd uintptr, minimized func(uintptr) bool, restore func(uintptr)) {
+	if minimized(hwnd) {
+		restore(hwnd)
+	}
+}
+
 // Register the whole set or none, so a collision never leaves partial shortcuts.
 func watchRegisterShortcuts(choice string, register func(id, modifiers, key uintptr) bool, unregister func(id uintptr)) string {
 	for i := 0; i < 10; i++ {
@@ -91,10 +144,17 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 		a.logClick(p, releaseY, state, problem, false, false)
 		return
 	}
-	// Only a session click or an explicit numbered shortcut calls this path.
+	// Only a session click or an explicit session shortcut calls this path.
 	watchFlash(row.Sample.HWND, false)
-	watchUser.NewProc("ShowWindowAsync").Call(row.Sample.HWND, 9)
-	watchUser.NewProc("SwitchToThisWindow").Call(row.Sample.HWND, 1)
+	watchRestoreMinimized(row.Sample.HWND, func(hwnd uintptr) bool {
+		iconic, _, _ := watchUser.NewProc("IsIconic").Call(hwnd)
+		return iconic != 0
+	}, func(hwnd uintptr) { watchUser.NewProc("ShowWindowAsync").Call(hwnd, 9) })
+	// The shell switch is needed only for an explicitly selected other desktop.
+	// On this desktop SetForegroundWindow brings the window forward unchanged.
+	if row.Sample.DesktopID != "" && row.Sample.DesktopID != watchCurrentDesktop() {
+		watchUser.NewProc("SwitchToThisWindow").Call(row.Sample.HWND, 1)
+	}
 	set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
 }

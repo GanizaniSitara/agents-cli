@@ -130,6 +130,14 @@ set and is shown in Settings. Application-local shortcut conflicts cannot be
 detected, so select a different combination or Off if an application needs it.
 Shortcuts work while the panel is hidden and pause while Settings is open.
 
+Settings also has an independent **First row** shortcut, initially Off. Choose
+Ctrl+Win+Z, Ctrl+Alt+Shift+Z, Ctrl+Alt+Z, or Off. It activates whichever session
+is first in the last displayed panel frame, including the scroll position;
+it never pins a PID or task. The same session identity guards apply. Its
+registration status is shown separately and a collision does not disable the
+numbered shortcuts. Windows reserves Win-key combinations, so Ctrl+Win+Z is
+offered only subject to successful registration, not as universally available.
+
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four
 seconds. `--stable D` changes that threshold. Startup-idle sessions are listed

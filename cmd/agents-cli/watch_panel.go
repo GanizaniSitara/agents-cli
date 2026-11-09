@@ -64,12 +64,17 @@ func watchPanel(a *watchApp) error {
 	offset := 0
 	var hwnd uintptr
 	shortcutProblem := ""
+	firstRowProblem := ""
 	unregisterShortcut := func(id uintptr) { watchUser.NewProc("UnregisterHotKey").Call(hwnd, id) }
+	registerShortcut := func(id, modifiers, key uintptr) bool {
+		ok, _, _ := watchUser.NewProc("RegisterHotKey").Call(hwnd, id, modifiers, key)
+		return ok != 0
+	}
 	applyShortcuts := func() {
-		shortcutProblem = watchRegisterShortcuts(settings.Shortcuts, func(id, modifiers, key uintptr) bool {
-			ok, _, _ := watchUser.NewProc("RegisterHotKey").Call(hwnd, id, modifiers, key)
-			return ok != 0
-		}, unregisterShortcut)
+		shortcutProblem = watchRegisterShortcuts(settings.Shortcuts, registerShortcut, unregisterShortcut)
+	}
+	applyFirstRowShortcut := func() {
+		firstRowProblem = watchRegisterFirstRowShortcut(settings.FirstRowShortcut, registerShortcut, unregisterShortcut)
 	}
 	var rows []watchEntry
 	var summaries []watchPanelSummary
@@ -100,7 +105,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 4
+			n = len(monitors) + len(desktops) + 6
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -142,6 +147,13 @@ func watchPanel(a *watchApp) error {
 	proc := syscall.NewCallback(func(window uintptr, msg uint32, wp, lp uintptr) uintptr {
 		switch msg {
 		case 0x312: // WM_HOTKEY: same targets and identity checks as explicit clicks
+			if wp == watchFirstRowHotkey {
+				if p, ok := watchFirstRowTarget(painted); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
+					p.Time = time.Now()
+					a.activateWatchRow(p, p.Y)
+				}
+				return 0
+			}
 			if p, ok := watchShortcutRow(painted, wp); ok && shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 && !pressed.Active && !dragging {
 				p.Time = time.Now()
 				a.activateWatchRow(p, p.Y)
@@ -344,7 +356,7 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+2 {
+				} else if i == len(monitors)+len(desktops)+4 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(monitors)+len(desktops) {
@@ -353,7 +365,13 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+1 {
+				} else if i == len(monitors)+len(desktops)+2 {
+					settings.FirstRowShortcut = watchNextFirstRowShortcut(settings.FirstRowShortcut)
+					applyFirstRowShortcut()
+					_ = saveWatchSettings(a.dir, settings)
+					resize()
+					return 0
+				} else if i == len(monitors)+len(desktops)+1 || i == len(monitors)+len(desktops)+3 {
 					return 0
 				}
 				menu = false
@@ -470,6 +488,17 @@ func watchPanel(a *watchApp) error {
 				}
 				watchText(dc, hint, 12, top+8, 350, top+35)
 				top += 44
+				watchText(dc, "First row: "+watchFirstRowChoice(settings.FirstRowShortcut)+"  [change]", 12, top+8, 350, top+35)
+				top += 44
+				firstRowStatus := "Off | independent of numbered shortcuts"
+				if watchFirstRowChoice(settings.FirstRowShortcut) != "Off" {
+					firstRowStatus = "Registered: " + watchFirstRowChoice(settings.FirstRowShortcut)
+				}
+				if firstRowProblem != "" {
+					firstRowStatus = firstRowProblem
+				}
+				watchText(dc, firstRowStatus, 12, top+8, 350, top+35)
+				top += 44
 				watchText(dc, "Reset location", 12, top+8, 350, top+35)
 				top += 44
 				watchText(dc, "Done | choices are remembered", 12, top+8, 350, top+35)
@@ -558,7 +587,9 @@ func watchPanel(a *watchApp) error {
 	}
 	hwnd = window
 	applyShortcuts()
+	applyFirstRowShortcut()
 	defer func() {
+		unregisterShortcut(watchFirstRowHotkey)
 		for i := 0; i < 10; i++ {
 			unregisterShortcut(watchHotkeyBase + uintptr(i))
 		}
