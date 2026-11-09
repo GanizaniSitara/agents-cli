@@ -319,7 +319,7 @@ var (
 	// Claude: "✢ Misting… (10s · ↓ 550 tokens)" / "esc to interrupt"; Codex:
 	// "Working (4m 43s • esc to interrupt)"; braille spinners elsewhere.
 	spinnerRe = regexp.MustCompile(`[\x{2800}-\x{28FF}]|esc to interrupt|Esc to cancel|\(esc\)|Thinking|Working \(|\(\d+[smh][\d\w ]* · |…\s*\(`)
-	promptRe  = regexp.MustCompile(`(?i)\(y/n\)|\[y/n\]|Yes, |Do you want|Do you trust|Allow |Approve|press enter to confirm|enter Confirm|❯ 1\.|› 1\.|\? for shortcuts.*\n.*\b1\. `)
+	promptRe  = regexp.MustCompile(`(?i)\(y/n\)|\[y/n\]|Yes, |Do you want|Do you trust|Allow |(?:^|[^-])\bApprove\b|press enter to confirm|enter Confirm|❯ 1\.|› 1\.|\? for shortcuts.*\n.*\b1\. `)
 	// A bare input prompt, or a TUI's empty-input placeholder.
 	brailleOnlyRe = regexp.MustCompile(`^[\s\x{2800}-\x{28FF}]+$`)
 	idleRe        = regexp.MustCompile(`^\s*(>|›|❯|\$|%)\s*$|^› Ask Codex|^[>›❯] Try "|^>\s+Type your message|^[A-Za-z]:\\[^>]*>\s*$`)

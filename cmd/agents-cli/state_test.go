@@ -68,6 +68,15 @@ func TestGuessStateLiveScreens(t *testing.T) {
 	if s := guessState("vibe", append(append([]string{}, vibeLogo...), vibeFoot...)); s != "idle" {
 		t.Errorf("vibe idle screen with logo -> %s", s)
 	}
+	vibeYoloFoot := []string{
+		"──────────────────────────────────────── accept edits · auto-approve ─",
+		">",
+		"────────────────────────────────────────────────────────",
+		`~\vibetest [PID 16476]                 0/200k tokens (0%)`,
+	}
+	if s := guessState("vibe", append(append([]string{}, vibeLogo...), vibeYoloFoot...)); s != "idle" {
+		t.Errorf("vibe idle screen with auto-approve -> %s", s)
+	}
 	vibeBusy := append(append([]string{}, vibeLogo...), "> Run the shell command: echo hi",
 		"⠉⠁ Generating… (0s Esc/Ctrl+C to interrupt)")
 	if s := guessState("vibe", append(vibeBusy, vibeFoot...)); s != "busy" {
