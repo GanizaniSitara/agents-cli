@@ -313,10 +313,16 @@ func watchWorker() error {
 				sample.State = "error"
 			}
 			sample.WorkProcesses = work
+			if s.Tool == "codex" {
+				sample.PendingQuestions, sample.Working = codexQueuedQuestions(r.Lines)
+			}
 			if agyRuntimeState(sample.State, work) != sample.State {
 				sample.State, sample.Phase, sample.Reason = "busy", "working", "child command active"
 			}
 			if sample.Agents.Running != nil && *sample.Agents.Running > 0 {
+				sample.Working = true
+			}
+			if sample.Agents.Running != nil && *sample.Agents.Running > 0 && sample.PendingQuestions == 0 {
 				sample.State = "busy"
 				if sample.Phase != "error" {
 					sample.Phase = "working"

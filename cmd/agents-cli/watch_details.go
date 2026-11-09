@@ -126,6 +126,14 @@ func (a watchAgents) label() string {
 // Bare idle is deliberately distinct from an explicit completion. Each TUI
 // can also use its empty composer after asking a natural-language question.
 func watchPhase(tool string, lines []string, state string) (string, string) {
+	if tool == "codex" {
+		if count, working := codexQueuedQuestions(lines); count > 0 {
+			if working {
+				return "waiting", "question to answer; still working"
+			}
+			return "waiting", "question to answer"
+		}
+	}
 	tail := trimBlankTail(lines)
 	start := len(tail) - 18
 	if start < 0 {

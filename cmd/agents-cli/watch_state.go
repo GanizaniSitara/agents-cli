@@ -7,18 +7,20 @@ import (
 
 type watchSample struct {
 	Session
-	HWND          uintptr     `json:"hwnd"`
-	Signature     string      `json:"signature"`
-	DesktopID     string      `json:"desktop_id"`
-	Desktop       string      `json:"desktop"`
-	Agents        watchAgents `json:"agents"`
-	Phase         string      `json:"phase"`
-	Reason        string      `json:"reason,omitempty"`
-	Context       string      `json:"context,omitempty"`
-	RootStarted   string      `json:"root_started"`
-	WindowPID     uint32      `json:"window_pid"`
-	WindowStarted string      `json:"window_started"`
-	WorkProcesses int         `json:"work_processes,omitempty"`
+	HWND             uintptr     `json:"hwnd"`
+	Signature        string      `json:"signature"`
+	DesktopID        string      `json:"desktop_id"`
+	Desktop          string      `json:"desktop"`
+	Agents           watchAgents `json:"agents"`
+	Phase            string      `json:"phase"`
+	Reason           string      `json:"reason,omitempty"`
+	Context          string      `json:"context,omitempty"`
+	RootStarted      string      `json:"root_started"`
+	WindowPID        uint32      `json:"window_pid"`
+	WindowStarted    string      `json:"window_started"`
+	WorkProcesses    int         `json:"work_processes,omitempty"`
+	PendingQuestions int         `json:"pending_questions,omitempty"`
+	Working          bool        `json:"working,omitempty"`
 }
 
 type watchEntry struct {
@@ -45,6 +47,9 @@ func newWatchTracker(stable time.Duration) *watchTracker {
 
 func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	if s.Agents.Running != nil && *s.Agents.Running > 0 {
+		s.Working = true
+	}
+	if s.Agents.Running != nil && *s.Agents.Running > 0 && s.PendingQuestions == 0 {
 		s.State = "busy"
 		if s.Phase != "error" {
 			s.Phase = "working"
@@ -71,6 +76,23 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		e.Changed = now
 	}
 	e.Sample = s
+	if s.PendingQuestions > 0 {
+		// A live queue is already an explicit input request, even while its
+		// running footer changes. Screen stability cannot debounce this case.
+		notify := old.PendingQuestions == 0
+		if notify {
+			e.Dismissed = false
+			e.Since = now
+			e.Attention = true
+		}
+		e.Stopped = true
+		e.Busy = s.Working
+		return notify
+	}
+	if old.PendingQuestions > 0 {
+		e.Stopped, e.Attention, e.Dismissed = false, false, false
+		e.Candidate = time.Time{}
+	}
 	if s.State == "busy" {
 		e.Busy, e.Stopped = true, false
 		e.Attention = false
