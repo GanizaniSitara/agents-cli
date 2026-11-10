@@ -31,6 +31,11 @@ func TestWatchSelectionSettingsPersist(t *testing.T) {
 func TestWatchParkLifecycle(t *testing.T) {
 	w := newWatchTracker(0)
 	s := watchSample{Session: Session{PID: 1, State: "idle"}, Phase: "idle", RootStarted: "one", HWND: 1}
+	active := s
+	active.Phase = "active"
+	if !watchCanPark(active) {
+		t.Fatal("focused idle row hides park control")
+	}
 	now := time.Now()
 	w.observe(s, now)
 	w.observe(s, now.Add(time.Second))

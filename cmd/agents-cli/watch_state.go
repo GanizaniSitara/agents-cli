@@ -149,7 +149,7 @@ func (w *watchTracker) dismiss(pid uint32) {
 }
 
 func watchCanPark(s watchSample) bool {
-	return s.State == "idle" && (s.Phase == "idle" || s.Phase == "") && !s.Working && s.PendingQuestions == 0
+	return s.State == "idle" && (s.Phase == "idle" || s.Phase == "active" || s.Phase == "") && !s.Working && s.PendingQuestions == 0
 }
 
 func (w *watchTracker) togglePark(s watchSample) bool {
