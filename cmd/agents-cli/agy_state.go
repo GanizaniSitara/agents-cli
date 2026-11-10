@@ -6,15 +6,16 @@ import (
 )
 
 var (
-	agyRunningTask = regexp.MustCompile(`^\s*●\s+\[\d{2}:\d{2}:\d{2}\]\s+.+\s+running\s*$`)
-	agyLiveSpinner = regexp.MustCompile(`(?i)^\s*[\x{2800}-\x{28FF}]\s+(?:running command|reading file|thinking|generating|working)\b`)
+	agyRunningTask   = regexp.MustCompile(`^\s*●\s+\[\d{2}:\d{2}:\d{2}\]\s+.+\s+running\s*$`)
+	agyLiveSpinner   = regexp.MustCompile(`(?i)^\s*[\x{2800}-\x{28FF}]\s+(?:running command|reading file|thinking|generating|working)\b`)
+	agyCommandChoice = regexp.MustCompile(`^> [1-4]\. `)
 )
 
 // AGY keeps an idle composer while background commands run. Only the live
 // task strip below that composer is liveness; transcript prose is not.
 func agyState(lines []string) string {
 	tail := trimBlankTail(lines)
-	if copilotMenu(tail) {
+	if copilotMenu(tail) || agyCommandApproval(tail) {
 		return "prompt"
 	}
 	if agyBusy(tail) {
@@ -59,6 +60,33 @@ func agyState(lines []string) string {
 		}
 	}
 	return "unknown"
+}
+
+// Command approval uses a navigation/amend footer rather than Enter/Confirm.
+// Its final Esc-to-cancel row is also used while working, so inspect the live
+// dialog before treating that row as progress. Historical menus lack this
+// adjacent live footer and must not hold a completed session in needs input.
+func agyCommandApproval(tail []string) bool {
+	if len(tail) < 3 || !agyBusy(tail) {
+		return false
+	}
+	nav := len(tail) - 2
+	for nav >= 0 && strings.TrimSpace(tail[nav]) == "" {
+		nav--
+	}
+	if nav < 0 || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(tail[nav])), "↑/↓ navigate · tab amend") {
+		return false
+	}
+	question, selection := false, false
+	for i := nav - 1; i >= 0 && i >= nav-24; i-- {
+		text := strings.TrimSpace(tail[i])
+		if agyBorder(text) {
+			break
+		}
+		question = question || text == "Run this command?"
+		selection = selection || agyCommandChoice.MatchString(text)
+	}
+	return question && selection
 }
 
 func agyBorder(line string) bool {

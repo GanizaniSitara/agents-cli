@@ -22,6 +22,9 @@ func TestAGYLiveStateRegions(t *testing.T) {
 		{"spinner above composer", "busy", frame("⣽  Running command...")},
 		{"explicit patch question", "prompt", frame("Would you like me to apply this patch?")},
 		{"approval overrides foreground footer", "prompt", []string{"⣯ Running command...", "Allow this command?", "> Yes, once", "↑/↓ Navigate · enter Confirm"}},
+		{"command permission with cancel footer", "prompt", agyCommandPermissionScreen("> 1. Yes, run command")},
+		{"command permission other selection", "prompt", agyCommandPermissionScreen("> 4. No, cancel")},
+		{"historical command permission", "idle", frame(strings.Join(agyCommandPermissionScreen("> 1. Yes, run command"), "\n") + "\n\nCommand completed.")},
 		{"idle", "idle", frame("The requested change is ready.")},
 		{"task count alone is not liveness", "idle", frame("Finished the background command.")},
 		{"completed task strip", "idle", frame("Done.", "  ● [21:05:35] python.exe example_job.py completed")},
@@ -41,5 +44,15 @@ func TestAGYLiveStateRegions(t *testing.T) {
 				t.Fatalf("panel phase=%s for state=%s", phase, state)
 			}
 		})
+	}
+}
+
+func agyCommandPermissionScreen(selected string) []string {
+	return []string{
+		"Command", "────────────────────────", "Requesting permission for:", "   git status",
+		"", "Run this command?", selected,
+		"  2. Yes, and always allow in this conversation", "  3. Yes, and always allow (Persist to settings.json)",
+		"  4. No, cancel", "", "  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command",
+		"esc to cancel                 Gemini 3.8 Flash · medium",
 	}
 }
