@@ -85,6 +85,7 @@ func TestConsoleHelperHonoursParentDeadline(t *testing.T) {
 
 // A writer that never closes stdin used to strand send before discovery.
 func TestSendDeadlineIncludesStdin(t *testing.T) {
+	t.Setenv("LOCALAPPDATA",t.TempDir())
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	r, w, err := os.Pipe()
