@@ -3,30 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>agents-cli(1)</title>
+<title>agents-cli — help</title>
 <style>
-body{max-width:880px;margin:32px auto;padding:0 20px 40px;color:#202020;background:#fff;font:15px/1.55 Consolas,monospace}header{display:flex;justify-content:space-between;border-bottom:1px solid #bbb;padding-bottom:8px}h1{font-size:19px;margin:0}h2{font-size:15px;margin:26px 0 8px}p{margin:6px 0 12px}pre{font:inherit;line-height:1.65;overflow:auto;background:#f4f4f4;padding:12px}code{font:inherit}table{border-collapse:collapse;width:100%}td{vertical-align:top;padding:5px 12px 5px 0}td:first-child{width:44%}.muted{color:#666;font-size:12px}.blue{color:#176da8}.amber{color:#8c6100}.red{color:#b32626}footer{border-top:1px solid #bbb;margin-top:28px;padding-top:8px}@media(max-width:600px){body{margin:20px auto;font-size:13px}td:first-child{width:46%}header{display:block}.muted{font-size:11px}}@media print{body{max-width:none;margin:0}pre{white-space:pre-wrap}}
+body{max-width:960px;margin:28px auto;padding:0 24px 32px;color:#202020;background:white;font:15px/1.5 Consolas,monospace}header{display:flex;justify-content:space-between;border-bottom:1px solid #bbb;padding-bottom:8px}h1{font-size:20px;margin:0}h2{font-size:16px;margin:12px 0 8px}p{margin:8px 0 14px}pre{font:inherit;line-height:1.7;overflow:auto;background:#f4f4f4;padding:12px}code{font:inherit}table{border-collapse:collapse;width:100%;margin-top:12px}td{vertical-align:top;padding:5px 14px 5px 0}td:first-child{width:44%}.muted{color:#666;font-size:12px}.blue{color:#176da8}.amber{color:#8c6100}.red{color:#b32626}details{border-top:1px solid #ccc;padding:13px 0}summary{cursor:pointer;font-weight:bold}footer{border-top:1px solid #bbb;padding-top:12px}@media(max-width:720px){body{margin:20px auto;padding:0 16px 24px;font-size:13px}header{display:block}td:first-child{width:45%}}@media print{body{max-width:none;margin:0}pre{white-space:pre-wrap}}
 </style>
 </head>
 <body>
-<header><h1>AGENTS-CLI(1)</h1><span class="muted">Windows · build {{BUILD}}</span></header>
+<header><h1>agents-cli</h1><span class="muted">Windows · build {{BUILD}}</span></header>
+<section aria-labelledby="watcher-start">
+<h2 id="watcher-start">WATCH SESSIONS</h2>
+<pre>agents-cli watch start</pre>
+<p>Shows session status and input requests. Click a row to bring the window forward.
+<code>Ctrl+Win+Z</code> selects the first unparked row; <code>Park</code> puts an idle session aside.
+<code>Hide</code> keeps watching in the tray. <code>Exit</code> or <code>watch stop</code> stops only the watcher.</p>
+</section>
 
-<h2>NAME</h2>
-<p>agents-cli — command-line control and a desktop watcher for agent sessions.</p>
-<p><strong>CLI:</strong> list sessions, read output, send instructions, wait and manage sessions.<br>
-<strong>Watcher:</strong> show status and input requests, switch to session windows, use shortcuts and park idle sessions.</p>
+<section aria-labelledby="cli-start">
+<h2 id="cli-start">LIST AND READ SESSIONS</h2>
+<pre>agents-cli ls
+agents-cli tail 12345 --lines 20</pre>
+<p>List the sessions, then read one. Replace <code>12345</code> with its PID.</p>
+</section>
 
-<h2>USE</h2>
-<pre>agents-cli watch start
-agents-cli ls
-agents-cli tail 12345 --lines 20
-agents-cli send 12345 --stdin &lt; message.txt
+<section aria-labelledby="send-start">
+<h2 id="send-start">SEND AND WAIT</h2>
+<pre>agents-cli send 12345 --stdin &lt; message.txt
 agents-cli wait 12345 --idle-for 10s --timeout 10m</pre>
-<p>Replace <code>12345</code> with the intended session's PID. Inspect it before sending.
-<code>message.txt</code> contains your instruction; the redirection example is for cmd.exe.
-Output is JSON. If the EXE is not on PATH, use <code>.\agents-cli.exe</code>.</p>
+<p>Send the instruction in <code>message.txt</code>, then wait for idle.
+Read the intended session before sending. The redirection example is for cmd.exe.
+After a timeout or unverified send, check <code>tail</code> before retrying.</p>
+</section>
 
-<h2>COMMANDS</h2>
+<details><summary>Command reference</summary>
 <table aria-label="Commands"><tbody>
 <tr><td><code>ls [--fast] [--tool T]</code></td><td>List sessions. <code>--fast</code>: metadata only.</td></tr>
 <tr><td><code>tail REF --lines 20</code></td><td>Read the visible console.</td></tr>
@@ -44,8 +52,8 @@ Output is JSON. If the EXE is not on PATH, use <code>.\agents-cli.exe</code>.</p
 <p><code>REF</code>: PID, registered label, task name or unique name/title substring.
 Prefer a PID when targeting matters. A send timeout or <code>submitted:false</code>
 does not mean nothing was delivered; read <code>tail</code> before retrying.</p>
-
-<h2>WATCHER</h2>
+</details>
+<details><summary>Watcher controls &amp; shortcuts</summary>
 <pre>agents-cli watch start
 agents-cli watch list
 agents-cli watch stop</pre>
@@ -72,8 +80,8 @@ A normal pulse matches the row colour.</p>
 RUNNING: work detected. ACTIVE: focused window.
 UNKNOWN: state unavailable. PARKED: manually put aside.
 Detection is heuristic; the console is authoritative.</p>
-
-<h2>DIAGNOSE</h2>
+</details>
+<details><summary>Error codes &amp; logs</summary>
 <p>Run <code>watch list</code>. Check <code>build_commit</code>,
 <code>last_reader_error</code>, <code>last_console_error</code> and <code>reader_restarts</code>.</p>
 <pre>WR101 start failed       WR102 no heartbeat
@@ -83,5 +91,7 @@ WR107 discovery failed   WR108 console unreadable</pre>
 <p class="muted">Local files: %LOCALAPPDATA%\agents-cli (watcher state, send/stop logs).
 Review before sharing: status and click logs may include private names/titles.
 Logs begin with the updated EXE; they cannot recover earlier activity.</p>
-<footer class="muted">Portable EXE. Offline help: Settings → Help, or agents-cli help --open.</footer>
+</details>
+<footer class="muted">Not on PATH? Use .\agents-cli.exe from its folder. Commands return JSON.<br>
+More syntax: agents-cli help. This page works offline.</footer>
 </body></html>
