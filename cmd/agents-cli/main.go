@@ -44,6 +44,9 @@ func main() {
 }
 
 func run(args []string) error {
+	if len(args) == 2 && args[0] == "help" && args[1] == "--open" {
+		return openWatchHelp()
+	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
 		printHelp()
 		return nil
@@ -121,6 +124,7 @@ func printHelp() {
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
   stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
   sends [--since 1d] [--limit 50]          read send/key audit (metadata only)
+  help --open                            open the included offline quick guide
   watch start|run [--monitor N] [--stable 2s]  low-priority taskbar/tray watcher
   watch list|stop                          stopped windows / stop only the watcher
   watch monitors|desktops                  available screens and virtual desktops

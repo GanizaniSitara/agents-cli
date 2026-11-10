@@ -32,6 +32,11 @@ It retains up to approximately 8 MiB locally. These are runtime files, not
 embedded executable assets. File access uses inherited Windows permissions;
 these files are not encrypted by agents-cli.
 
+Settings Help writes the embedded, self-contained guide to
+`%LOCALAPPDATA%\agents-cli\help\index.html` and opens it in the browser. It
+contains the build identifier and generic instructions, with no session data,
+remote assets, scripts or analytics.
+
 `tail` deliberately returns screen text. Treat its output and any model or log
 receiving it as sensitive. Prefer `send --stdin` for message input. Literal
 messages on a command line can appear in shell history or process listings.

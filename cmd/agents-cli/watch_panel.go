@@ -55,6 +55,7 @@ func watchPanel(a *watchApp) error {
 	settings := loadWatchSettings(a.dir)
 	theme := loadWatchTheme(a.dir)
 	menu := false
+	helpLabel := "Help"
 	monitors := watchMonitors()
 	desktops := watchDesktops()
 	taskbar, releaseTaskbar := openWatchTaskbar()
@@ -114,7 +115,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 10
+			n = len(monitors) + len(desktops) + 11
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -437,9 +438,15 @@ func watchPanel(a *watchApp) error {
 					resize()
 					return 0
 				} else if i == len(monitors)+len(desktops)+7 {
-					watchRequestExit(window)
+					helpLabel = "Help"
+					if err := openWatchHelp(); err != nil {
+						helpLabel = "Help (could not open)"
+					}
 					return 0
 				} else if i == len(monitors)+len(desktops)+8 {
+					watchRequestExit(window)
+					return 0
+				} else if i == len(monitors)+len(desktops)+9 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(monitors)+len(desktops) {
@@ -615,6 +622,8 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, prefix+option.label, 12, top+8, 350, top+35)
 				}
+				top += watchSettingsRowHeight
+				watchText(dc, helpLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				watchText(dc, "Exit", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight

@@ -29,6 +29,10 @@ agents-cli version
 Copy the same executable to any Windows PC; the watcher needs no installer,
 admin rights, scripts, task files, ringmaster, or provider credentials.
 
+Choose **Settings → Help** for the included single-page guide, or run
+`agents-cli help --open`. It covers the panel, shortcuts, parking, diagnostics,
+send audit and CLI basics. The page works offline and is embedded in the EXE.
+
 ```
 agents-cli watch start
 agents-cli watch list
