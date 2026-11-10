@@ -87,6 +87,8 @@ func run(args []string) error {
 		return cmdStop(args[1:])
 	case "stops":
 		return cmdStops(args[1:])
+	case "sends":
+		return cmdSends(args[1:])
 	}
 	return fmt.Errorf("unknown command %q (try `agents-cli help`)", args[0])
 }
@@ -97,7 +99,11 @@ func emit(value interface{}) {
 }
 
 func emitError(err error) {
-	emit(map[string]interface{}{"error": map[string]string{"code": "agents_command_failed", "message": err.Error()}})
+	out := map[string]interface{}{"error": map[string]string{"code": "agents_command_failed", "message": err.Error()}}
+	if audit := currentSendAudit(); audit != nil {
+		audit.addReceipt(out)
+	}
+	emit(out)
 }
 
 func printHelp() {
@@ -114,6 +120,7 @@ func printHelp() {
   adopt <pid> --tool T [--name L]           register a session the scan cannot classify
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
   stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
+  sends [--since 1d] [--limit 50]          read send/key audit (metadata only)
   watch start|run [--monitor N] [--stable 2s]  low-priority taskbar/tray watcher
   watch list|stop                          stopped windows / stop only the watcher
   watch monitors|desktops                  available screens and virtual desktops

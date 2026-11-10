@@ -102,6 +102,9 @@ var vtKeys = map[string]string{
 
 // keyFor sends a named key the way the tool reads it.
 func keyFor(pid uint32, tool, key string) error {
+	if err := auditKeyDispatch(pid, tool, strings.ToLower(key)); err != nil {
+		return err
+	}
 	if seq, ok := vtKeys[strings.ToLower(key)]; ok && tool == "vibe" {
 		return inject(pid, seq, false)
 	}

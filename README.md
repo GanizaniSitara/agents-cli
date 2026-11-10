@@ -14,6 +14,7 @@ no port, no MCP.
 agents-cli ls    [--tool codex|agy|qwen|claude|opencode|copilot] [--all] [--fast]
 agents-cli tail  <ref> [--lines N] [--above N]
 agents-cli send  <ref> --stdin | "text" [--no-enter] [--via auto|inject|native] [--force]
+agents-cli sends [--since 1d] [--limit 50]
 agents-cli key   <ref> enter|escape|ctrl-c|ctrl-u|tab|up|down|backspace
 agents-cli wait  <ref> [--idle-for 10s] [--timeout 10m] [--match REGEX]
 agents-cli name  <ref> "label"
@@ -231,6 +232,27 @@ is bound to PID plus process start time, so it does not affect a reused PID.
 Muting does not pause the agent or send it a message. Explicit `send`/`key`
 commands remain available. Use a numeric PID or registered name to mute;
 discovery does not read live titles to resolve references.
+Explicit `send` and `key` operations are audited locally in
+`%LOCALAPPDATA%\agents-cli\sends.jsonl`. Run `agents-cli sends --since 1d --limit 50`
+to view recent events. Correlated request, resolved-target, dispatch, key and
+result events identify the caller/parent PID, nearest identifiable caller agent,
+target PID/agent PID/start/thread ID, delivery method, message byte count,
+Enter/force flags and submission outcome. Caller session ID is included when
+available for Claude. Names, titles, message bodies, hashes, command lines and
+raw error text are not stored in this audit.
+
+Attempts are recorded before delivery; if that cannot be recorded, the command
+refuses without sending. A later result-log failure is reported as `audit_error`
+in the receipt and must not be treated as a reason to resend. A hard timeout
+records its result when possible; a dispatch without a result means delivery is
+unknown. Inspect the session before retrying. `submitted` reports the existing
+delivery verifier's result, not completion of the agent's task.
+
+The audit uses a bounded cross-process lock and rotates at 4 MiB, keeping one
+previous file (about 8 MiB total). This starts with the updated executable; it
+cannot reconstruct older sends or capture other tools' native messaging/manual
+typing. Watch-mode polling creates no send audit events.
+
 For generic console sends (including Claude), an explicit `send` with Enter
 performs bounded screen checks to verify delivery even when polling is muted.
 It does not change the mute setting or emit the screen contents. Copilot's

@@ -18,6 +18,18 @@ const privateTestText = "privacy-test-only: £漢😀\n" + "not-a-real-credentia
 // Exercise the real detached-helper launch and stdin pipe without attaching
 // to a user's console. No actual credentials are used in these tests.
 func TestMain(m *testing.M) {
+	if os.Getenv("AGENTS_CLI_TEST_SEND_AUDIT_TIMEOUT") == "1" {
+		_ = runWithDeadline([]string{"send", "--timeout", "150ms"}, func([]string) error {
+			a := startSendAudit("send")
+			a.input(7, true, false, "")
+			if err := a.dispatch("inject"); err != nil {
+				return err
+			}
+			time.Sleep(5 * time.Second) // synthetic transport; never attaches or sends
+			return nil
+		})
+		os.Exit(0)
+	}
 	if mode := os.Getenv("AGENTS_CLI_TEST_READER_ERROR"); mode != "" {
 		switch mode {
 		case "watchdog":

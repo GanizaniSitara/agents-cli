@@ -24,7 +24,11 @@ window title. Do not include this directory in a shared bug report without
 reviewing and redacting it. `--state-dir` can change its location.
 
 Adopted names and mute settings live under `%APPDATA%\agents-cli`; stop audit
-records live under `%LOCALAPPDATA%\agents-cli`. These are runtime files, not
+records and send/key audit records live under `%LOCALAPPDATA%\agents-cli`.
+The send audit (`sends.jsonl`, one rotated predecessor) records process/session
+identifiers, timestamps, delivery method, message byte count and outcomes. It
+does not record message bodies, hashes, titles, command lines or raw error text.
+It retains up to approximately 8 MiB locally. These are runtime files, not
 embedded executable assets. File access uses inherited Windows permissions;
 these files are not encrypted by agents-cli.
 

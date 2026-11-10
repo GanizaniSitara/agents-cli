@@ -29,6 +29,17 @@ func runWithDeadline(args []string, dispatch func([]string) error) error {
 		if verb == "send" {
 			message += "; input may already be delivered; inspect tail before retrying"
 		}
+		if verb == "send" || verb == "key" {
+			if audit := currentSendAudit(); audit != nil {
+				done := make(chan struct{})
+				go func() { audit.finish(context.DeadlineExceeded, true); close(done) }()
+				// A blocked log write must not defeat the hard deadline.
+				select {
+				case <-done:
+				case <-time.After(150 * time.Millisecond):
+				}
+			}
+		}
 		emit(map[string]interface{}{"error": map[string]string{
 			"code":    "agents_command_timeout",
 			"message": message,

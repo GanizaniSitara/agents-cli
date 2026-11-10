@@ -85,7 +85,9 @@ func cmdTail(args []string) error {
 	return nil
 }
 
-func cmdSend(args []string) error {
+func cmdSend(args []string) (result error) {
+	audit := startSendAudit("send")
+	defer func() { audit.finish(result, false) }()
 	p, err := parseArgs(args, "no-enter", "force", "stdin", "allow-argv")
 	if err != nil {
 		return err
@@ -94,10 +96,12 @@ func cmdSend(args []string) error {
 	if err != nil {
 		return err
 	}
+	audit.input(len(text), !p.boolean("no-enter"), p.boolean("force"), "")
 	s, procs, err := lookup(p.pos[0])
 	if err != nil {
 		return err
 	}
+	audit.resolve(s, procs)
 	if !s.Alive {
 		return fmt.Errorf("session %d is not running", s.PID)
 	}
@@ -145,35 +149,47 @@ func cmdSend(args []string) error {
 		cmd := exec.CommandContext(ctx, codex, "queue", "--thread", thread, "--message", text)
 		cmd.WaitDelay = 250 * time.Millisecond
 		cmd.Env = append(os.Environ(), "CODEX_HOME="+s.Home)
+		if err := audit.dispatch("native"); err != nil {
+			return err
+		}
 		_, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("codex queue failed: %w", err)
 		}
-		emit(sendReceipt(s, "native", true, true))
+		audit.sent(s, "native", true, true)
 		return nil
 	}
 	if s.Tool == "agy" {
 		enter := !p.boolean("no-enter")
+		if err := audit.dispatch("inject"); err != nil {
+			return err
+		}
 		submitted, err := liveAGYConsole.send(s, text, enter, p.boolean("force"))
 		if err != nil {
 			return err
 		}
-		emit(sendReceipt(s, "inject", enter, submitted))
+		audit.sent(s, "inject", enter, submitted)
 		return nil
 	}
 	if s.Tool == "copilot" {
 		enter := !p.boolean("no-enter")
+		if err := audit.dispatch("inject"); err != nil {
+			return err
+		}
 		submitted, err := liveCopilotConsole.send(s, text, enter)
 		if err != nil {
 			return err
 		}
-		emit(sendReceipt(s, "inject", enter, submitted))
+		audit.sent(s, "inject", enter, submitted)
 		return nil
 	}
 	enter := !p.boolean("no-enter")
 	send := inject
 	if s.Tool == "gemini" {
 		send = liveGeminiConsole.inject
+	}
+	if err := audit.dispatch("inject"); err != nil {
+		return err
 	}
 	if err := send(s.PID, text, enter); err != nil {
 		return err
@@ -182,7 +198,7 @@ func cmdSend(args []string) error {
 	if enter {
 		submitted = defaultVerifier.verify(s, text)
 	}
-	emit(sendReceipt(s, "inject", enter, submitted))
+	audit.sent(s, "inject", enter, submitted)
 	return nil
 }
 
@@ -368,7 +384,9 @@ func screenTail(lines []string, count int) []string {
 	return lines
 }
 
-func cmdKey(args []string) error {
+func cmdKey(args []string) (result error) {
+	audit := startSendAudit("key")
+	defer func() { audit.finish(result, false) }()
 	p, err := parseArgs(args)
 	if err != nil {
 		return err
@@ -376,14 +394,28 @@ func cmdKey(args []string) error {
 	if len(p.pos) < 2 {
 		return errors.New("usage: agents-cli key <ref> enter|escape|ctrl-c|ctrl-u|tab|up|down|backspace")
 	}
-	s, _, err := lookup(p.pos[0])
+	key := strings.ToLower(p.pos[1])
+	if _, ok := namedKeys[key]; !ok {
+		if _, ok := vtKeys[key]; !ok {
+			return errors.New("unknown key")
+		}
+	}
+	audit.input(0, key == "enter", false, key)
+	s, procs, err := lookup(p.pos[0])
 	if err != nil {
+		return err
+	}
+	audit.resolve(s, procs)
+	if err := audit.dispatch("inject"); err != nil {
 		return err
 	}
 	if err := keyFor(s.PID, s.Tool, p.pos[1]); err != nil {
 		return err
 	}
-	emit(map[string]interface{}{"pid": s.PID, "tool": s.Tool, "key": strings.ToLower(p.pos[1])})
+	audit.finish(nil, false)
+	out := map[string]interface{}{"pid": s.PID, "tool": s.Tool, "key": key}
+	audit.addReceipt(out)
+	emit(out)
 	return nil
 }
 
