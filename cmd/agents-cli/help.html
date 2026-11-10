@@ -12,9 +12,10 @@ body{max-width:960px;margin:28px auto;padding:0 24px 32px;color:#202020;backgrou
 <header><h1>agents-cli</h1><span class="muted">Windows · build {{BUILD}}</span></header>
 <section aria-labelledby="watcher-start">
 <h2 id="watcher-start">WATCH SESSIONS</h2>
-<pre>agents-cli watch start</pre>
-<p>Starts the watcher in the background. You can close this terminal.
-Shows session status and input requests. Click a row to bring the window forward.
+<pre>agents-cli watch run      # foreground; keep this terminal open
+agents-cli watch start    # background; you can close this terminal</pre>
+<p>Both show the same panel with session status and input requests.
+Click a row to bring the window forward.
 <code>Ctrl+Win+Z</code> selects the first unparked row; <code>Park</code> puts an idle session aside.
 <code>Hide</code> keeps watching in the tray. <code>Exit</code> or <code>watch stop</code> stops only the watcher.</p>
 </section>
@@ -55,7 +56,8 @@ Prefer a PID when targeting matters. A send timeout or <code>submitted:false</co
 does not mean nothing was delivered; read <code>tail</code> before retrying.</p>
 </section>
 <section><h2>WATCHER CONTROLS &amp; SHORTCUTS</h2>
-<pre>agents-cli watch start
+<pre>agents-cli watch run
+agents-cli watch start
 agents-cli watch list
 agents-cli watch stop</pre>
 <p>A background panel showing sessions that need attention. It does not send instructions.
