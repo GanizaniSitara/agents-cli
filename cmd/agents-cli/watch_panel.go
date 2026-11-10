@@ -46,6 +46,7 @@ type watchPaint struct {
 func watchPanel(a *watchApp) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	defer a.foregroundLift.release(watchLiftIdentity, watchSetLift)
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	name := windows.StringToUTF16Ptr("AgentsCLIWatchPanel")
 	settings := loadWatchSettings(a.dir)
@@ -151,12 +152,14 @@ func watchPanel(a *watchApp) error {
 				if p, ok := watchFirstRowTarget(painted); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
 					p.Time = time.Now()
 					a.activateWatchRow(p, p.Y)
+					watchSetLift(window, true) // keep the nonactivating panel visible
 				}
 				return 0
 			}
 			if p, ok := watchShortcutRow(painted, wp); ok && shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 && !pressed.Active && !dragging {
 				p.Time = time.Now()
 				a.activateWatchRow(p, p.Y)
+				watchSetLift(window, true)
 			}
 			return 0
 		case 0x8001: // tray callback: reopening never activates the panel
@@ -174,6 +177,11 @@ func watchPanel(a *watchApp) error {
 		case 0x21:
 			return 3 // WM_MOUSEACTIVATE: deliver click, never focus panel
 		case 0x113: // WM_TIMER
+			liftForeground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+			a.foregroundLift.update(liftForeground, watchLiftIdentity, watchSetLift)
+			if a.foregroundLift.sample.HWND != 0 {
+				watchSetLift(window, true) // target stacking may complete asynchronously
+			}
 			if wp == 2 {
 				if dragging {
 					buttons, _, _ := watchUser.NewProc("GetAsyncKeyState").Call(1)
@@ -425,6 +433,7 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			a.activateWatchRow(p, releaseY)
+			watchSetLift(window, true)
 			return 0
 		case 0x0f: // WM_PAINT
 			// A frame snapshot is valid for hit-testing only after every pixel

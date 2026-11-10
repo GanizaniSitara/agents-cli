@@ -43,16 +43,17 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
-	mu            sync.Mutex
-	tracker       *watchTracker
-	dir           string
-	problem       string
-	stop          chan struct{}
-	consoleEvents uint64
-	coverage      map[string]map[string]int
-	flashes       watchFlashController
-	expanded      map[string]bool
-	agentRecords  watchAgentRecords
+	mu             sync.Mutex
+	tracker        *watchTracker
+	dir            string
+	problem        string
+	stop           chan struct{}
+	consoleEvents  uint64
+	coverage       map[string]map[string]int
+	flashes        watchFlashController
+	expanded       map[string]bool
+	agentRecords   watchAgentRecords
+	foregroundLift watchForegroundLift
 }
 
 func watchDirectory(p parsed) (string, error) {

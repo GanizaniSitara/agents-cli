@@ -161,13 +161,18 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	// Foreground activation alone lets the shell follow the explicit selection
 	// across desktops without an additional restore request.
 	set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
+	if set != 0 {
+		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
+	}
 	watchPulseWindow(row.Sample.HWND)
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
 	go func() {
 		time.Sleep(250 * time.Millisecond)
 		var after watchRect
 		watchUser.NewProc("GetWindowRect").Call(row.Sample.HWND, uintptr(unsafe.Pointer(&after)))
+		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 		_ = watchAppendClick(a.dir, watchClickRecord{Time: time.Now(), PID: row.Sample.PID, HWND: row.Sample.HWND,
-			Outcome: "activation-geometry", BoundsBefore: &before, BoundsAfter: &after, WasMinimized: wasMinimized != 0})
+			Outcome: "activation-geometry", BoundsBefore: &before, BoundsAfter: &after, WasMinimized: wasMinimized != 0,
+			ForegroundAfter: foreground, ForegroundPID: watchWindowPID(foreground), ForegroundTitle: watchWindowTitle(foreground)})
 	}()
 }
