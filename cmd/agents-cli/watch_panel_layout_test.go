@@ -1,6 +1,32 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+func TestWatchAnimatedInputRequestStaysVisible(t *testing.T) {
+	w := newWatchTracker(2 * time.Second)
+	s := watchSample{Session: Session{PID: 4764, Tool: "vibe", State: "busy"}, DesktopID: "one", Phase: "working"}
+	now := time.Now()
+	w.observe(s, now)
+	s.State, s.Phase = "prompt", "waiting"
+	for i := 0; i < 5; i++ {
+		s.Signature = string(rune('a' + i))
+		if notify := w.observe(s, now.Add(time.Duration(i+1)*time.Second)); notify != (i == 0) {
+			t.Fatalf("input notification at frame %d: %v", i, notify)
+		}
+		rows, _ := watchPanelLayout(w.panelRows(), "one", nil, nil)
+		if len(rows) != 1 || rows[0].Sample.PID != s.PID || !rows[0].Stopped {
+			t.Fatalf("animated permission request disappeared: %+v", rows)
+		}
+	}
+	s.State, s.Phase = "busy", "working"
+	w.observe(s, now.Add(6*time.Second))
+	if w.entries[s.PID].Stopped || w.entries[s.PID].Attention {
+		t.Fatal("cleared request retained input attention")
+	}
+}
 
 func TestWatchPanelCurrentDesktopAndSummary(t *testing.T) {
 	entries := []watchEntry{

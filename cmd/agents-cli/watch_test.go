@@ -54,9 +54,11 @@ func TestWatchStableTransitions(t *testing.T) {
 		t.Fatal("dismissal did not stick")
 	}
 	step(9*time.Second, "busy", "e")
-	step(10*time.Second, "prompt", "f")
-	if !step(13*time.Second, "prompt", "f") {
+	if !step(10*time.Second, "prompt", "f") {
 		t.Fatal("new input wait missed")
+	}
+	if step(13*time.Second, "prompt", "f") {
+		t.Fatal("duplicate input notification")
 	}
 	step(14*time.Second, "busy", "g")
 	if len(w.rows()) != 0 {

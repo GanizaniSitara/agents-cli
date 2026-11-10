@@ -111,6 +111,19 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		e.Stopped, e.Attention, e.Dismissed = false, false, false
 		e.Candidate = time.Time{}
 	}
+	if s.State == "prompt" {
+		// An explicit input request may retain a live spinner or timer.
+		// Waiting for screen stability would hide the request indefinitely.
+		notify := old.State != "prompt"
+		if notify {
+			e.Since = now
+			e.Dismissed = false
+			e.Attention = true
+		}
+		e.Stopped = true
+		e.Candidate = time.Time{}
+		return notify
+	}
 	if s.State == "busy" {
 		e.Busy, e.Stopped = true, false
 		e.Attention = false
