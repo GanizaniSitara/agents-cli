@@ -25,6 +25,9 @@ func watchPulseWindow(target uintptr) {
 		defer runtime.UnlockOSThread()
 		// Allow an asynchronously restored window to reach its saved bounds.
 		time.Sleep(100 * time.Millisecond)
+		// FLASHW_CAPTION also flashes an already-active native title bar.
+		// Do not use TIMERNOFG: selection has just brought this window forward.
+		watchFlashCaption(target)
 		var overlays []uintptr
 		defer func() {
 			for _, h := range overlays {
@@ -61,4 +64,11 @@ func watchPulseWindow(target uintptr) {
 			time.Sleep(165 * time.Millisecond)
 		}
 	}()
+}
+
+func watchFlashCaption(target uintptr) {
+	info := flashInfo{HWND: target, Flags: 1, Count: 6, Timeout: 250}
+	info.Size = uint32(unsafe.Sizeof(info))
+	// The return value describes the old active-caption state, not success.
+	watchUser.NewProc("FlashWindowEx").Call(uintptr(unsafe.Pointer(&info)))
 }
