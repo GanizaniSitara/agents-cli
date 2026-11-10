@@ -3,105 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>Agents CLI — quick guide</title>
+<title>agents-cli(1)</title>
 <style>
-:root{font:16px/1.6 system-ui,Segoe UI,sans-serif;color:#202936;background:#f4f6f8}*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:44px 28px 64px}header{margin-bottom:32px}h1{font-size:40px;line-height:1.15;letter-spacing:-1.2px;margin:8px 0 16px}h2{font-size:23px;line-height:1.3;margin:0 0 14px}h3{font-size:17px;margin:20px 0 8px}p{margin:8px 0 14px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#596575}.lead{font-size:19px;max-width:720px;color:#465365}.version{font-size:13px;color:#596575}nav{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:24px}a{color:#205ea1;text-underline-offset:3px}section{background:white;border:1px solid #dce2e8;border-radius:12px;padding:25px 28px;margin:18px 0;scroll-margin-top:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 28px}.note{border-left:4px solid #54b7ff;background:#edf6fd;padding:12px 16px;border-radius:0 6px 6px 0;margin:18px 0}.signal{display:inline-block;min-width:125px;border-left:5px solid var(--c);padding-left:10px;font-weight:650}.status{display:grid;grid-template-columns:145px 1fr;gap:12px 16px}.status p{margin:0}code,kbd{font-family:Consolas,monospace;font-size:.9em;background:#eef1f4;border-radius:4px;padding:2px 5px}kbd{border:1px solid #cbd3dc;white-space:nowrap}pre{background:#202a36;color:#f0f4f8;border-radius:7px;padding:15px 18px;overflow:auto;font-size:14px;line-height:1.7}pre code{background:none;color:inherit;padding:0;font-size:inherit}ul,ol{padding-left:22px}li{margin:5px 0}details{border-top:1px solid #e4e8ed;padding-top:15px;margin-top:18px}summary{cursor:pointer;font-weight:650}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid #e4e8ed;vertical-align:top}th:first-child,td:first-child{width:90px}footer{color:#596575;font-size:13px;margin-top:26px}@media(max-width:650px){main{padding:26px 16px}h1{font-size:34px}section{padding:20px}.grid{grid-template-columns:1fr}.status{grid-template-columns:1fr;gap:4px}.status p{margin-bottom:12px}kbd{white-space:normal}}@media print{body{background:white}main{padding:0}section{break-inside:avoid;border-radius:0}nav{display:none}pre{white-space:pre-wrap}details{display:block}}
+body{max-width:880px;margin:32px auto;padding:0 20px 40px;color:#202020;background:#fff;font:15px/1.55 Consolas,monospace}header{display:flex;justify-content:space-between;border-bottom:1px solid #bbb;padding-bottom:8px}h1{font-size:19px;margin:0}h2{font-size:15px;margin:26px 0 8px}p{margin:6px 0 12px}pre{font:inherit;line-height:1.65;overflow:auto;background:#f4f4f4;padding:12px}code{font:inherit}table{border-collapse:collapse;width:100%}td{vertical-align:top;padding:5px 12px 5px 0}td:first-child{width:44%}.muted{color:#666;font-size:12px}.blue{color:#176da8}.amber{color:#8c6100}.red{color:#b32626}footer{border-top:1px solid #bbb;margin-top:28px;padding-top:8px}@media(max-width:600px){body{margin:20px auto;font-size:13px}td:first-child{width:46%}header{display:block}.muted{font-size:11px}}@media print{body{max-width:none;margin:0}pre{white-space:pre-wrap}}
 </style>
 </head>
-<body><main>
-<header>
-<div class="eyebrow">Windows · portable · local</div>
-<h1>Agents CLI</h1>
-<p class="lead">See which agent sessions need your attention, then get back to the right window.</p>
-<p class="version">Quick guide · build <code>{{BUILD}}</code> · included in the executable, works offline</p>
-<nav aria-label="Guide sections"><a href="#start">Start</a><a href="#panel">Read the panel</a><a href="#controls">Controls &amp; settings</a><a href="#cli">CLI</a><a href="#diagnostics">Troubleshooting</a><a href="#privacy">Privacy</a></nav>
-</header>
+<body>
+<header><h1>AGENTS-CLI(1)</h1><span class="muted">Windows · build {{BUILD}}</span></header>
 
-<section id="start"><h2>Get started</h2>
-<ol><li>Put <code>agents-cli.exe</code> in a folder you want to keep. No installer is required.</li><li>Open a terminal in that folder and run:</li></ol>
-<pre><code>.\agents-cli.exe watch start</code></pre>
-<p>The panel appears and the watcher continues in the background. Open <strong>Settings</strong> to choose the monitor, desktops and shortcuts. If the executable is on your PATH, you can use <code>agents-cli</code> without the <code>.\</code> prefix.</p>
-<p>It recognises supported CLI consoles, including Claude Code, Codex, Copilot CLI, AGY, Vibe, OpenCode and Qwen. Classic Windows console windows support the window attention effects. Terminal tabs and native/browser chat apps do not have the same coverage.</p>
-<div class="note"><strong>Observing is not delegating.</strong> The watcher does not send prompts or recruit other sessions as workers. An unrelated session appearing in the panel is not permission to message it.</div>
-<p>Nothing is added to Windows startup. Run <code>watch start</code> again after signing in.</p>
-</section>
+<h2>NAME</h2>
+<p>agents-cli — list, read and control existing agent CLI sessions.</p>
 
-<section id="panel"><h2>Read the panel</h2>
-<div class="status">
-<span class="signal" style="--c:#ffc247">NEEDS INPUT</span><p>An approval or other input request is waiting. <strong>QUESTION</strong> and <strong>REVIEW</strong> also use amber.</p>
-<span class="signal" style="--c:#54b7ff">IDLE</span><p>The session appears idle. This alone does not prove that the task is finished.</p>
-<span class="signal" style="--c:#88c58e">FINISHED</span><p>A completion indicator was detected.</p>
-<span class="signal" style="--c:#ed7373">ERROR</span><p>An error or usage-limit indicator was detected in the session.</p>
-<span class="signal" style="--c:#9299a1">RUNNING</span><p>Work appears to be in progress. Running sessions stay below attention rows.</p>
-<span class="signal" style="--c:#d4d9de">ACTIVE</span><p>This is the focused window. Focus is not evidence that the agent is working.</p>
-<span class="signal" style="--c:#54b7ff">UNKNOWN</span><p>The watcher cannot currently establish the state. Check the actual console.</p>
-<span class="signal" style="--c:#41464c">PARKED</span><p>An idle session you have put at the bottom of the list.</p>
-</div>
-<p>Each row identifies the session and provider, with age, available context information and sub-agent counts when those can be established. Counts stay unknown when there is no reliable source.</p>
-<p>Status detection is heuristic. When the panel and console disagree, use the console and report the diagnostic details below.</p>
-</section>
-
-<section id="controls"><h2>Controls &amp; settings</h2>
-<div class="grid"><div>
-<h3>Find a session</h3><ul><li><strong>Click a row</strong> to select its window.</li><li><strong>Double-click a row</strong> for a bright white locator pulse.</li><li>A normal selection pulses the title bar in the row's colour: blue, amber, red or the configured colour.</li><li>Visible windows keep their size and position. Minimized windows may be restored.</li></ul>
-<h3>Move or hide the panel</h3><ul><li>Drag the panel header to move it.</li><li><strong>Hide</strong> keeps the watcher running. Click its tray icon to show it again.</li><li><strong>Exit</strong>, in Settings or the tray right-click menu, stops only the watcher. Agent sessions keep running.</li></ul>
-</div><div>
-<h3>Park or dismiss</h3><ul><li><strong>Park</strong> is below the row number and close control. It puts an idle session at the bottom and excludes it from the first-row shortcut.</li><li><strong>^</strong> unparks it. New work or input requests also clear parking.</li><li>Parking lasts for the current watcher run.</li><li><strong>x</strong> dismisses the row from the panel; it does not close the agent.</li></ul>
-<h3>Settings</h3><ul><li><strong>Blink selected window</strong> controls the selection pulse.</li><li><strong>Bring selected window forward</strong> controls activation.</li><li><strong>Allow selection to switch desktops</strong> permits following an explicitly selected session to another desktop.</li><li><strong>Reset location</strong> returns the panel to its default position. <strong>Done</strong> returns to the session list.</li></ul>
-</div></div>
-<h3>Global shortcuts</h3>
-<p>Default first-row shortcut: <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>Z</kbd>. It targets the first eligible row <em>currently displayed</em>, skipping parked sessions.</p>
-<p>Default numbered shortcuts: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>1–9, 0</kbd>, for the first ten displayed rows. The two bindings are independently changeable or can be turned off in Settings. Existing explicit Off choices are preserved.</p>
-<p>Release the shortcut keys before activation. Global bindings can clash with other software or Windows; Settings reports registration failures. Neither shortcut sends a prompt or presses Enter in the agent.</p>
-</section>
-
-<section id="cli"><h2>The command line</h2>
-<p>These examples assume <code>agents-cli.exe</code> is on PATH. Otherwise use <code>.\agents-cli.exe</code> from its folder. Commands return JSON.</p>
-<pre><code>agents-cli version
-agents-cli ls --fast
-agents-cli ls
+<h2>USE</h2>
+<pre>agents-cli ls
 agents-cli tail 12345 --lines 20
-agents-cli watch list
-agents-cli watch stop
-agents-cli sends --since 1d --limit 50
-agents-cli help</code></pre>
-<p>Replace <code>12345</code> with the actual session PID from <code>ls</code>. <code>ls --fast</code> lists metadata; <code>ls</code> also reads state. <code>watch stop</code> stops the background watcher, not agent sessions. Open this guide with <code>agents-cli help --open</code>.</p>
-<details><summary>Sending to a session you are authorized to control</summary>
-<p>Inspect its fresh <code>tail</code> first. Confirm that it is the intended agent, not a bare shell, another task or a permission dialog. Discovery and a matching provider name do not authorize reuse of someone else's conversation.</p>
-<p>From Windows cmd, send the contents of a text file without putting the message in process arguments:</p>
-<pre><code>agents-cli send 12345 --stdin &lt; message.txt
-agents-cli tail 12345 --lines 20</code></pre>
-<p><code>--no-enter</code> only types. <code>agents-cli key 12345 enter</code> sends a named key. The send receipt distinguishes submission from merely typing the message. If submission is unverified or the command times out, inspect the target before retrying.</p>
-<p>Ordinary sends and key actions are logged with caller and target identifiers. Other providers' native messaging tools and manual typing are outside this audit.</p>
-</details>
-</section>
+agents-cli send 12345 --stdin &lt; message.txt
+agents-cli wait 12345 --idle-for 10s --timeout 10m</pre>
+<p>Replace <code>12345</code> with the intended session's PID. Inspect it before sending.
+<code>message.txt</code> contains your instruction; the redirection example is for cmd.exe.
+Output is JSON. If the EXE is not on PATH, use <code>.\agents-cli.exe</code>.</p>
 
-<section id="diagnostics"><h2>When something looks wrong</h2>
-<p>If the header shows <strong>reader retrying</strong> or a <strong>WR</strong> code, the watcher has a reading problem. This is separate from an agent session's own error status.</p>
-<pre><code>agents-cli version
-agents-cli watch list
-agents-cli sends --since 1d --limit 50</code></pre>
-<p>For a report, include the build, visible code, <code>last_reader_error</code>, <code>last_console_error</code> and <code>reader_restarts</code>. The last failures remain available after recovery for the current watcher run. A reported PID is the last known target, not proof that it caused the failure.</p>
-<table><thead><tr><th>Code</th><th>Meaning</th></tr></thead><tbody>
-<tr><td>WR101</td><td>Reader could not start or create its pipe.</td></tr>
-<tr><td>WR102</td><td>No reader heartbeat arrived within the deadline.</td></tr>
-<tr><td>WR103</td><td>Invalid structured reader data.</td></tr>
-<tr><td>WR104</td><td>Reader watchdog timeout.</td></tr>
-<tr><td>WR105</td><td>Reader exited unexpectedly; check its exit status.</td></tr>
-<tr><td>WR106</td><td>Reader pipe failed or a record was too large.</td></tr>
-<tr><td>WR107</td><td>Process/session discovery failed.</td></tr>
-<tr><td>WR108</td><td>A particular console was unreadable; other sessions may still be healthy.</td></tr>
+<h2>COMMANDS</h2>
+<table aria-label="Commands"><tbody>
+<tr><td><code>ls [--fast] [--tool T]</code></td><td>List sessions. <code>--fast</code>: metadata only.</td></tr>
+<tr><td><code>tail REF --lines 20</code></td><td>Read the visible console.</td></tr>
+<tr><td><code>send REF --stdin</code></td><td>Send text and Enter. <code>--no-enter</code>: type only.</td></tr>
+<tr><td><code>key REF enter</code></td><td>Send a key: enter, escape, ctrl-c, ctrl-u, tab, arrows, backspace.</td></tr>
+<tr><td><code>wait REF --idle-for 10s</code></td><td>Wait for idle. Also: <code>--timeout 10m</code>, <code>--match REGEX</code>.</td></tr>
+<tr><td><code>name REF "label"</code></td><td>Give a session a local label.</td></tr>
+<tr><td><code>adopt PID --tool T</code></td><td>Register an unrecognised session. Optional: <code>--name L</code>.</td></tr>
+<tr><td><code>mute REF</code> / <code>unmute REF</code></td><td>Disable / enable screen polling.</td></tr>
+<tr><td><code>stop REF</code></td><td>Preview a session stop. Add <code>--confirm PID</code> to kill its process tree.</td></tr>
+<tr><td><code>sends --since 1d --limit 50</code></td><td>Read the send/key audit: caller, target and outcome; no message text.</td></tr>
+<tr><td><code>stops --since 7d</code></td><td>Read the session-stop log.</td></tr>
+<tr><td><code>version</code> / <code>help</code></td><td>Build information / full command syntax.</td></tr>
 </tbody></table>
-<p>Unknown states can occur with unsupported console hosts or unreadable background processes. A steady blue taskbar-button background is not implemented; the coloured selection pulse is a separate effect.</p>
-</section>
+<p><code>REF</code>: PID, registered label, task name or unique name/title substring.
+Prefer a PID when targeting matters. A send timeout or <code>submitted:false</code>
+does not mean nothing was delivered; read <code>tail</code> before retrying.</p>
 
-<section id="privacy"><h2>Local data &amp; sharing</h2>
-<p>The guide is embedded in the executable and uses no remote assets, analytics or web service. Opening it writes a local HTML copy. No provider credentials are required by the watcher.</p>
-<p>Share the reviewed executable or release package, not your runtime folders. Logs and settings are local files and are not encrypted by Agents CLI.</p>
-<ul><li><code>%LOCALAPPDATA%\agents-cli\watch</code>: watcher status, settings and diagnostics. Names and window titles may contain private information.</li><li><code>%LOCALAPPDATA%\agents-cli\sends.jsonl</code>: send/key audit, plus one rotated predecessor; about 8 MiB total.</li></ul>
-<p>The send audit includes timestamps, caller and target process/session identifiers, method, message byte count and outcome. It excludes message bodies, hashes, titles, command lines and raw error text. Logging starts with the updated executable and cannot reconstruct older sends. A dispatch without a result has an unknown delivery outcome.</p>
-<p>Review and redact diagnostic output before sharing it. The agents being observed retain their own provider connections and data policies.</p>
-</section>
-<footer>Agents CLI quick guide · build {{BUILD}} · Settings → Help</footer>
-</main></body></html>
+<h2>WATCHER</h2>
+<pre>agents-cli watch start
+agents-cli watch list
+agents-cli watch stop</pre>
+<p>A background panel showing sessions that need attention. It does not send instructions.
+<code>watch stop</code> stops the watcher; <code>stop REF</code> stops an agent.</p>
+<p><code>watch monitors</code> / <code>watch desktops</code> list displays.
+Start options: <code>--monitor N</code>, <code>--stable 2s</code>.
+No automatic start at sign-in.</p>
+
+<h2>PANEL</h2>
+<table aria-label="Panel controls"><tbody>
+<tr><td>Click / double-click row</td><td>Bring forward / white locator pulse.</td></tr>
+<tr><td>Ctrl+Win+Z</td><td>First eligible displayed row; skips parked sessions.</td></tr>
+<tr><td>Ctrl+Alt+Shift+1–9,0</td><td>First ten displayed rows. Both shortcut sets are configurable.</td></tr>
+<tr><td>Park / ^</td><td>Move idle session to bottom / unpark. Parking lasts until watcher exit.</td></tr>
+<tr><td>x / Hide / Exit</td><td>Dismiss row / hide panel / stop watcher. Agent keeps running.</td></tr>
+<tr><td>Drag header</td><td>Move panel. Settings → Reset location restores its position.</td></tr>
+</tbody></table>
+<p>Settings controls selection blinking, foreground activation and desktop switching.
+A normal pulse matches the row colour.</p>
+<p><span class="blue">IDLE</span>: idle, not proof of completion.
+<span class="amber">NEEDS INPUT / QUESTION / REVIEW</span>: check the session.
+<span class="red">ERROR</span>: error detected.
+RUNNING: work detected. ACTIVE: focused window.
+UNKNOWN: state unavailable. PARKED: manually put aside.
+Detection is heuristic; the console is authoritative.</p>
+
+<h2>DIAGNOSE</h2>
+<p>Run <code>watch list</code>. Check <code>build_commit</code>,
+<code>last_reader_error</code>, <code>last_console_error</code> and <code>reader_restarts</code>.</p>
+<pre>WR101 start failed       WR102 no heartbeat
+WR103 invalid data       WR104 watchdog timeout
+WR105 reader exited      WR106 pipe failure
+WR107 discovery failed   WR108 console unreadable</pre>
+<p class="muted">Local files: %LOCALAPPDATA%\agents-cli (watcher state, send/stop logs).
+Review before sharing: status and click logs may include private names/titles.
+Logs begin with the updated EXE; they cannot recover earlier activity.</p>
+<footer class="muted">Portable EXE. Offline help: Settings → Help, or agents-cli help --open.</footer>
+</body></html>
