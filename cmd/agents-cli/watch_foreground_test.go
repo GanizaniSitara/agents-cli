@@ -44,7 +44,14 @@ func TestWatchForegroundLiftNativePlacement(t *testing.T) {
 func TestWatchForegroundLiftLifecycle(t *testing.T) {
 	l := watchForegroundLift{}
 	states := map[uintptr]bool{}
-	set := func(h uintptr, on bool) bool { states[h] = on; return true }
+	raises := 0
+	set := func(h uintptr, on bool) bool {
+		states[h] = on
+		if on {
+			raises++
+		}
+		return true
+	}
 	valid := func(watchSample) bool { return true }
 	s := watchSample{Session: Session{PID: 1}, HWND: 11}
 	l.selectWindow(s, true, false, valid, set)
@@ -52,6 +59,9 @@ func TestWatchForegroundLiftLifecycle(t *testing.T) {
 		t.Fatal("covered selected window not raised")
 	}
 	l.selectWindow(s, true, true, valid, set)
+	if raises != 2 {
+		t.Fatal("repeat selection failed to raise covered window again")
+	}
 	l.update(11, valid, set)
 	if !states[11] {
 		t.Fatal("repeat selection or retained focus released lift")

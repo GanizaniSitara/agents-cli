@@ -24,7 +24,12 @@ func (l *watchForegroundLift) release(valid func(watchSample) bool, set func(uin
 
 func (l *watchForegroundLift) selectWindow(s watchSample, covered, topmost bool, valid func(watchSample) bool, set func(uintptr, bool) bool) {
 	if l.sample.HWND == s.HWND && watchSameClickSession(l.sample, s) {
-		return // repeated selection must still release our original promotion
+		// Another topmost app may have covered it since the previous selection.
+		// Raise it again while retaining ownership of the original promotion.
+		if valid(s) {
+			set(s.HWND, true)
+		}
+		return
 	}
 	l.release(valid, set)
 	if covered && !topmost && set(s.HWND, true) {

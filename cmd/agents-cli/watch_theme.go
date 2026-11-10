@@ -67,6 +67,8 @@ func (t watchTheme) colour(hex string) uintptr {
 func (t watchTheme) rowColour(phase string) uintptr {
 	hex := t.Metadata
 	switch phase {
+	case "parked":
+		hex = "#41464C"
 	case "idle", "unknown":
 		hex = t.Idle
 	case "waiting", "question", "review":
@@ -83,6 +85,8 @@ func (t watchTheme) rowColour(phase string) uintptr {
 
 func watchProminentStatus(phase string) string {
 	switch phase {
+	case "parked":
+		return "PARKED"
 	case "active":
 		return "ACTIVE"
 	case "waiting":

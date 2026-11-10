@@ -81,6 +81,8 @@ func watchPanel(a *watchApp) error {
 	var summaries []watchPanelSummary
 	var painted watchPanelFrame
 	var pressed watchPanelPress
+	var pendingShortcut watchPanelPress
+	pendingFirstRow := false
 	dragging := false
 	var dragOffset watchPoint
 	capacity := 1
@@ -106,7 +108,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 6
+			n = len(monitors) + len(desktops) + 9
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -151,15 +153,15 @@ func watchPanel(a *watchApp) error {
 			if wp == watchFirstRowHotkey {
 				if p, ok := watchFirstRowTarget(painted); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
 					p.Time = time.Now()
-					a.activateWatchRow(p, p.Y)
-					watchSetLift(window, true) // keep the nonactivating panel visible
+					pendingShortcut, pendingFirstRow = p, true
+					watchUser.NewProc("SetTimer").Call(window, 3, 25, 0)
 				}
 				return 0
 			}
 			if p, ok := watchShortcutRow(painted, wp); ok && shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 && !pressed.Active && !dragging {
 				p.Time = time.Now()
-				a.activateWatchRow(p, p.Y)
-				watchSetLift(window, true)
+				pendingShortcut, pendingFirstRow = p, false
+				watchUser.NewProc("SetTimer").Call(window, 3, 25, 0)
 			}
 			return 0
 		case 0x8001: // tray callback: reopening never activates the panel
@@ -177,6 +179,32 @@ func watchPanel(a *watchApp) error {
 		case 0x21:
 			return 3 // WM_MOUSEACTIVATE: deliver click, never focus panel
 		case 0x113: // WM_TIMER
+			if wp == 3 {
+				if !pendingShortcut.Active {
+					return 0
+				}
+				if !watchShortcutReleased(func(key uintptr) bool {
+					state, _, _ := watchUser.NewProc("GetAsyncKeyState").Call(key)
+					return state&0x8000 != 0
+				}) && time.Since(pendingShortcut.Time) < 3*time.Second {
+					return 0
+				}
+				watchUser.NewProc("KillTimer").Call(window, 3)
+				p := pendingShortcut
+				pendingShortcut.Active = false
+				if time.Since(p.Time) >= 3*time.Second {
+					return 0
+				}
+				a.mu.Lock()
+				entry := a.tracker.entries[p.Row.Sample.PID]
+				eligible := entry != nil && (!pendingFirstRow || !entry.Parked)
+				a.mu.Unlock()
+				if eligible && !menu && !pressed.Active && !dragging {
+					a.activateWatchRow(p, p.Y)
+					watchSetLift(window, true)
+				}
+				return 0
+			}
 			liftForeground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 			a.foregroundLift.update(liftForeground, watchLiftIdentity, watchSetLift)
 			if a.foregroundLift.sample.HWND != 0 {
@@ -366,7 +394,22 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+4 {
+				} else if i >= len(monitors)+len(desktops)+4 && i <= len(monitors)+len(desktops)+6 {
+					switch i - len(monitors) - len(desktops) {
+					case 4:
+						settings.DisableSelectionBlink = !settings.DisableSelectionBlink
+					case 5:
+						settings.DisableForeground = !settings.DisableForeground
+						if settings.DisableForeground {
+							a.foregroundLift.release(watchLiftIdentity, watchSetLift)
+						}
+					case 6:
+						settings.DisableDesktopSwitch = !settings.DisableDesktopSwitch
+					}
+					_ = saveWatchSettings(a.dir, settings)
+					resize()
+					return 0
+				} else if i == len(monitors)+len(desktops)+7 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(monitors)+len(desktops) {
@@ -422,6 +465,14 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			if x >= 330 {
+				if (y-34)%watchRowHeight >= 36 {
+					a.mu.Lock()
+					a.tracker.togglePark(row.Sample)
+					a.save()
+					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
+					a.mu.Unlock()
+					return 0
+				}
 				a.mu.Lock()
 				a.tracker.dismiss(row.Sample.PID)
 				a.save()
@@ -509,6 +560,21 @@ func watchPanel(a *watchApp) error {
 					firstRowStatus = firstRowProblem
 				}
 				watchText(dc, firstRowStatus, 12, top+8, 350, top+35)
+				for _, option := range []struct {
+					label    string
+					disabled bool
+				}{
+					{"Blink selected window", settings.DisableSelectionBlink},
+					{"Bring selected window forward", settings.DisableForeground},
+					{"Allow selection to switch desktops", settings.DisableDesktopSwitch},
+				} {
+					top += 44
+					prefix := "[x] "
+					if option.disabled {
+						prefix = "[ ] "
+					}
+					watchText(dc, prefix+option.label, 12, top+8, 350, top+35)
+				}
 				top += 44
 				watchText(dc, "Reset location", 12, top+8, 350, top+35)
 				top += 44
@@ -528,6 +594,9 @@ func watchPanel(a *watchApp) error {
 						}
 					}
 					status := firstNonEmpty(row.Sample.Reason, phase)
+					if row.Parked {
+						phase = "parked"
+					}
 					if phase == "working" {
 						status = "RUNNING"
 					}
@@ -536,8 +605,11 @@ func watchPanel(a *watchApp) error {
 					if prominent := watchProminentStatus(phase); prominent != "" {
 						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour(phase))
 						colour, metadata = theme.colour("#191919"), theme.colour("#493713")
+						if row.Parked {
+							colour, metadata = theme.colour("#D4D9DE"), theme.colour("#B2B8BF")
+						}
 						status = prominent
-						if inputFont != 0 && phase != "idle" && phase != "question" && phase != "review" {
+						if inputFont != 0 && phase != "parked" && phase != "idle" && phase != "question" && phase != "review" {
 							watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 						}
 					}
@@ -548,7 +620,7 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					descriptionTop := top + 22
-					if phase == "idle" || phase == "question" || phase == "review" || phase == "working" {
+					if phase == "parked" || phase == "idle" || phase == "question" || phase == "review" || phase == "working" {
 						descriptionTop = top + 16
 					}
 					if inputFont != 0 && phase != "working" {
@@ -559,11 +631,18 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
 					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 270, descriptionTop+35)
-					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 350, descriptionTop+35)
+					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 328, descriptionTop+35)
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}
-					watchText(dc, "x", 336, top+26, 358, top+46)
+					watchText(dc, "x", 336, top+18, 358, top+36)
+					if row.Parked || watchCanPark(row.Sample) {
+						label := "P"
+						if row.Parked {
+							label = "^"
+						}
+						watchText(dc, label, 336, top+36, 358, top+55)
+					}
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {

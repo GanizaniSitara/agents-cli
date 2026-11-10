@@ -44,6 +44,9 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 	}
 	// Keep all stops (including idle/check) ahead of expanded working rows.
 	priority := func(row watchEntry) int {
+		if row.Parked {
+			return 6
+		}
 		if row.Sample.State == "busy" || row.Sample.Phase == "working" {
 			return 5
 		}

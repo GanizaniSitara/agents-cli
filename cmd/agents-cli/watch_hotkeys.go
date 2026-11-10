@@ -50,6 +50,17 @@ const watchHotkeyBase = 0x4100
 
 const watchFirstRowHotkey = 0x4200
 
+// Do not hand focus to a console while the chord is still down: subsequent
+// repeat/key-up events belong to the invoking app, not the selected shell.
+func watchShortcutReleased(down func(uintptr) bool) bool {
+	for _, key := range []uintptr{0x10, 0x11, 0x12, 0x5B, 0x5C, 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'} {
+		if down(key) {
+			return false
+		}
+	}
+	return true
+}
+
 var watchFirstRowChoices = []string{"Off", "Ctrl+Win+Z", "Ctrl+Alt+Shift+Z", "Ctrl+Alt+Z"}
 
 func watchFirstRowChoice(choice string) string {
@@ -90,7 +101,16 @@ func watchRegisterFirstRowShortcut(choice string, register func(id, modifiers, k
 }
 
 func watchFirstRowTarget(frame watchPanelFrame) (watchPanelPress, bool) {
-	return watchShortcutRow(frame, watchHotkeyBase)
+	if frame.Menu {
+		return watchPanelPress{}, false
+	}
+	for i, row := range frame.Rows {
+		if !row.Parked {
+			p := frame.hit(20, 34+i*watchRowHeight+20)
+			return p, p.Kind == "row"
+		}
+	}
+	return watchPanelPress{}, false
 }
 
 // SW_RESTORE changes a visible maximized/snapped window's placement. Only a
@@ -149,6 +169,23 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 		return
 	}
 	// Only a session click or an explicit session shortcut calls this path.
+	settings := loadWatchSettings(a.dir)
+	if settings.DisableDesktopSwitch {
+		manager, release := openWatchDesktopManager()
+		desktop, _ := windowWatchDesktop(manager, row.Sample.HWND, watchDesktops())
+		release()
+		if desktop == "" || desktop != watchCurrentDesktop() {
+			a.logClick(p, releaseY, state, "desktop-switch-disabled", false, false)
+			return
+		}
+	}
+	if settings.DisableForeground {
+		if !settings.DisableSelectionBlink {
+			watchPulseWindow(row.Sample.HWND)
+		}
+		a.logClick(p, releaseY, state, "foreground-disabled", false, false)
+		return
+	}
 	var before watchRect
 	watchUser.NewProc("GetWindowRect").Call(row.Sample.HWND, uintptr(unsafe.Pointer(&before)))
 	wasMinimized, _, _ := watchUser.NewProc("IsIconic").Call(row.Sample.HWND)
@@ -164,7 +201,9 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	if set != 0 {
 		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
 	}
-	watchPulseWindow(row.Sample.HWND)
+	if !settings.DisableSelectionBlink {
+		watchPulseWindow(row.Sample.HWND)
+	}
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
 	go func() {
 		time.Sleep(250 * time.Millisecond)

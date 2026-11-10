@@ -24,6 +24,7 @@ type watchSample struct {
 }
 
 type watchEntry struct {
+	Parked    bool        `json:"parked,omitempty"`
 	Sample    watchSample `json:"window"`
 	Since     time.Time   `json:"since"`
 	Candidate time.Time   `json:"-"`
@@ -47,7 +48,7 @@ func watchActiveRows(rows []watchEntry, foreground uintptr) []watchEntry {
 	result := append([]watchEntry(nil), rows...)
 	for i := range result {
 		s := &result[i].Sample
-		if foreground != 0 && s.HWND == foreground && s.State != "busy" && s.Phase != "error" {
+		if !result[i].Parked && foreground != 0 && s.HWND == foreground && s.State != "busy" && s.Phase != "error" {
 			s.Phase, s.Reason = "active", "active window"
 			result[i].Stopped = false
 		}
@@ -90,6 +91,9 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		e.Changed = now
 	}
 	e.Sample = s
+	if !watchCanPark(s) {
+		e.Parked = false
+	}
 	if s.PendingQuestions > 0 {
 		// A live queue is already an explicit input request, even while its
 		// running footer changes. Screen stability cannot debounce this case.
@@ -142,6 +146,19 @@ func (w *watchTracker) dismiss(pid uint32) {
 		e.Dismissed = true
 		e.Attention = false
 	}
+}
+
+func watchCanPark(s watchSample) bool {
+	return s.State == "idle" && (s.Phase == "idle" || s.Phase == "") && !s.Working && s.PendingQuestions == 0
+}
+
+func (w *watchTracker) togglePark(s watchSample) bool {
+	e := w.entries[s.PID]
+	if e == nil || !watchSameClickSession(s, e.Sample) || (!e.Parked && !watchCanPark(e.Sample)) {
+		return false
+	}
+	e.Parked = !e.Parked
+	return true
 }
 
 func (w *watchTracker) prune(alive map[uint32]bool) {
