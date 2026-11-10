@@ -60,7 +60,7 @@ chosen monitor's work area; scroll when they exceed the available height.
 After Hide, a new or changed stopped/unknown status on the current desktop can
 reopen the panel without activation. Age ticks, background-desktop changes and
 working counts do not reopen it.
-Only an explicit session-row click or numbered session shortcut activates another window.
+Only an explicit session-row click or session shortcut activates another window.
 Row clicks select the last fully painted row on mouse press. The panel holds
 its position and painted rows until release, so a new input wait or a height
 change cannot redirect the click. Closed/reused processes and changed window
@@ -130,13 +130,30 @@ set and is shown in Settings. Application-local shortcut conflicts cannot be
 detected, so select a different combination or Off if an application needs it.
 Shortcuts work while the panel is hidden and pause while Settings is open.
 
-Settings also has an independent **First row** shortcut, initially Off. Choose
+Settings also has an independent **First row** shortcut, defaulting to Ctrl+Win+Z. Choose
 Ctrl+Win+Z, Ctrl+Alt+Shift+Z, Ctrl+Alt+Z, or Off. It activates whichever session
-is first in the last displayed panel frame, including the scroll position;
+is first and unparked in the last displayed panel frame, including the scroll position;
 it never pins a PID or task. The same session identity guards apply. Its
 registration status is shown separately and a collision does not disable the
 numbered shortcuts. Windows reserves Win-key combinations, so Ctrl+Win+Z is
 offered only subject to successful registration, not as universally available.
+An explicitly saved Off choice remains Off after an upgrade. Before using the
+chord on another PC, check its registration in Settings or the `shortcuts`
+section of `watch list`. With the shortcut Off or unavailable, the watcher does
+not intercept it, and it may reach the foreground application.
+
+Idle rows have a small **P** control below the number and dismiss button.
+Parking moves the row to the bottom and displays **PARKED** on dark grey;
+Ctrl+Win+Z skips it. **^** unparks it. New work or a request for input clears
+parking automatically. Parking lasts for the current watcher run; it does not
+stop or suspend the agent. Explicit numbered shortcuts and row clicks still work.
+
+Settings independently controls **Blink selected window**, **Bring selected
+window forward**, and **Allow selection to switch desktops**. Selection blinking
+uses the native title bar as well as a border pulse; appearance depends on the
+window frame and Windows theme. Hotkey activation waits for the chord to be
+released. The bounded click log records shortcut receipt, release timeout,
+cancellation and activation separately; it records no typed input.
 
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four

@@ -49,6 +49,22 @@ func watchShortcutDigit(index int) string {
 const watchHotkeyBase = 0x4100
 
 const watchFirstRowHotkey = 0x4200
+const watchDefaultFirstRowShortcut = "Ctrl+Win+Z"
+
+type watchShortcutHealth struct {
+	Binding    string `json:"binding"`
+	Registered bool   `json:"registered"`
+	Problem    string `json:"problem,omitempty"`
+}
+
+func (a *watchApp) recordShortcut(kind, binding, problem string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.shortcuts == nil {
+		a.shortcuts = map[string]watchShortcutHealth{}
+	}
+	a.shortcuts[kind] = watchShortcutHealth{Binding: binding, Registered: binding != "Off" && problem == "", Problem: problem}
+}
 
 // Do not hand focus to a console while the chord is still down: subsequent
 // repeat/key-up events belong to the invoking app, not the selected shell.
@@ -64,6 +80,9 @@ func watchShortcutReleased(down func(uintptr) bool) bool {
 var watchFirstRowChoices = []string{"Off", "Ctrl+Win+Z", "Ctrl+Alt+Shift+Z", "Ctrl+Alt+Z"}
 
 func watchFirstRowChoice(choice string) string {
+	if choice == "" {
+		return watchDefaultFirstRowShortcut
+	}
 	for _, value := range watchFirstRowChoices {
 		if choice == value {
 			return value
@@ -82,6 +101,7 @@ func watchNextFirstRowShortcut(choice string) string {
 }
 
 func watchRegisterFirstRowShortcut(choice string, register func(id, modifiers, key uintptr) bool, unregister func(id uintptr)) string {
+	choice = watchFirstRowChoice(choice)
 	unregister(watchFirstRowHotkey) // never unregister the numbered set
 	var modifiers uintptr
 	switch watchFirstRowChoice(choice) {

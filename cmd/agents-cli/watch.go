@@ -28,21 +28,23 @@ type watchBatch struct {
 }
 
 type watchReceipt struct {
-	PID            uint32                    `json:"pid"`
-	Started        string                    `json:"started"`
-	Updated        time.Time                 `json:"updated"`
-	Rows           []watchEntry              `json:"stopped"`
-	Sessions       []watchEntry              `json:"sessions"`
-	Error          string                    `json:"error,omitempty"`
-	ConsoleEvents  uint64                    `json:"console_events"`
-	Coverage       map[string]map[string]int `json:"coverage"`
-	CurrentDesktop string                    `json:"current_desktop"`
-	PanelRows      []watchEntry              `json:"panel_rows"`
-	PanelSummary   []string                  `json:"panel_summary"`
-	PanelSections  []watchPanelSummary       `json:"panel_sections"`
+	Shortcuts      map[string]watchShortcutHealth `json:"shortcuts,omitempty"`
+	PID            uint32                         `json:"pid"`
+	Started        string                         `json:"started"`
+	Updated        time.Time                      `json:"updated"`
+	Rows           []watchEntry                   `json:"stopped"`
+	Sessions       []watchEntry                   `json:"sessions"`
+	Error          string                         `json:"error,omitempty"`
+	ConsoleEvents  uint64                         `json:"console_events"`
+	Coverage       map[string]map[string]int      `json:"coverage"`
+	CurrentDesktop string                         `json:"current_desktop"`
+	PanelRows      []watchEntry                   `json:"panel_rows"`
+	PanelSummary   []string                       `json:"panel_summary"`
+	PanelSections  []watchPanelSummary            `json:"panel_sections"`
 }
 
 type watchApp struct {
+	shortcuts      map[string]watchShortcutHealth
 	mu             sync.Mutex
 	tracker        *watchTracker
 	dir            string
@@ -115,7 +117,7 @@ func runWatch(args []string) error {
 		for _, row := range r.Rows {
 			rows = append(rows, map[string]interface{}{"pid": row.Sample.PID, "tool": row.Sample.Tool, "name": firstNonEmpty(row.Sample.Name, row.Sample.Title), "desktop": row.Sample.Desktop, "waiting_on": firstNonEmpty(row.Sample.Reason, watchReason(row.Sample.State)), "stopped_for": time.Since(row.Since).Round(time.Second).String(), "agents": row.Sample.Agents, "phase": row.Sample.Phase})
 		}
-		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "coverage": r.Coverage})
+		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "coverage": r.Coverage, "shortcuts": r.Shortcuts})
 		return nil
 	case "start":
 		exe, err := os.Executable()
@@ -353,6 +355,7 @@ func normalizeWatchStart(v string) string {
 
 func (a *watchApp) save() {
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
+	r.Shortcuts = a.shortcuts
 	r.CurrentDesktop = watchCurrentDesktop()
 	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops(), a.expanded)
 	for _, summary := range r.PanelSections {

@@ -16,6 +16,7 @@ var watchUser = windows.NewLazySystemDLL("user32.dll")
 var watchGDI = windows.NewLazySystemDLL("gdi32.dll")
 
 const watchRowHeight = 56
+const watchSettingsRowHeight = 36
 
 type watchRect struct{ Left, Top, Right, Bottom int32 }
 type watchPoint struct{ X, Y int32 }
@@ -73,9 +74,11 @@ func watchPanel(a *watchApp) error {
 	}
 	applyShortcuts := func() {
 		shortcutProblem = watchRegisterShortcuts(settings.Shortcuts, registerShortcut, unregisterShortcut)
+		a.recordShortcut("numbered", watchShortcutChoice(settings.Shortcuts), shortcutProblem)
 	}
 	applyFirstRowShortcut := func() {
 		firstRowProblem = watchRegisterFirstRowShortcut(settings.FirstRowShortcut, registerShortcut, unregisterShortcut)
+		a.recordShortcut("first_row", watchFirstRowChoice(settings.FirstRowShortcut), firstRowProblem)
 	}
 	var rows []watchEntry
 	var summaries []watchPanelSummary
@@ -112,7 +115,7 @@ func watchPanel(a *watchApp) error {
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
-			height = int32(34 + n*44)
+			height = int32(34 + n*watchSettingsRowHeight)
 		}
 		width := int32(360)
 		flags := uintptr(0x10)
@@ -153,6 +156,8 @@ func watchPanel(a *watchApp) error {
 			if wp == watchFirstRowHotkey {
 				if p, ok := watchFirstRowTarget(painted); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
 					p.Time = time.Now()
+					p.Trigger = "first-row-shortcut"
+					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-received", false, false)
 					pendingShortcut, pendingFirstRow = p, true
 					watchUser.NewProc("SetTimer").Call(window, 3, 25, 0)
 				}
@@ -160,6 +165,8 @@ func watchPanel(a *watchApp) error {
 			}
 			if p, ok := watchShortcutRow(painted, wp); ok && shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 && !pressed.Active && !dragging {
 				p.Time = time.Now()
+				p.Trigger = "numbered-shortcut"
+				a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-received", false, false)
 				pendingShortcut, pendingFirstRow = p, false
 				watchUser.NewProc("SetTimer").Call(window, 3, 25, 0)
 			}
@@ -193,6 +200,7 @@ func watchPanel(a *watchApp) error {
 				p := pendingShortcut
 				pendingShortcut.Active = false
 				if time.Since(p.Time) >= 3*time.Second {
+					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-release-timeout", false, false)
 					return 0
 				}
 				a.mu.Lock()
@@ -202,6 +210,8 @@ func watchPanel(a *watchApp) error {
 				if eligible && !menu && !pressed.Active && !dragging {
 					a.activateWatchRow(p, p.Y)
 					watchSetLift(window, true)
+				} else {
+					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-cancelled", false, false)
 				}
 				return 0
 			}
@@ -384,7 +394,7 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			if p.Kind == "menu" {
-				i := (y - 34) / 44
+				i := (y - 34) / watchSettingsRowHeight
 				if i >= 0 && i < len(monitors) {
 					settings.Monitor = monitors[i].Device
 					settings.Position = nil
@@ -530,7 +540,7 @@ func watchPanel(a *watchApp) error {
 					if m.Device == selected.Device {
 						prefix = "[x] "
 					}
-					top := int32(34 + i*44)
+					top := int32(34 + i*watchSettingsRowHeight)
 					watchText(dc, prefix+monitorLabel(m), 12, top+8, 350, top+35)
 				}
 				for i, d := range desktops {
@@ -538,20 +548,20 @@ func watchPanel(a *watchApp) error {
 					if settings.monitorsDesktop(d.ID) {
 						prefix = "[x] "
 					}
-					top := int32(34 + (len(monitors)+i)*44)
+					top := int32(34 + (len(monitors)+i)*watchSettingsRowHeight)
 					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
 				}
-				top := int32(34 + (len(monitors)+len(desktops))*44)
+				top := int32(34 + (len(monitors)+len(desktops))*watchSettingsRowHeight)
 				watchText(dc, "Shortcuts: "+watchShortcutChoice(settings.Shortcuts)+"  [change]", 12, top+8, 350, top+35)
-				top += 44
+				top += watchSettingsRowHeight
 				hint := "1-9, 0: shown rows | app shortcuts may clash"
 				if shortcutProblem != "" {
 					hint = shortcutProblem
 				}
 				watchText(dc, hint, 12, top+8, 350, top+35)
-				top += 44
+				top += watchSettingsRowHeight
 				watchText(dc, "First row: "+watchFirstRowChoice(settings.FirstRowShortcut)+"  [change]", 12, top+8, 350, top+35)
-				top += 44
+				top += watchSettingsRowHeight
 				firstRowStatus := "Off | independent of numbered shortcuts"
 				if watchFirstRowChoice(settings.FirstRowShortcut) != "Off" {
 					firstRowStatus = "Registered: " + watchFirstRowChoice(settings.FirstRowShortcut)
@@ -568,17 +578,17 @@ func watchPanel(a *watchApp) error {
 					{"Bring selected window forward", settings.DisableForeground},
 					{"Allow selection to switch desktops", settings.DisableDesktopSwitch},
 				} {
-					top += 44
+					top += watchSettingsRowHeight
 					prefix := "[x] "
 					if option.disabled {
 						prefix = "[ ] "
 					}
 					watchText(dc, prefix+option.label, 12, top+8, 350, top+35)
 				}
-				top += 44
+				top += watchSettingsRowHeight
 				watchText(dc, "Reset location", 12, top+8, 350, top+35)
-				top += 44
-				watchText(dc, "Done | choices are remembered", 12, top+8, 350, top+35)
+				top += watchSettingsRowHeight
+				watchText(dc, "Done", 12, top+8, 350, top+35)
 			} else {
 				for i, row := range frame.Rows {
 					top := int32(34 + i*watchRowHeight)

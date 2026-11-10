@@ -114,7 +114,7 @@ func monitorLabel(m watchMonitor) string {
 }
 
 func loadWatchSettings(dir string) watchSettings {
-	var settings watchSettings
+	settings := watchSettings{FirstRowShortcut: watchDefaultFirstRowShortcut}
 	if b, err := os.ReadFile(filepath.Join(dir, "settings.json")); err == nil {
 		_ = json.Unmarshal(b, &settings)
 	}

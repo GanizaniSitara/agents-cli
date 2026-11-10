@@ -1,6 +1,37 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestShortcutHealthRecordsRegistrationAndCollision(t *testing.T) {
+	a := &watchApp{dir: t.TempDir(), tracker: newWatchTracker(0)}
+	a.recordShortcut("numbered", "Ctrl+Alt+Shift", "")
+	a.recordShortcut("first_row", "Ctrl+Win+Z", "Unavailable: Ctrl+Win+Z; row 1 shortcut off")
+	a.save()
+	b, err := os.ReadFile(filepath.Join(a.dir, "status.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt watchReceipt
+	if err := json.Unmarshal(b, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if !receipt.Shortcuts["numbered"].Registered || receipt.Shortcuts["first_row"].Registered || receipt.Shortcuts["first_row"].Problem == "" {
+		t.Fatalf("collision receipt: %+v", receipt.Shortcuts)
+	}
+	a.recordShortcut("first_row", "Ctrl+Win+Z", "")
+	if !a.shortcuts["first_row"].Registered || !a.shortcuts["numbered"].Registered {
+		t.Fatal("successful registration lost")
+	}
+	a.recordShortcut("first_row", "Off", "")
+	if a.shortcuts["first_row"].Registered || a.shortcuts["first_row"].Problem != "" {
+		t.Fatal("Off reports registration or old collision")
+	}
+}
 
 func TestSessionActivationRestoresOnlyMinimizedWindows(t *testing.T) {
 	for _, minimized := range []bool{false, true} {
@@ -91,8 +122,8 @@ func TestFirstRowShortcutSettingsPersistIndependently(t *testing.T) {
 	if got.Shortcuts != want.Shortcuts || got.FirstRowShortcut != want.FirstRowShortcut {
 		t.Fatalf("independent settings lost: %+v", got)
 	}
-	if watchFirstRowChoice("") != "Off" || watchFirstRowChoice("bad chord") != "Off" {
-		t.Fatal("unconfigured/invalid shortcut should be Off")
+	if watchFirstRowChoice("") != "Ctrl+Win+Z" || watchFirstRowChoice("bad chord") != "Off" {
+		t.Fatal("default must be enabled; invalid binding must remain Off")
 	}
 	choice := "Off"
 	for _, expected := range []string{"Ctrl+Win+Z", "Ctrl+Alt+Shift+Z", "Ctrl+Alt+Z", "Off"} {
@@ -100,5 +131,32 @@ func TestFirstRowShortcutSettingsPersistIndependently(t *testing.T) {
 		if choice != expected {
 			t.Fatalf("choice=%s, want %s", choice, expected)
 		}
+	}
+}
+
+func TestFirstRowDefaultEnabledButExplicitOffPreserved(t *testing.T) {
+	dir := t.TempDir()
+	if loadWatchSettings(dir).FirstRowShortcut != "Ctrl+Win+Z" {
+		t.Fatal("fresh configuration ships shortcut Off")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"shortcuts":"Ctrl+Alt+Shift"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if loadWatchSettings(dir).FirstRowShortcut != "Ctrl+Win+Z" {
+		t.Fatal("missing first-row setting disables shortcut")
+	}
+	if err := saveWatchSettings(dir, watchSettings{Shortcuts: "Ctrl+Alt+Shift", FirstRowShortcut: "Off"}); err != nil {
+		t.Fatal(err)
+	}
+	if loadWatchSettings(dir).FirstRowShortcut != "Off" {
+		t.Fatal("explicit owner Off was overridden")
+	}
+	var registered bool
+	problem := watchRegisterFirstRowShortcut("", func(id, modifiers, key uintptr) bool {
+		registered = id == watchFirstRowHotkey && modifiers == 0x400a && key == 'Z'
+		return registered
+	}, func(uintptr) {})
+	if problem != "" || !registered {
+		t.Fatal("default does not register Ctrl+Win+Z")
 	}
 }

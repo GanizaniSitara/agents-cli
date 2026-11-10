@@ -82,6 +82,7 @@ func TestWatchClickOwnHiddenWindowsAndFallbackLabel(t *testing.T) {
 	}
 	p := newWatchPanelFrame([]watchEntry{{Sample: s}}, nil, 0, 6, false).hit(40, 60)
 	p.Time = time.Now()
+	p.Trigger = "first-row-shortcut"
 	dir := t.TempDir()
 	app := &watchApp{dir: dir}
 	app.logClick(p, 60, state, "test-no-activation", false, false)
@@ -95,6 +96,9 @@ func TestWatchClickOwnHiddenWindowsAndFallbackLabel(t *testing.T) {
 	}
 	if record.Label != s.Title || record.WindowTitle != s.Title || record.PID != pid || record.HWND != alpha || record.RowIndex != 0 || record.Y != 60 || record.ForegroundAfter != foreground || record.ActivationRequested {
 		t.Fatalf("wrong click trace: %+v", record)
+	}
+	if record.Trigger != p.Trigger {
+		t.Fatal("shortcut origin missing from diagnostic record")
 	}
 	after, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 	if after != foreground {

@@ -41,6 +41,7 @@ type watchPanelFrame struct {
 }
 
 type watchPanelPress struct {
+	Trigger    string
 	Active     bool
 	Kind       string
 	X, Y       int
@@ -138,6 +139,7 @@ func watchSameClickSession(pressed, current watchSample) bool {
 }
 
 type watchClickRecord struct {
+	Trigger                string     `json:"trigger,omitempty"`
 	BoundsBefore           *watchRect `json:"bounds_before,omitempty"`
 	BoundsAfter            *watchRect `json:"bounds_after,omitempty"`
 	WasMinimized           bool       `json:"was_minimized,omitempty"`
@@ -173,7 +175,8 @@ type watchClickRecord struct {
 func (a *watchApp) logClick(p watchPanelPress, releaseY int, state watchTargetState, outcome string, attempted, succeeded bool) {
 	foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 	_ = watchAppendClick(a.dir, watchClickRecord{
-		Time: time.Now(), PressTime: p.Time,
+		Trigger: p.Trigger,
+		Time:    time.Now(), PressTime: p.Time,
 		Y: p.Y, ReleaseY: releaseY, ScreenY: p.Screen.Y, RowIndex: p.RowIndex,
 		Label: watchRowLabel(p.Row.Sample), PID: p.Row.Sample.PID, HWND: p.Row.Sample.HWND,
 		WindowTitle: state.WindowTitle, SampleTitle: p.Row.Sample.Title,
