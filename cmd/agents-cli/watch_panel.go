@@ -649,11 +649,11 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, "x", 336, top+18, 358, top+36)
 					if row.Parked || watchCanPark(row.Sample) {
-						label := "P"
+						label := "Park"
 						if row.Parked {
 							label = "^"
 						}
-						watchText(dc, label, 336, top+36, 358, top+55)
+						watchText(dc, label, 330, top+36, 360, top+55)
 					}
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
