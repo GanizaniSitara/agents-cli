@@ -23,12 +23,6 @@ func TestWatchForegroundLiftNativePlacement(t *testing.T) {
 	defer watchUser.NewProc("DestroyWindow").Call(hwnd)
 	var before, after watchRect
 	watchUser.NewProc("GetWindowRect").Call(hwnd, uintptr(unsafe.Pointer(&before)))
-	watchFlashCaption(hwnd)
-	watchUser.NewProc("GetWindowRect").Call(hwnd, uintptr(unsafe.Pointer(&after)))
-	actualForeground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
-	if before != after || actualForeground != foreground {
-		t.Fatal("caption flash changed placement or focus")
-	}
 	for _, topmost := range []bool{true, false} {
 		if !watchSetLift(hwnd, topmost) {
 			t.Fatal("native SetWindowPos failed")

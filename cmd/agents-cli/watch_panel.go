@@ -47,6 +47,7 @@ type watchPaint struct {
 func watchPanel(a *watchApp) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	defer watchCancelPulse()
 	defer a.foregroundLift.release(watchLiftIdentity, watchSetLift)
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	name := windows.StringToUTF16Ptr("AgentsCLIWatchPanel")
@@ -408,6 +409,7 @@ func watchPanel(a *watchApp) error {
 					switch i - len(monitors) - len(desktops) {
 					case 4:
 						settings.DisableSelectionBlink = !settings.DisableSelectionBlink
+						watchCancelPulse()
 					case 5:
 						settings.DisableForeground = !settings.DisableForeground
 						if settings.DisableForeground {

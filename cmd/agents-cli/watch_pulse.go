@@ -2,73 +2,153 @@ package main
 
 import (
 	"runtime"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
-// Four narrow overlays leave the target's contents and placement untouched.
-func watchPulseEdges(r watchRect) [4]watchRect {
-	const w = 6
-	return [4]watchRect{
-		{r.Left, r.Top, r.Right, r.Top + w},
-		{r.Left, r.Bottom - w, r.Right, r.Bottom},
-		{r.Left, r.Top + w, r.Left + w, r.Bottom - w},
-		{r.Right - w, r.Top + w, r.Right, r.Bottom - w},
-	}
-}
+var watchPulseSerial sync.Mutex
+var watchPulseGeneration atomic.Uint64
+var watchPulseOnce sync.Once
+var watchPulseRegistered bool
 
-func watchPulseWindow(target uintptr) {
+func watchCancelPulse() { watchPulseGeneration.Add(1) }
+
+func watchPulseWindow(sample watchSample) {
+	target := sample.HWND
+	generation := watchPulseGeneration.Add(1)
 	go func() {
+		watchPulseSerial.Lock()
+		defer watchPulseSerial.Unlock()
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		// Allow an asynchronously restored window to reach its saved bounds.
 		time.Sleep(100 * time.Millisecond)
-		// FLASHW_CAPTION also flashes an already-active native title bar.
-		// Do not use TIMERNOFG: selection has just brought this window forward.
-		watchFlashCaption(target)
-		var overlays []uintptr
+		if watchPulseGeneration.Load() != generation || !watchLiftIdentity(sample) || !watchRegisterPulse() {
+			return
+		}
+		var overlay uintptr
 		defer func() {
-			for _, h := range overlays {
-				watchUser.NewProc("DestroyWindow").Call(h)
+			if overlay != 0 {
+				watchUser.NewProc("DestroyWindow").Call(overlay)
 			}
 		}()
 		for pulse := 0; pulse < 3; pulse++ {
-			var r watchRect
-			ok, _, _ := watchUser.NewProc("GetWindowRect").Call(target, uintptr(unsafe.Pointer(&r)))
-			if ok == 0 || r.Right-r.Left < 12 || r.Bottom-r.Top < 12 {
+			foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+			r, ok := watchPulseCaption(target)
+			if !ok || foreground != target || watchPulseGeneration.Load() != generation || !watchLiftIdentity(sample) {
 				return
 			}
-			for i, edge := range watchPulseEdges(r) {
-				if pulse == 0 {
-					// STATIC SS_WHITERECT; transparent layered tool windows never
-					// activate or intercept mouse input, including across monitors.
-					h, _, _ := watchUser.NewProc("CreateWindowExW").Call(0x080800A8,
-						uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("STATIC"))), 0,
-						0x80000006, 0, 0, 0, 0, 0, 0, 0, 0)
-					if h == 0 {
-						return
-					}
-					overlays = append(overlays, h)
-					watchUser.NewProc("SetLayeredWindowAttributes").Call(h, 0, 230, 2)
+			if pulse == 0 {
+				// Opaque, click-through band; the original window stays untouched.
+				overlay, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x080800A8,
+					uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLISelectionHeader"))),
+					uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(watchWindowTitle(target)))),
+					0x80000000, 0, 0, 0, 0, 0, 0, 0, 0)
+				if overlay == 0 {
+					return
 				}
-				h := overlays[i]
-				watchUser.NewProc("SetWindowPos").Call(h, ^uintptr(0), uintptr(edge.Left), uintptr(edge.Top), uintptr(edge.Right-edge.Left), uintptr(edge.Bottom-edge.Top), 0x10|0x40)
-				watchUser.NewProc("UpdateWindow").Call(h)
+				watchUser.NewProc("SetLayeredWindowAttributes").Call(overlay, 0, 255, 2)
 			}
-			time.Sleep(165 * time.Millisecond)
-			for _, h := range overlays {
-				watchUser.NewProc("ShowWindow").Call(h, 0)
+			watchUser.NewProc("SetWindowPos").Call(overlay, ^uintptr(0), uintptr(r.Left), uintptr(r.Top), uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), 0x10|0x40)
+			watchUser.NewProc("UpdateWindow").Call(overlay)
+			for tick := 0; tick < 14; tick++ {
+				foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+				bounds, valid := watchPulseCaption(target)
+				if foreground != target || watchPulseGeneration.Load() != generation || !valid || bounds != r {
+					return
+				}
+				var msg watchMessage
+				for {
+					pending, _, _ := watchUser.NewProc("PeekMessageW").Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 1)
+					if pending == 0 {
+						break
+					}
+					watchUser.NewProc("TranslateMessage").Call(uintptr(unsafe.Pointer(&msg)))
+					watchUser.NewProc("DispatchMessageW").Call(uintptr(unsafe.Pointer(&msg)))
+				}
+				time.Sleep(25 * time.Millisecond)
 			}
-			time.Sleep(165 * time.Millisecond)
+			watchUser.NewProc("ShowWindow").Call(overlay, 0)
+			time.Sleep(200 * time.Millisecond)
 		}
 	}()
 }
 
-func watchFlashCaption(target uintptr) {
-	info := flashInfo{HWND: target, Flags: 1, Count: 6, Timeout: 250}
-	info.Size = uint32(unsafe.Sizeof(info))
-	// The return value describes the old active-caption state, not success.
-	watchUser.NewProc("FlashWindowEx").Call(uintptr(unsafe.Pointer(&info)))
+func watchPulseBand(window, caption, buttons watchRect) (watchRect, bool) {
+	if buttons.Left < 0 || buttons.Right > window.Right-window.Left || buttons.Right <= buttons.Left || buttons.Bottom <= buttons.Top {
+		return watchRect{}, false
+	}
+	caption.Right = min(caption.Right, window.Left+buttons.Left)
+	if caption.Left < window.Left || caption.Top < window.Top || caption.Bottom > window.Bottom || caption.Right-caption.Left < 24 || caption.Bottom-caption.Top < 8 {
+		return watchRect{}, false
+	}
+	return caption, true
+}
+
+func watchPulseCaption(target uintptr) (watchRect, bool) {
+	var title struct {
+		Size  uint32
+		Rect  watchRect
+		State [6]uint32
+	}
+	title.Size = uint32(unsafe.Sizeof(title))
+	var window, buttons watchRect
+	var cloaked uint32
+	watchDWM.NewProc("DwmGetWindowAttribute").Call(target, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
+	visible, _, _ := watchUser.NewProc("IsWindowVisible").Call(target)
+	iconic, _, _ := watchUser.NewProc("IsIconic").Call(target)
+	a, _, _ := watchUser.NewProc("GetTitleBarInfo").Call(target, uintptr(unsafe.Pointer(&title)))
+	b, _, _ := watchUser.NewProc("GetWindowRect").Call(target, uintptr(unsafe.Pointer(&window)))
+	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(target, 5, uintptr(unsafe.Pointer(&buttons)), unsafe.Sizeof(buttons))
+	if a == 0 || b == 0 || int32(hr) < 0 || cloaked != 0 || visible == 0 || iconic != 0 || title.State[0]&(0x8000|0x10000) != 0 {
+		return watchRect{}, false
+	}
+	return watchPulseBand(window, title.Rect, buttons)
+}
+
+func watchRegisterPulse() bool {
+	watchPulseOnce.Do(func() {
+		proc := syscall.NewCallback(func(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
+			if msg == 0x84 {
+				return ^uintptr(0)
+			}
+			if msg == 0x21 {
+				return 3
+			}
+			if msg == 0x14 {
+				return 1
+			}
+			if msg == 0xF || msg == 0x318 {
+				var paint watchPaint
+				dc := wp
+				if msg == 0xF {
+					dc, _, _ = watchUser.NewProc("BeginPaint").Call(hwnd, uintptr(unsafe.Pointer(&paint)))
+					defer watchUser.NewProc("EndPaint").Call(hwnd, uintptr(unsafe.Pointer(&paint)))
+				}
+				var rect watchRect
+				watchUser.NewProc("GetClientRect").Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+				watchFill(dc, rect, 0x2828C6)
+				font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
+				old, _, _ := watchGDI.NewProc("SelectObject").Call(dc, font)
+				defer watchGDI.NewProc("SelectObject").Call(dc, old)
+				watchGDI.NewProc("SetBkMode").Call(dc, 1)
+				watchGDI.NewProc("SetTextColor").Call(dc, 0xFFFFFF)
+				watchText(dc, watchWindowTitle(hwnd), 6, 2, rect.Right-6, rect.Bottom)
+				return 0
+			}
+			r, _, _ := watchUser.NewProc("DefWindowProcW").Call(hwnd, uintptr(msg), wp, lp)
+			return r
+		})
+		instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
+		class := watchClass{Proc: proc, Instance: instance, Name: windows.StringToUTF16Ptr("AgentsCLISelectionHeader")}
+		class.Size = uint32(unsafe.Sizeof(class))
+		r, _, _ := watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
+		watchPulseRegistered = r != 0
+	})
+	return watchPulseRegistered
 }

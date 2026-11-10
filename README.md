@@ -150,8 +150,11 @@ stop or suspend the agent. Explicit numbered shortcuts and row clicks still work
 
 Settings independently controls **Blink selected window**, **Bring selected
 window forward**, and **Allow selection to switch desktops**. Selection blinking
-uses the native title bar as well as a border pulse; appearance depends on the
-window frame and Windows theme. Hotkey activation waits for the chord to be
+uses one temporary red title-bar band with the window title, leaving the icon
+and window buttons uncovered. It only appears while the target has foreground
+focus, and stops on another selection, focus loss, movement or minimisation.
+Windows without verified caption/button bounds are left untouched. This works
+without Windows 11-only caption colouring APIs. Hotkey activation waits for the chord to be
 released. The bounded click log records shortcut receipt, release timeout,
 cancellation and activation separately; it records no typed input.
 
