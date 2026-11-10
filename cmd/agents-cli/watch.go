@@ -22,12 +22,20 @@ import (
 )
 
 type watchBatch struct {
-	Samples       []watchSample `json:"samples"`
-	Error         string        `json:"error,omitempty"`
-	ConsoleEvents uint64        `json:"console_events"`
+	ReadingPID    uint32            `json:"reading_pid,omitempty"`
+	ScanMillis    int64             `json:"scan_ms,omitempty"`
+	Partial       bool              `json:"partial,omitempty"`
+	Alive         map[uint32]string `json:"alive,omitempty"`
+	Unavailable   []uint32          `json:"unavailable,omitempty"`
+	Samples       []watchSample     `json:"samples"`
+	Error         string            `json:"error,omitempty"`
+	ConsoleEvents uint64            `json:"console_events"`
 }
 
 type watchReceipt struct {
+	ReaderRestarts int                            `json:"reader_restarts"`
+	ReadingPID     uint32                         `json:"reading_pid,omitempty"`
+	LastScanMillis int64                          `json:"last_scan_ms,omitempty"`
 	Shortcuts      map[string]watchShortcutHealth `json:"shortcuts,omitempty"`
 	PID            uint32                         `json:"pid"`
 	Started        string                         `json:"started"`
@@ -44,6 +52,9 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	readerRestarts int
+	readingPID     uint32
+	lastScanMillis int64
 	shortcuts      map[string]watchShortcutHealth
 	mu             sync.Mutex
 	tracker        *watchTracker
@@ -68,7 +79,11 @@ func watchDirectory(p parsed) (string, error) {
 
 func runWatch(args []string) error {
 	if args[0] == "_watch-worker" {
-		return watchWorker()
+		var after uint64
+		if len(args) == 2 {
+			after, _ = strconv.ParseUint(args[1], 10, 32)
+		}
+		return watchWorker(uint32(after))
 	}
 	if len(args) == 1 || args[1] == "--help" || args[1] == "help" {
 		printHelp()
@@ -117,7 +132,7 @@ func runWatch(args []string) error {
 		for _, row := range r.Rows {
 			rows = append(rows, map[string]interface{}{"pid": row.Sample.PID, "tool": row.Sample.Tool, "name": firstNonEmpty(row.Sample.Name, row.Sample.Title), "desktop": row.Sample.Desktop, "waiting_on": firstNonEmpty(row.Sample.Reason, watchReason(row.Sample.State)), "stopped_for": time.Since(row.Since).Round(time.Second).String(), "agents": row.Sample.Agents, "phase": row.Sample.Phase})
 		}
-		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "coverage": r.Coverage, "shortcuts": r.Shortcuts})
+		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "coverage": r.Coverage, "shortcuts": r.Shortcuts, "reader_restarts": r.ReaderRestarts, "reading_pid": r.ReadingPID, "last_scan_ms": r.LastScanMillis})
 		return nil
 	case "start":
 		exe, err := os.Executable()
@@ -200,11 +215,11 @@ func runWatch(args []string) error {
 // One persistent detached copy attaches sequentially, reusing the established
 // classifier. There is no per-window/per-tick process creation. Its watchdog
 // bounds even a blocked Windows syscall, independently of the parent's heartbeat.
-func watchWorker() error {
+func watchWorker(afterPID uint32) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
-	initialDeadline := time.AfterFunc(4*time.Second, func() { os.Exit(2) })
+	initialDeadline := time.AfterFunc(watchReadDeadline, func() { os.Exit(2) })
 	manager, release := openWatchDesktopManager()
 	defer release()
 	drain, unhook, hooked := watchConsoleEvents()
@@ -222,20 +237,27 @@ func watchWorker() error {
 	encoder := json.NewEncoder(os.Stdout)
 	var eventCount uint64
 	for {
-		deadline := time.AfterFunc(4*time.Second, func() { os.Exit(2) })
-		batch := watchBatch{}
+		scanStarted := time.Now()
+		deadline := time.AfterFunc(watchReadDeadline, func() { os.Exit(2) })
+		batch := watchBatch{Alive: map[uint32]string{}}
+		published := 0
 		adopted := readAdopted()
 		dirty := drain()
 		eventCount += uint64(len(dirty))
 		batch.ConsoleEvents = eventCount
 		if time.Now().After(nextDiscovery) {
 			desktops = watchDesktops()
-			var err error
-			sessions, _, err = discover(discoverOpts{})
+			found, _, err := discover(discoverOpts{})
 			if err != nil {
 				batch.Error = err.Error()
+				nextDiscovery = time.Now().Add(2 * time.Second)
+			} else {
+				sessions = found
+				nextDiscovery = time.Now().Add(15 * time.Second)
 			}
-			nextDiscovery = time.Now().Add(15 * time.Second)
+		}
+		if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
+			return err
 		}
 		// One inexpensive process enumeration for all AGY rows, never parallel.
 		var runtimeProcesses procMap
@@ -245,7 +267,11 @@ func watchWorker() error {
 				break
 			}
 		}
-		for _, s := range sessions {
+		for _, s := range watchReadOrder(sessions, afterPID) {
+			batch.ReadingPID = s.PID
+			if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
+				return err
+			}
 			if !s.Alive || s.Kind != "window" || s.PollingMuted {
 				continue
 			}
@@ -257,8 +283,9 @@ func watchWorker() error {
 			if rootStarted.IsZero() || rootStarted.Format(time.RFC3339) != normalizeWatchStart(s.Started) {
 				continue
 			}
+			batch.Alive[s.PID] = rootStarted.Format(time.RFC3339Nano)
 			previous := cache[s.PID]
-			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
+			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && previous.sample.State != "unknown" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s
@@ -270,9 +297,7 @@ func watchWorker() error {
 			if r.Error != "" {
 				if previous.sample.HWND != 0 && previous.sample.Started == s.Started && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) {
 					failed := previous.sample
-					failed.State = "error"
-					failed.Phase = "error"
-					failed.Reason = "console read failed"
+					failed = watchUnavailableSample(failed, "console read unavailable; retrying")
 					failed.Signature = r.Error
 					failed.WorkProcesses = work
 					if work > 0 {
@@ -281,12 +306,15 @@ func watchWorker() error {
 					previous.sample = failed
 					cache[s.PID] = previous
 					batch.Samples = append(batch.Samples, failed)
+				} else {
+					batch.Unavailable = append(batch.Unavailable, s.PID)
 				}
 				continue
 			}
 			hwnd, _, _ := k32.NewProc("GetConsoleWindow").Call()
 			visible, _, _ := watchUser.NewProc("IsWindowVisible").Call(hwnd)
 			if visible == 0 {
+				batch.Unavailable = append(batch.Unavailable, s.PID)
 				continue
 			} // message-only ConPTY handles cannot be flashed
 			s.Title = r.Title
@@ -335,6 +363,10 @@ func watchWorker() error {
 			cache[s.PID] = cachedScreen{sample: sample, desktopRead: previous.desktopRead, readAt: time.Now()}
 			batch.Samples = append(batch.Samples, sample)
 		}
+		batch.Samples = batch.Samples[published:]
+		batch.Partial = batch.Error != ""
+		batch.ReadingPID = 0
+		batch.ScanMillis = time.Since(scanStarted).Milliseconds()
 		if err := encoder.Encode(batch); err != nil {
 			return err
 		}
@@ -356,6 +388,7 @@ func normalizeWatchStart(v string) string {
 func (a *watchApp) save() {
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
 	r.Shortcuts = a.shortcuts
+	r.ReaderRestarts, r.ReadingPID, r.LastScanMillis = a.readerRestarts, a.readingPID, a.lastScanMillis
 	r.CurrentDesktop = watchCurrentDesktop()
 	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops(), a.expanded)
 	for _, summary := range r.PanelSections {
@@ -376,9 +409,13 @@ func (a *watchApp) collect() {
 		default:
 		}
 		err := a.readWorker()
+		if err == nil {
+			return
+		}
 		a.mu.Lock()
 		a.problem = fmt.Sprint(err)
-		a.tracker.prune(nil)
+		a.readerRestarts++
+		a.tracker.unavailable("reader reconnecting; status unavailable", time.Now())
 		a.save()
 		a.mu.Unlock()
 		select {
@@ -396,7 +433,7 @@ func (a *watchApp) readWorker() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, "_watch-worker")
+	cmd := exec.CommandContext(ctx, exe, "_watch-worker", strconv.FormatUint(uint64(a.readingPID), 10))
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.BELOW_NORMAL_PRIORITY_CLASS, HideWindow: true}
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -425,7 +462,7 @@ func (a *watchApp) readWorker() error {
 		}
 		fail <- fmt.Errorf("read worker exited: %v", scanner.Err())
 	}()
-	timer := time.NewTimer(6 * time.Second)
+	timer := time.NewTimer(watchHeartbeatTimeout)
 	defer timer.Stop()
 	for {
 		select {
@@ -442,7 +479,7 @@ func (a *watchApp) readWorker() error {
 				default:
 				}
 			}
-			timer.Reset(6 * time.Second)
+			timer.Reset(watchHeartbeatTimeout)
 			for i := range batch.Samples {
 				if counts, ok := a.agentRecords.counts(batch.Samples[i].Session); ok {
 					batch.Samples[i].Agents = counts
@@ -450,25 +487,46 @@ func (a *watchApp) readWorker() error {
 			}
 			a.mu.Lock()
 			a.problem = batch.Error
+			a.readingPID = batch.ReadingPID
+			if !batch.Partial {
+				a.lastScanMillis = batch.ScanMillis
+			}
 			a.consoleEvents = batch.ConsoleEvents
 			settings := loadWatchSettings(a.dir)
-			a.coverage = map[string]map[string]int{}
 			alive := map[uint32]bool{}
+			if !batch.Partial {
+				for pid, root := range batch.Alive {
+					if entry := a.tracker.entries[pid]; entry != nil && entry.Sample.RootStarted == root && settings.monitorsDesktop(entry.Sample.DesktopID) {
+						alive[pid] = true
+					}
+				}
+			}
 			for _, s := range batch.Samples {
 				if !settings.monitorsDesktop(s.DesktopID) {
 					watchFlash(s.HWND, false)
 					continue
 				}
 				alive[s.PID] = true
-				if a.coverage[s.Tool] == nil {
-					a.coverage[s.Tool] = map[string]int{}
-				}
-				a.coverage[s.Tool][s.State]++
 				if a.tracker.observe(s, time.Now()) {
 					a.log(s)
 				}
 			}
-			a.tracker.prune(alive)
+			if !batch.Partial {
+				a.tracker.prune(alive)
+			}
+			for _, pid := range batch.Unavailable {
+				if entry := a.tracker.entries[pid]; entry != nil && entry.Sample.RootStarted == batch.Alive[pid] {
+					entry.unavailable("console read unavailable; retrying", time.Now())
+				}
+			}
+			a.coverage = map[string]map[string]int{}
+			for _, entry := range a.tracker.entries {
+				s := entry.Sample
+				if a.coverage[s.Tool] == nil {
+					a.coverage[s.Tool] = map[string]int{}
+				}
+				a.coverage[s.Tool][s.State]++
+			}
 			a.flashes.update(a.tracker.entries, watchCurrentDesktop(), watchFlash)
 			a.save()
 			a.mu.Unlock()

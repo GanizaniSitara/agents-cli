@@ -172,8 +172,16 @@ One persistent detached reader handles the consoles; it does not repeatedly
 spawn `ls`. Console accessibility events invalidate idle-screen snapshots,
 busy windows are sampled every two seconds, and a ten-second reread covers
 missed events. Discovery refreshes every fifteen seconds. A four-second worker
-watchdog bounds Windows calls; a six-second parent heartbeat restarts a failed
-reader with backoff. Muted sessions are excluded before reading. Windows
+watchdog bounds each discovery/read step rather than the combined scan of all
+sessions. Completed rows stream progressively; a partial scan never removes
+unread sessions or counts one console snapshot twice. A nine-second parent
+heartbeat bounds an unresponsive reader, with scheduling slack for the normal
+two-second pause. On restart, identities remain visible as status unavailable;
+the reader begins after its last attempted console so a hung window cannot
+repeatedly starve later sessions. Transient console read failures are unknown,
+not evidence of an agent error or completion. `watch list` includes
+`reader_restarts`, `reading_pid`, and `last_scan_ms` for diagnosing busy machines.
+Muted sessions are excluded before reading. Windows
 Terminal message-only ConPTY handles cannot be flashed and are skipped; use
 classic console windows for taskbar notification. Copilot uses the existing
 footer/composer detector, including menus and permission waits.
