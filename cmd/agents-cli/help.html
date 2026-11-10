@@ -12,10 +12,13 @@ body{max-width:880px;margin:32px auto;padding:0 20px 40px;color:#202020;backgrou
 <header><h1>AGENTS-CLI(1)</h1><span class="muted">Windows · build {{BUILD}}</span></header>
 
 <h2>NAME</h2>
-<p>agents-cli — list, read and control existing agent CLI sessions.</p>
+<p>agents-cli — command-line control and a desktop watcher for agent sessions.</p>
+<p><strong>CLI:</strong> list sessions, read output, send instructions, wait and manage sessions.<br>
+<strong>Watcher:</strong> show status and input requests, switch to session windows, use shortcuts and park idle sessions.</p>
 
 <h2>USE</h2>
-<pre>agents-cli ls
+<pre>agents-cli watch start
+agents-cli ls
 agents-cli tail 12345 --lines 20
 agents-cli send 12345 --stdin &lt; message.txt
 agents-cli wait 12345 --idle-for 10s --timeout 10m</pre>
