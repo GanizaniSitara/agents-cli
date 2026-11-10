@@ -115,7 +115,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 11
+			n = len(desktops) + 11
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -412,17 +412,13 @@ func watchPanel(a *watchApp) error {
 			}
 			if p.Kind == "menu" {
 				i := (y - 34) / watchSettingsRowHeight
-				if i >= 0 && i < len(monitors) {
-					settings.Monitor = monitors[i].Device
-					settings.Position = nil
-					_ = saveWatchSettings(a.dir, settings)
-				} else if i >= len(monitors) && i < len(monitors)+len(desktops) {
-					settings.toggleDesktop(desktops[i-len(monitors)].ID)
+				if i >= 0 && i < len(desktops) {
+					settings.toggleDesktop(desktops[i].ID)
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i >= len(monitors)+len(desktops)+4 && i <= len(monitors)+len(desktops)+6 {
-					switch i - len(monitors) - len(desktops) {
+				} else if i >= len(desktops)+4 && i <= len(desktops)+6 {
+					switch i - len(desktops) {
 					case 4:
 						settings.DisableSelectionBlink = !settings.DisableSelectionBlink
 						watchCancelPulse()
@@ -437,31 +433,31 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+7 {
+				} else if i == len(desktops)+7 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(monitors)+len(desktops)+8 {
+				} else if i == len(desktops)+8 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(monitors)+len(desktops)+9 {
+				} else if i == len(desktops)+9 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
-				} else if i == len(monitors)+len(desktops) {
+				} else if i == len(desktops) {
 					settings.Shortcuts = watchNextShortcut(settings.Shortcuts)
 					applyShortcuts()
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+2 {
+				} else if i == len(desktops)+2 {
 					settings.FirstRowShortcut = watchNextFirstRowShortcut(settings.FirstRowShortcut)
 					applyFirstRowShortcut()
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(monitors)+len(desktops)+1 || i == len(monitors)+len(desktops)+3 {
+				} else if i == len(desktops)+1 || i == len(desktops)+3 {
 					return 0
 				}
 				menu = false
@@ -571,24 +567,15 @@ func watchPanel(a *watchApp) error {
 			watchText(dc, settingsLabel, 249, 8, 312, 30)
 			watchText(dc, "Hide", 324, 8, 358, 30)
 			if frame.Menu {
-				selected := selectWatchMonitor(monitors, settings.Monitor)
-				for i, m := range monitors {
-					prefix := "   "
-					if m.Device == selected.Device {
-						prefix = "[x] "
-					}
-					top := int32(34 + i*watchSettingsRowHeight)
-					watchText(dc, prefix+monitorLabel(m), 12, top+8, 350, top+35)
-				}
 				for i, d := range desktops {
 					prefix := "[ ] "
 					if settings.monitorsDesktop(d.ID) {
 						prefix = "[x] "
 					}
-					top := int32(34 + (len(monitors)+i)*watchSettingsRowHeight)
+					top := int32(34 + i*watchSettingsRowHeight)
 					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
 				}
-				top := int32(34 + (len(monitors)+len(desktops))*watchSettingsRowHeight)
+				top := int32(34 + len(desktops)*watchSettingsRowHeight)
 				watchText(dc, "Shortcuts: "+watchShortcutChoice(settings.Shortcuts)+"  [change]", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				hint := "1-9, 0: shown rows | app shortcuts may clash"
