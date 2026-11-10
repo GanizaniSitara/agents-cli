@@ -16,6 +16,9 @@ func TestWatchWorkerHeartbeatBoundsStuckRead(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "heartbeat timed out") {
 		t.Fatalf("missing timeout: %v", err)
 	}
+	if failure, ok := err.(*watchReaderError); !ok || failure.Code != "WR102" {
+		t.Fatalf("missing heartbeat code: %v", err)
+	}
 	if time.Since(started) > watchHeartbeatTimeout+2*time.Second {
 		t.Fatal("stuck reader outlived watchdog budget")
 	}

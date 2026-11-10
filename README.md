@@ -190,6 +190,27 @@ the reader begins after its last attempted console so a hung window cannot
 repeatedly starve later sessions. Transient console read failures are unknown,
 not evidence of an agent error or completion. `watch list` includes
 `reader_restarts`, `reading_pid`, and `last_scan_ms` for diagnosing busy machines.
+The header shows a reader error code. `watch list` also reports `error_code`,
+`reader_stage`, the running watcher's `build_commit`, `last_reader_error` (code,
+stage, PID when known, UTC time, detail and exit status when available), and
+`reader_error_counts`. The last error and counts survive recovery for the current
+watcher run. No console or conversation text is added to these diagnostics.
+
+| Code | Meaning |
+| --- | --- |
+| WR101 | Reader process could not be started or its pipe created. |
+| WR102 | Parent received no reader heartbeat within its deadline. |
+| WR103 | Reader returned invalid structured data. |
+| WR104 | Reader exited with its watchdog status (step deadline exceeded). |
+| WR105 | Reader exited unexpectedly; exit status is included when available. |
+| WR106 | Reader output pipe could not be read, including oversized records. |
+| WR107 | Process/session discovery failed. |
+| WR108 | A specific console could not be read; other sessions can continue. |
+
+`reader_stage` identifies startup, discovery, read or the normal pause between
+scans. A timeout's PID is the last reported read target, not proof that the target
+caused the timeout: scheduling delays or blocked reader output can also contribute.
+
 Muted sessions are excluded before reading. Windows
 Terminal message-only ConPTY handles cannot be flashed and are skipped; use
 classic console windows for taskbar notification. Copilot uses the existing

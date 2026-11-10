@@ -22,51 +22,62 @@ import (
 )
 
 type watchBatch struct {
-	ReadingPID    uint32            `json:"reading_pid,omitempty"`
-	ScanMillis    int64             `json:"scan_ms,omitempty"`
-	Partial       bool              `json:"partial,omitempty"`
-	Alive         map[uint32]string `json:"alive,omitempty"`
-	Unavailable   []uint32          `json:"unavailable,omitempty"`
-	Samples       []watchSample     `json:"samples"`
-	Error         string            `json:"error,omitempty"`
-	ConsoleEvents uint64            `json:"console_events"`
+	Stage         string             `json:"stage,omitempty"`
+	Failures      []watchReaderError `json:"failures,omitempty"`
+	ReadingPID    uint32             `json:"reading_pid,omitempty"`
+	ScanMillis    int64              `json:"scan_ms,omitempty"`
+	Partial       bool               `json:"partial,omitempty"`
+	Alive         map[uint32]string  `json:"alive,omitempty"`
+	Unavailable   []uint32           `json:"unavailable,omitempty"`
+	Samples       []watchSample      `json:"samples"`
+	Error         string             `json:"error,omitempty"`
+	ConsoleEvents uint64             `json:"console_events"`
 }
 
 type watchReceipt struct {
-	ReaderRestarts int                            `json:"reader_restarts"`
-	ReadingPID     uint32                         `json:"reading_pid,omitempty"`
-	LastScanMillis int64                          `json:"last_scan_ms,omitempty"`
-	Shortcuts      map[string]watchShortcutHealth `json:"shortcuts,omitempty"`
-	PID            uint32                         `json:"pid"`
-	Started        string                         `json:"started"`
-	Updated        time.Time                      `json:"updated"`
-	Rows           []watchEntry                   `json:"stopped"`
-	Sessions       []watchEntry                   `json:"sessions"`
-	Error          string                         `json:"error,omitempty"`
-	ConsoleEvents  uint64                         `json:"console_events"`
-	Coverage       map[string]map[string]int      `json:"coverage"`
-	CurrentDesktop string                         `json:"current_desktop"`
-	PanelRows      []watchEntry                   `json:"panel_rows"`
-	PanelSummary   []string                       `json:"panel_summary"`
-	PanelSections  []watchPanelSummary            `json:"panel_sections"`
+	BuildCommit       string                         `json:"build_commit"`
+	ErrorCode         string                         `json:"error_code"`
+	ReaderStage       string                         `json:"reader_stage"`
+	LastReaderError   *watchReaderError              `json:"last_reader_error,omitempty"`
+	ReaderErrorCounts map[string]uint64              `json:"reader_error_counts,omitempty"`
+	ReaderRestarts    int                            `json:"reader_restarts"`
+	ReadingPID        uint32                         `json:"reading_pid,omitempty"`
+	LastScanMillis    int64                          `json:"last_scan_ms,omitempty"`
+	Shortcuts         map[string]watchShortcutHealth `json:"shortcuts,omitempty"`
+	PID               uint32                         `json:"pid"`
+	Started           string                         `json:"started"`
+	Updated           time.Time                      `json:"updated"`
+	Rows              []watchEntry                   `json:"stopped"`
+	Sessions          []watchEntry                   `json:"sessions"`
+	Error             string                         `json:"error,omitempty"`
+	ConsoleEvents     uint64                         `json:"console_events"`
+	Coverage          map[string]map[string]int      `json:"coverage"`
+	CurrentDesktop    string                         `json:"current_desktop"`
+	PanelRows         []watchEntry                   `json:"panel_rows"`
+	PanelSummary      []string                       `json:"panel_summary"`
+	PanelSections     []watchPanelSummary            `json:"panel_sections"`
 }
 
 type watchApp struct {
-	readerRestarts int
-	readingPID     uint32
-	lastScanMillis int64
-	shortcuts      map[string]watchShortcutHealth
-	mu             sync.Mutex
-	tracker        *watchTracker
-	dir            string
-	problem        string
-	stop           chan struct{}
-	consoleEvents  uint64
-	coverage       map[string]map[string]int
-	flashes        watchFlashController
-	expanded       map[string]bool
-	agentRecords   watchAgentRecords
-	foregroundLift watchForegroundLift
+	problemCode       string
+	readerStage       string
+	lastReaderError   *watchReaderError
+	readerErrorCounts map[string]uint64
+	readerRestarts    int
+	readingPID        uint32
+	lastScanMillis    int64
+	shortcuts         map[string]watchShortcutHealth
+	mu                sync.Mutex
+	tracker           *watchTracker
+	dir               string
+	problem           string
+	stop              chan struct{}
+	consoleEvents     uint64
+	coverage          map[string]map[string]int
+	flashes           watchFlashController
+	expanded          map[string]bool
+	agentRecords      watchAgentRecords
+	foregroundLift    watchForegroundLift
 }
 
 func watchDirectory(p parsed) (string, error) {
@@ -132,7 +143,7 @@ func runWatch(args []string) error {
 		for _, row := range r.Rows {
 			rows = append(rows, map[string]interface{}{"pid": row.Sample.PID, "tool": row.Sample.Tool, "name": firstNonEmpty(row.Sample.Name, row.Sample.Title), "desktop": row.Sample.Desktop, "waiting_on": firstNonEmpty(row.Sample.Reason, watchReason(row.Sample.State)), "stopped_for": time.Since(row.Since).Round(time.Second).String(), "agents": row.Sample.Agents, "phase": row.Sample.Phase})
 		}
-		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "coverage": r.Coverage, "shortcuts": r.Shortcuts, "reader_restarts": r.ReaderRestarts, "reading_pid": r.ReadingPID, "last_scan_ms": r.LastScanMillis})
+		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "error_code": r.ErrorCode, "reader_stage": r.ReaderStage, "last_reader_error": r.LastReaderError, "reader_error_counts": r.ReaderErrorCounts, "build_commit": r.BuildCommit, "coverage": r.Coverage, "shortcuts": r.Shortcuts, "reader_restarts": r.ReaderRestarts, "reading_pid": r.ReadingPID, "last_scan_ms": r.LastScanMillis})
 		return nil
 	case "start":
 		exe, err := os.Executable()
@@ -247,8 +258,11 @@ func watchWorker(afterPID uint32) error {
 	for {
 		scanStarted := time.Now()
 		deadline := time.AfterFunc(watchReadDeadline, func() { os.Exit(2) })
-		batch := watchBatch{Alive: map[uint32]string{}}
+		batch := watchBatch{Alive: map[uint32]string{}, Stage: "discovery"}
 		published := 0
+		if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
+			return err
+		}
 		adopted := readAdopted()
 		dirty := drain()
 		eventCount += uint64(len(dirty))
@@ -258,6 +272,7 @@ func watchWorker(afterPID uint32) error {
 			found, _, err := discover(discoverOpts{})
 			if err != nil {
 				batch.Error = err.Error()
+				batch.Failures = append(batch.Failures, watchReaderError{Code: "WR107", Stage: "discovery", Detail: batch.Error})
 				nextDiscovery = time.Now().Add(2 * time.Second)
 			} else {
 				sessions = found
@@ -276,6 +291,7 @@ func watchWorker(afterPID uint32) error {
 			}
 		}
 		for _, s := range watchReadOrder(sessions, afterPID) {
+			batch.Stage = "read"
 			batch.ReadingPID = s.PID
 			if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
 				return err
@@ -303,6 +319,7 @@ func watchWorker(afterPID uint32) error {
 			work := agyRuntimeWork(s, runtimeProcesses, commandLine, startTime)
 			r := doPeek(s.PID, 0)
 			if r.Error != "" {
+				batch.Failures = append(batch.Failures, watchReaderError{Code: "WR108", Stage: "read", PID: s.PID, Detail: r.Error})
 				if previous.sample.HWND != 0 && previous.sample.Started == s.Started && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) {
 					failed := previous.sample
 					failed = watchUnavailableSample(failed, "console read unavailable; retrying")
@@ -374,6 +391,7 @@ func watchWorker(afterPID uint32) error {
 		batch.Samples = batch.Samples[published:]
 		batch.Partial = batch.Error != ""
 		batch.ReadingPID = 0
+		batch.Stage = "pause"
 		batch.ScanMillis = time.Since(scanStarted).Milliseconds()
 		if err := encoder.Encode(batch); err != nil {
 			return err
@@ -395,6 +413,8 @@ func normalizeWatchStart(v string) string {
 
 func (a *watchApp) save() {
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
+	r.BuildCommit = buildCommit
+	r.ErrorCode, r.ReaderStage, r.LastReaderError, r.ReaderErrorCounts = a.problemCode, a.readerStage, a.lastReaderError, a.readerErrorCounts
 	r.Shortcuts = a.shortcuts
 	r.ReaderRestarts, r.ReadingPID, r.LastScanMillis = a.readerRestarts, a.readingPID, a.lastScanMillis
 	r.CurrentDesktop = watchCurrentDesktop()
@@ -422,6 +442,12 @@ func (a *watchApp) collect() {
 		}
 		a.mu.Lock()
 		a.problem = fmt.Sprint(err)
+		failure, ok := err.(*watchReaderError)
+		if !ok {
+			failure = watchReaderFailure("WR105", "", err)
+		}
+		a.problemCode = failure.Code
+		a.recordReaderError(*failure)
 		a.readerRestarts++
 		a.tracker.unavailable("reader reconnecting; status unavailable", time.Now())
 		a.save()
@@ -434,10 +460,13 @@ func (a *watchApp) collect() {
 	}
 }
 
-func (a *watchApp) readWorker() error {
+func (a *watchApp) readWorker() (result error) {
+	a.mu.Lock()
+	a.readerStage = "startup"
+	a.mu.Unlock()
 	exe, err := os.Executable()
 	if err != nil {
-		return err
+		return watchReaderFailure("WR101", "startup", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -445,12 +474,27 @@ func (a *watchApp) readWorker() error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.BELOW_NORMAL_PRIORITY_CLASS, HideWindow: true}
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return watchReaderFailure("WR101", "startup", err)
 	}
 	if err = cmd.Start(); err != nil {
-		return err
+		return watchReaderFailure("WR101", "startup", err)
 	}
-	defer func() { cancel(); pipe.Close(); cmd.Wait() }()
+	defer func() {
+		cancel()
+		pipe.Close()
+		exitErr := cmd.Wait()
+		if failure, ok := result.(*watchReaderError); ok && (failure.Code == "WR105" || failure.Code == "WR106") {
+			classified := watchReaderExit(nil, exitErr)
+			if classified.Code == "WR104" {
+				result = classified
+			} else {
+				failure.ExitCode = classified.ExitCode
+				if failure.ExitCode != nil {
+					failure.Detail += fmt.Sprintf(" (exit %d)", *failure.ExitCode)
+				}
+			}
+		}
+	}()
 	updates := make(chan watchBatch)
 	fail := make(chan error, 1)
 	go func() {
@@ -459,7 +503,7 @@ func (a *watchApp) readWorker() error {
 		for scanner.Scan() {
 			var b watchBatch
 			if err := json.Unmarshal(scanner.Bytes(), &b); err != nil {
-				fail <- err
+				fail <- watchReaderFailure("WR103", "protocol", fmt.Errorf("invalid reader JSON: %w", err))
 				return
 			}
 			select {
@@ -468,7 +512,7 @@ func (a *watchApp) readWorker() error {
 				return
 			}
 		}
-		fail <- fmt.Errorf("read worker exited: %v", scanner.Err())
+		fail <- watchReaderExit(scanner.Err(), nil)
 	}()
 	timer := time.NewTimer(watchHeartbeatTimeout)
 	defer timer.Stop()
@@ -477,7 +521,7 @@ func (a *watchApp) readWorker() error {
 		case <-a.stop:
 			return nil
 		case <-timer.C:
-			return fmt.Errorf("read worker heartbeat timed out; restarting")
+			return watchReaderFailure("WR102", "", fmt.Errorf("read worker heartbeat timed out; restarting"))
 		case err := <-fail:
 			return err
 		case batch := <-updates:
@@ -495,6 +539,14 @@ func (a *watchApp) readWorker() error {
 			}
 			a.mu.Lock()
 			a.problem = batch.Error
+			a.readerStage = batch.Stage
+			a.problemCode = ""
+			if batch.Error != "" {
+				a.problemCode = "WR107"
+			}
+			for _, failure := range batch.Failures {
+				a.recordReaderError(failure)
+			}
 			a.readingPID = batch.ReadingPID
 			if !batch.Partial {
 				a.lastScanMillis = batch.ScanMillis

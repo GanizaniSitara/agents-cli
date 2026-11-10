@@ -10,7 +10,7 @@ const watchHeartbeatTimeout = 9 * time.Second
 // A progressing scan can take longer than one read's hard deadline. Publish
 // each completed row before the next read; partial batches cannot remove rows.
 func watchPublishProgress(batch watchBatch, published *int, encode func(any) error, reset func(time.Duration) bool) error {
-	progress := watchBatch{Partial: true, ReadingPID: batch.ReadingPID, Samples: batch.Samples[*published:], Error: batch.Error, ConsoleEvents: batch.ConsoleEvents}
+	progress := watchBatch{Partial: true, Stage: batch.Stage, ReadingPID: batch.ReadingPID, Samples: batch.Samples[*published:], Error: batch.Error, ConsoleEvents: batch.ConsoleEvents}
 	if err := encode(progress); err != nil {
 		return err
 	}

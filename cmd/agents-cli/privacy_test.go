@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,6 +18,21 @@ const privateTestText = "privacy-test-only: £漢😀\n" + "not-a-real-credentia
 // Exercise the real detached-helper launch and stdin pipe without attaching
 // to a user's console. No actual credentials are used in these tests.
 func TestMain(m *testing.M) {
+	if mode := os.Getenv("AGENTS_CLI_TEST_READER_ERROR"); mode != "" {
+		switch mode {
+		case "watchdog":
+			fmt.Fprintln(os.Stdout, `{"partial":true,"stage":"read","reading_pid":123}`)
+			os.Exit(2)
+		case "protocol":
+			fmt.Fprintln(os.Stdout, "not-json")
+			os.Exit(0)
+		case "exit":
+			os.Exit(7)
+		case "pipe":
+			fmt.Fprintln(os.Stdout, strings.Repeat("x", 3<<20))
+			os.Exit(0)
+		}
+	}
 	if os.Getenv("AGENTS_CLI_TEST_WATCH_STREAM") == "1" {
 		os.Exit(watchSlowScanFixture())
 	}

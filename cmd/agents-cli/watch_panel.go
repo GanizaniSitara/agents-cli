@@ -304,6 +304,9 @@ func watchPanel(a *watchApp) error {
 			}
 			if !settings.Hidden && !pressed.Active && !dragging {
 				key := watchPanelRenderKey(rows, summaries, offset, capacity, currentDesktop, stoppedCount, unknownCount, time.Now().Unix()/10)
+				a.mu.Lock()
+				key += "|" + a.problemCode
+				a.mu.Unlock()
 				if key != lastRender {
 					lastRender = key
 					resize()
@@ -546,9 +549,10 @@ func watchPanel(a *watchApp) error {
 			}
 			a.mu.Lock()
 			problem := a.problem
+			problemCode := a.problemCode
 			a.mu.Unlock()
 			if problem != "" {
-				header = "Agents | reader retrying"
+				header = watchReaderHeader(problemCode)
 				watchGDI.NewProc("SetTextColor").Call(dc, theme.rowColour("error"))
 			}
 			watchText(dc, header, 12, 8, 240, 30)
