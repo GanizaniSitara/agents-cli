@@ -138,6 +138,14 @@ func watchSameClickSession(pressed, current watchSample) bool {
 	return pressed.PID == current.PID && pressed.RootStarted == current.RootStarted && pressed.HWND == current.HWND && pressed.AgentPID == current.AgentPID
 }
 
+func watchDoubleSelection(previous, current watchPanelPress, interval time.Duration, width, height int32) bool {
+	if previous.Time.IsZero() || current.Time.Before(previous.Time) || current.Time.Sub(previous.Time) > interval || !watchSameClickSession(previous.Row.Sample, current.Row.Sample) {
+		return false
+	}
+	dx, dy := current.Screen.X-previous.Screen.X, current.Screen.Y-previous.Screen.Y
+	return dx >= -width/2 && dx <= width/2 && dy >= -height/2 && dy <= height/2
+}
+
 type watchClickRecord struct {
 	Trigger                string     `json:"trigger,omitempty"`
 	BoundsBefore           *watchRect `json:"bounds_before,omitempty"`

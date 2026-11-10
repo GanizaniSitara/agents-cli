@@ -33,6 +33,14 @@ func TestWatchCaptionNativePaint(t *testing.T) {
 	if colour != 0x2828C6 {
 		t.Fatalf("caption background = %#x", colour)
 	}
+	for _, wanted := range []uintptr{0xFFB754, 0x47C2FF, 0x7373ED, 0xFFFFFF} {
+		watchUser.NewProc("SetPropW").Call(hwnd, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIPulseColour"))), wanted+1)
+		watchUser.NewProc("SendMessageW").Call(hwnd, 0x318, dc, 4)
+		actual, _, _ := watchGDI.NewProc("GetPixel").Call(dc, 390, 12)
+		if actual != wanted {
+			t.Fatalf("painted colour %#x, want %#x", actual, wanted)
+		}
+	}
 	actual, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 	if actual != foreground {
 		t.Fatal("caption painting stole focus")

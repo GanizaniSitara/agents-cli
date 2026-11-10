@@ -86,6 +86,7 @@ func watchPanel(a *watchApp) error {
 	var summaries []watchPanelSummary
 	var painted watchPanelFrame
 	var pressed watchPanelPress
+	var previousSelection watchPanelPress
 	var pendingShortcut watchPanelPress
 	pendingFirstRow := false
 	dragging := false
@@ -508,6 +509,15 @@ func watchPanel(a *watchApp) error {
 				a.logClick(p, releaseY, state, "dismissed", false, false)
 				resize()
 				return 0
+			}
+			doubleTime, _, _ := watchUser.NewProc("GetDoubleClickTime").Call()
+			doubleWidth, _, _ := watchUser.NewProc("GetSystemMetrics").Call(36)
+			doubleHeight, _, _ := watchUser.NewProc("GetSystemMetrics").Call(37)
+			if watchDoubleSelection(previousSelection, p, time.Duration(doubleTime)*time.Millisecond, int32(doubleWidth), int32(doubleHeight)) {
+				p.Trigger = "double-click"
+				previousSelection = watchPanelPress{}
+			} else {
+				previousSelection = p
 			}
 			a.activateWatchRow(p, releaseY)
 			watchSetLift(window, true)

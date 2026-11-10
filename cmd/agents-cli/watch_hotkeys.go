@@ -190,6 +190,7 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	}
 	// Only a session click or an explicit session shortcut calls this path.
 	settings := loadWatchSettings(a.dir)
+	pulseColour := watchPulseColour(row, loadWatchTheme(a.dir), p.Trigger == "double-click")
 	if settings.DisableDesktopSwitch {
 		manager, release := openWatchDesktopManager()
 		desktop, _ := windowWatchDesktop(manager, row.Sample.HWND, watchDesktops())
@@ -201,7 +202,7 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	}
 	if settings.DisableForeground {
 		if !settings.DisableSelectionBlink {
-			watchPulseWindow(row.Sample)
+			watchPulseWindow(row.Sample, pulseColour)
 		}
 		a.logClick(p, releaseY, state, "foreground-disabled", false, false)
 		return
@@ -222,7 +223,7 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
 	}
 	if !settings.DisableSelectionBlink {
-		watchPulseWindow(row.Sample)
+		watchPulseWindow(row.Sample, pulseColour)
 	}
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
 	go func() {

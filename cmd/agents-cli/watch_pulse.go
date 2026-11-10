@@ -18,7 +18,30 @@ var watchPulseRegistered bool
 
 func watchCancelPulse() { watchPulseGeneration.Add(1) }
 
-func watchPulseWindow(sample watchSample) {
+func watchPulseColour(row watchEntry, theme watchTheme, locator bool) uintptr {
+	if locator {
+		return 0xFFFFFF
+	}
+	if row.Parked {
+		return theme.rowColour("parked")
+	}
+	phase := row.Sample.Phase
+	if phase == "" {
+		switch row.Sample.State {
+		case "busy":
+			phase = "working"
+		case "prompt":
+			phase = "waiting"
+		case "error":
+			phase = "error"
+		default:
+			phase = "idle"
+		}
+	}
+	return theme.rowColour(phase)
+}
+
+func watchPulseWindow(sample watchSample, colour uintptr) {
 	target := sample.HWND
 	generation := watchPulseGeneration.Add(1)
 	go func() {
@@ -50,6 +73,9 @@ func watchPulseWindow(sample watchSample) {
 					uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(watchWindowTitle(target)))),
 					0x80000000, 0, 0, 0, 0, 0, 0, 0, 0)
 				if overlay == 0 {
+					return
+				}
+				if ok, _, _ := watchUser.NewProc("SetPropW").Call(overlay, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIPulseColour"))), colour+1); ok == 0 {
 					return
 				}
 				watchUser.NewProc("SetLayeredWindowAttributes").Call(overlay, 0, 255, 2)
@@ -132,12 +158,22 @@ func watchRegisterPulse() bool {
 				}
 				var rect watchRect
 				watchUser.NewProc("GetClientRect").Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-				watchFill(dc, rect, 0x2828C6)
+				colour, _, _ := watchUser.NewProc("GetPropW").Call(hwnd, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIPulseColour"))))
+				if colour == 0 {
+					colour = 0x2828C6
+				} else {
+					colour--
+				}
+				watchFill(dc, rect, colour)
 				font, _, _ := watchGDI.NewProc("GetStockObject").Call(17)
 				old, _, _ := watchGDI.NewProc("SelectObject").Call(dc, font)
 				defer watchGDI.NewProc("SelectObject").Call(dc, old)
 				watchGDI.NewProc("SetBkMode").Call(dc, 1)
-				watchGDI.NewProc("SetTextColor").Call(dc, 0xFFFFFF)
+				textColour := uintptr(0xFFFFFF)
+				if (299*(colour&255)+587*((colour>>8)&255)+114*((colour>>16)&255))/1000 >= 150 {
+					textColour = 0x191919
+				}
+				watchGDI.NewProc("SetTextColor").Call(dc, textColour)
 				watchText(dc, watchWindowTitle(hwnd), 6, 2, rect.Right-6, rect.Bottom)
 				return 0
 			}

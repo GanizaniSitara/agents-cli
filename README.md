@@ -150,7 +150,9 @@ stop or suspend the agent. Explicit numbered shortcuts and row clicks still work
 
 Settings independently controls **Blink selected window**, **Bring selected
 window forward**, and **Allow selection to switch desktops**. Selection blinking
-uses one temporary red title-bar band with the window title, leaving the icon
+uses one temporary title-bar band matching the selected row's colour, with the
+window title retained. Double-click a row for a bright white locator pulse.
+The band leaves the icon
 and window buttons uncovered. It only appears while the target has foreground
 focus, and stops on another selection, focus loss, movement or minimisation.
 Windows without verified caption/button bounds are left untouched. This works
