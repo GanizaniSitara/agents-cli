@@ -206,9 +206,17 @@ func runWatch(args []string) error {
 			return fmt.Errorf("monitor %d is not connected", number)
 		}
 	}
-	defer close(app.stop)
+	collected := make(chan struct{})
+	defer func() {
+		close(app.stop)
+		// Let the collector cancel and reap its own reader before exiting.
+		select {
+		case <-collected:
+		case <-time.After(2 * time.Second):
+		}
+	}()
 	app.save()
-	go app.collect()
+	go func() { defer close(collected); app.collect() }()
 	return watchPanel(app)
 }
 

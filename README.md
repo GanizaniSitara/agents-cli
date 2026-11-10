@@ -158,6 +158,10 @@ without Windows 11-only caption colouring APIs. Hotkey activation waits for the 
 released. The bounded click log records shortcut receipt, release timeout,
 cancellation and activation separately; it records no typed input.
 
+To stop the background watcher, choose **Exit** from its tray right-click menu
+or from Settings. This removes the panel and tray icon and releases its global
+shortcuts; agent sessions keep running. **Hide** only hides the panel.
+
 The watcher reuses the CLI's state classifier. Two matching stopped samples,
 two seconds apart, suppress brief pauses and normally notify within about four
 seconds. `--stable D` changes that threshold. Startup-idle sessions are listed

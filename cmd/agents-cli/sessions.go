@@ -329,6 +329,9 @@ var (
 // running; a visible question means the TUI is waiting on a human; a bare
 // input prompt means idle. Anything else is honestly unknown.
 func guessState(tool string, lines []string) string {
+	if tool == "claude" {
+		return claudeState(lines)
+	}
 	if tool == "codex" {
 		if count, _ := codexQueuedQuestions(lines); count > 0 {
 			return "prompt"

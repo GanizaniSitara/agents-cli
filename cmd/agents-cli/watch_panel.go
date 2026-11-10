@@ -48,6 +48,7 @@ func watchPanel(a *watchApp) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	defer watchCancelPulse()
+	defer a.flashes.update(nil, "", watchFlash)
 	defer a.foregroundLift.release(watchLiftIdentity, watchSetLift)
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	name := windows.StringToUTF16Ptr("AgentsCLIWatchPanel")
@@ -112,7 +113,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(monitors) + len(desktops) + 9
+			n = len(monitors) + len(desktops) + 10
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -173,7 +174,17 @@ func watchPanel(a *watchApp) error {
 			}
 			return 0
 		case 0x8001: // tray callback: reopening never activates the panel
-			if lp == 0x202 || lp == 0x205 {
+			if lp == 0x205 {
+				switch watchShowTrayMenu(window) {
+				case watchMenuExit:
+					watchRequestExit(window)
+					return 0
+				case watchMenuShow:
+					// Share the left-click Show action below.
+					lp = 0x202
+				}
+			}
+			if lp == 0x202 {
 				settings.Hidden = false
 				_ = saveWatchSettings(a.dir, settings)
 				watchUser.NewProc("ShowWindow").Call(window, 4)
@@ -422,6 +433,9 @@ func watchPanel(a *watchApp) error {
 					resize()
 					return 0
 				} else if i == len(monitors)+len(desktops)+7 {
+					watchRequestExit(window)
+					return 0
+				} else if i == len(monitors)+len(desktops)+8 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(monitors)+len(desktops) {
@@ -587,6 +601,8 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, prefix+option.label, 12, top+8, 350, top+35)
 				}
+				top += watchSettingsRowHeight
+				watchText(dc, "Exit", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				watchText(dc, "Reset location", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
