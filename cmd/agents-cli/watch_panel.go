@@ -573,7 +573,7 @@ func watchPanel(a *watchApp) error {
 						prefix = "[x] "
 					}
 					top := int32(34 + i*watchSettingsRowHeight)
-					watchText(dc, prefix+"Monitor "+d.Name, 12, top+8, 350, top+35)
+					watchText(dc, prefix+"Include "+d.Name, 12, top+8, 350, top+35)
 				}
 				top := int32(34 + len(desktops)*watchSettingsRowHeight)
 				watchText(dc, "Shortcuts: "+watchShortcutChoice(settings.Shortcuts)+"  [change]", 12, top+8, 350, top+35)
