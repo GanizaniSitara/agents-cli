@@ -1,0 +1,116 @@
+# Desktop app attention adapters: reviewed feasibility plan
+
+The proposed extension makes the existing Agents panel answer: **what is waiting for me, and where?** It brings actionable requests from desktop AI apps into the same panel as CLI agents, with the same colours, ordering, identity checks and explicit navigation shortcuts. The first release remains an attention monitor and navigator; it does not answer questions, grant approvals, submit prompts or control agents automatically.
+
+This is a plan for investigation and staged implementation, not a claim that any desktop provider currently exposes a usable integration. The owner requested Astra and Argon review before implementation. Architecture baseline: agents-cli local commit ed3e6be, 10 November 2026. This revision incorporates four findings accepted by both reviewers across two independent review rounds and reconciliation. Both final follow-ups approved the corrected feasibility plan with no remaining findings. Implementation, deployment and publication of desktop adapters are outside this planning phase.
+
+Preserve the subsequent CLI fixes when implementing this plan: parked idle rows, independent selection blink/foreground/desktop settings, title-bar flashing, and activation after hotkey release. A work-machine report was traced by the owner to the first-row shortcut being Off; a disabled shortcut cannot intercept application input. Fresh configurations now default to Ctrl+Win+Z subject to registration, while an explicit saved Off remains Off. Registration health must be visible before treating a chord as available.
+
+## User outcomes
+
+An item should say which app and conversation it belongs to, what the owner needs to do, whether work continues, and how recently that was verified. For example, a synthetic item could read `NEEDS INPUT | Example project | Claude Code desktop | approval | still working`.
+
+Keep the current visual grammar: amber for actionable question, approval or review; red for error; blue for ambiguous idle or unknown; green only for explicit completion of a turn, not proof the owner's task is done. Working items remain below attention items. Parked idle items use dark grey at the bottom and return to the live list when new work or input appears. Use text, no emoji. Ctrl+Win+Z continues to select the first displayed unparked item, and numbered shortcuts retain their independent settings and painted-row targeting.
+
+An app can need input and continue working simultaneously. Neither a running child nor a spinner suppresses an explicit request. An ordinary completed chat answer is not automatically a review request. Historical questions, draft text, unrelated notifications and unchanged screens do not create attention. Loss of evidence is not evidence that a question was answered.
+
+An app-only row is acceptable when conversation identity is unavailable, but it must say `app only` and cannot pretend to know which conversation needs attention. Unknown capability is distinct from no pending requests.
+
+## Initial scope and feasibility gate
+
+Investigate Claude desktop's Code surface first and the owner's intended Copilot surface second. Copilot is ambiguous: GitHub Copilot CLI is already supported; Microsoft Copilot consumer app, Microsoft 365 Copilot and IDE Copilot are different products and require separate findings. Do not silently treat them as one adapter. Confirm the exact product, version and app surface during discovery.
+
+Other candidates include ChatGPT/Codex desktop, Claude chat/Cowork, Gemini browser surfaces, and IDE assistants. They are candidates, not promised coverage. A preceding process inventory found CLI executables and shared WebView2 processes; it did not establish that the requested desktop apps were installed or running. Do not install, update, launch an installer or enable developer/debug ports to make the plan feasible.
+
+For each surface produce a local capability matrix: discover windows; identify conversations; see background/unselected conversations; detect question/approval/review/working/completion; receive clear/answer events; navigate to exact conversation; observe while minimized/covered/on another virtual desktop. Record the tested app version, evidence source, limitations and privacy footprint. Use an already available app and disposable test conversation with owner coordination. Inspection must not activate it, switch tabs/desktops, type, answer a pending question or interrupt work.
+
+Proceed to an attention adapter only if it can identify a current actionable request and its clearing lifecycle without reading arbitrary historical question prose. If only window discovery is reliable, ship at most an explicitly labelled window-only integration behind opt-in. If exact conversation navigation is unavailable, advertise app/window navigation only. Do not promise hidden conversation coverage from the selected view.
+
+## Source selection
+
+Prefer an existing documented local event or supported integration when it supplies sufficient identity and lifecycle information. Hooks are a candidate for Claude Code, but applicability to desktop-created sessions must be proven on the installed version. A documented feature is not proof that its state can be consumed externally.
+
+Second choice is Windows UI Automation, scoped to identified app windows and specific controls. Inspect control role, live status, automation identity and actionability; do not scan all desktop text for question marks. Use a separate helper process with a non-window-owning COM MTA thread, provider connection/transaction timeouts where supported, and a parent-enforced process deadline. A UIA event is a reason to refresh scoped evidence, not inherently an actionable request.
+
+Versioned local lifecycle metadata is a fallback only after documenting the exact fields, access scope, identity rules and update behavior. Do not open private provider databases, session transcripts, credential stores or undocumented local HTTP endpoints speculatively. A spike requiring any additional access must identify the exact source and privacy consequences before use.
+
+Browser integration is a later, separate opt-in extension if needed. Do not turn on remote debugging, attach a global CDP session, inject scripts or scan every browser tab as a shortcut. No OCR, screenshots, model calls or cloud classification in the first implementation.
+
+## Shared model
+
+The present tracker uses `map[uint32]*watchEntry`, keyed by root PID. That cannot represent several conversations in one app or the same logical session visible through desktop and CLI. Do not wedge desktop conversations into fake PIDs.
+
+Introduce an internal item identity with adapter ID, source instance identity, and conversation ID where verified. A window-only identity includes PID, process creation time and HWND generation. UIA runtime IDs and titles are locators, not durable conversation identities. A locator must be reacquired and checked after process/window/view changes. Records without a stable conversation ID are scoped to the currently verified view and cannot inherit another view's attention.
+
+An observation separates:
+
+- Activity: working, idle or unknown.
+- Completion: an optional explicit turn-completed signal with its verified turn ID or source-scoped turn generation and completion time. Idle never manufactures this signal. Clear the previous completion when new work or a new turn begins, and reject delayed completion from an older generation. Completion may coexist with an actionable review handoff, whose amber attention takes display priority over green completion. It does not mean the owner's overall task is done.
+- Attention: none, question, approval, review or error; multiple actionable requests may coexist.
+- Freshness: observed time, source generation/revision, expiry, and live/stale/unavailable health.
+- Identity and location: provider, product surface, account/profile discriminator where safely available, app instance, conversation and verified window target.
+- Capabilities: window discovery, conversation enumeration, attention observation and exact-conversation navigation, each independently declared. Each observation also declares its coverage scope and whether it is an authoritative complete snapshot for that scope or a partial observation/event.
+- Evidence: a small source code and bounded reason; never raw transcripts, full accessibility trees or arbitrary content.
+
+The aggregator owns freshness, priority, row stability, deduplication and notification lifecycle. Adapters provide source evidence, not arbitrary row colours or ranks. Explicit actionable input outranks concurrent activity. A pending request has an opaque request ID when available; otherwise use a bounded source-scoped generation tied to the verified control/conversation, not title text alone.
+
+Acknowledging/dismissing an item suppresses repeat alerts for that request; it does not mark the request answered. A new request or verified new generation rearms attention. A fresh explicit clear/answer event clears it. After a missed event, a fresh authoritative snapshot may also clear the request only when it verifies the same conversation and covers that request's entire pending-input scope with an equal or newer source revision. `Attention: none` from a partial view, hidden control, failed query or different conversation cannot clear it. A view-scoped item cannot be cleared by inspecting the replacement view.
+
+If a selected view disappears or an adapter fails, retain the last verified pending item as stale, stop repeated alerts and display its age; do not silently clear it or keep claiming current evidence. On restart, persisted records are stale until revalidated, and no old alert is replayed blindly. Add a separate `Hide stale item` action for unreachable records; it removes the display record without asserting the request was answered. Removing a stale record is distinct from acknowledging a still-live request.
+
+Live actionable items always precede stale items. Preserve existing group order for live rows; place all stale rows in a labelled group below live working and idle/unavailable rows, above parked items. Stale status uses subdued blue with a textual `last seen` age, never current amber or green. Thus stale attention cannot displace a live request from Ctrl+Win+Z. The shortcut still targets the first displayed unparked row, including a stale row if no live rows precede it, but stale navigation must revalidate identity and may only open its explicitly labelled app/window fallback; it cannot navigate to an unverified conversation.
+
+Provisional freshness limits are ten seconds for actively probed items and 45 seconds for quiet items refreshed on the 15-second rescan; the core applies these limits using its own receive clock, independently of provider clocks. Retain stale records for at most 24 hours within the per-adapter item cap, then expire the display record without recording a provider answer. Surface capacity overflow visibly; do not silently evict current live attention or let plugin output grow retention without bound. Test expiry, restart, hidden-stale actions and shortcut order explicitly.
+
+Merge duplicate representations only with verified common provider/session identity. Similar titles, same folder or temporal proximity are insufficient. One logical item may have several verified surfaces; choose a current reachable surface, and do not flash several windows for the same request. Where identity cannot be joined, keep clearly distinguished source items rather than guessing a merge.
+
+## Adapter boundary
+
+Use a small internal Go interface plus an explicit capability descriptor. The first desktop adapter should run in an isolated helper invoked by the installed executable, using the existing worker pattern. Keep console discovery and readers unchanged until the new model has characterization coverage. An adapter returns normalized observations over bounded, versioned JSON messages on inherited pipes. There is no network listener, plugin download manager, marketplace or DLL loader.
+
+The helper request carries a protocol version, request ID, allowed source instance and requested operation. Responses carry the matching ID, adapter/source generation, bounded observations and structured health. Require a handshake, reject unsupported versions, unknown message types, duplicate/out-of-order source revisions, oversized frames and malformed identities. The parent owns retries and authoritative expiry, rather than trusting a helper's unlimited TTL.
+
+Backpressure must preserve request lifecycles. Accumulate partial observations in source-revision order by item and request identity: activity-only updates cannot overwrite request-open/clear deltas, and separate pending requests on one conversation remain separate. Latest-only replacement is permitted only for a newer authoritative complete snapshot covering the same scope. If the bounded delta queue overflows, invalidate the affected scope and request a complete resync; do not assert `none` or discard unresolved attention. A provider unable to produce a complete resync remains visibly stale/unavailable. Test request-open followed by activity-only, request-clear followed by a different request, and overflow during either sequence.
+
+The extension seam must be capable of supporting a separately installed adapter executable later, but do not freeze a public plugin SDK before two real adapters prove the boundary. Compare built-in helper versus separately shipped executable during the pilot. If external executables are enabled later, require an explicit local allowlist, absolute path and recorded version/hash, no directory auto-discovery or auto-updates, and an owner-visible enable/disable control. A separate process is fault containment, not a security sandbox: it normally runs with the user's access. Capabilities describe policy and must be enforced by the core where possible; they do not magically prevent a trusted executable from reading files or networking.
+
+## Navigation
+
+Background discovery and monitoring never activate, move, resize, restore or switch an app's conversation, and never change virtual desktops. Navigation runs only after an explicit item selection. Reuse the painted-row selection and process/window identity guards.
+
+Start with window activation through the existing shared path, including minimized-only restoration and the temporary topmost lift for occluding apps. Preserve geometry, maximize/snap state, and original stacking policy. Selecting a conversation inside an app is a separate capability and explicit action: use a verified documented deep link or a narrowly scoped UIA selection pattern only after checking app instance and conversation identity immediately before the action. Never use blind coordinates, arbitrary keystrokes, a stale cached UIA element or a title substring to select a conversation.
+
+If validation fails, report `target changed` or `conversation navigation unavailable` and stop. Do not silently route to a different conversation or submit input. An app-only fallback must be visible as such. Verify both the actual foreground result after the asynchronous activation settles and the selected conversation where the adapter claims exact navigation; an API success return alone is not success. Test physical shortcuts under owner control rather than assuming synthetic input proves them.
+
+## Resource and privacy limits
+
+Do not run UIA on the panel thread or add it to the existing console worker's four-second watchdog loop. A blocked desktop provider must not restart the console reader or freeze the panel. Use at most one active desktop probe at a time initially, while leaving the current console reader independent. Coalesce provider events; no worker creation per UI element or per tick.
+
+Provisional spike budgets, to be measured before adoption: four-second per-probe wall deadline, at most 500 UIA nodes and depth 12 in an app-scoped traversal, 256 KiB message limit, 200 items per adapter, one-second minimum event coalescing and 15-second quiet rescan. Active pending items target under five-second detection when the provider supplies events. A hung helper is terminated by exact owned PID and creation identity, then restarted with exponential backoff (5/15/60 seconds, capped at five minutes); repeated failures disable that adapter visibly without affecting others.
+
+Measure total watcher plus helpers for ten minutes with one desktop app and the normal CLI workload. Initial acceptance target is under one percent of one logical core average and under 100 MiB additional private working set for the desktop helper; record event-burst and hang behavior separately. These are targets, not measured results. Cap queued events and item retention. Preserve existing CPU limits; sequential builds/tests only. Normalize validation process I/O only if needed; do not raise watcher/provider priority to hide resource problems.
+
+Keep all observations local. Settings default new desktop adapters off until enabled, show access needed, coverage and health, and allow immediate disable. Save only bounded normalized state, with private labels opt-in for diagnostics; no conversation content by default. Use synthetic fixtures in the public repository and local-only evidence for real apps. Bounded diagnostic files need explicit retention and user-readable paths. Do not claim per-user ACL isolation merely from Go file mode bits on Windows; inspect inherited ACLs if data is persisted. No account credentials, UIAccess manifest, elevation, injection, paid API or provider software modification is required by this plan. An app behind an unsupported integrity boundary is shown as unavailable.
+
+## Delivery stages and acceptance
+
+1. Capability investigation: identify exact installed products and read-only evidence/navigation options. Deliver the capability matrix and sanitized control shapes. Stop for owner input if the required app is absent; do not install it. Choose the pilot from demonstrated evidence quality, not provider name alone.
+2. Model and compatibility: characterize existing CLI ordering, alerts, subagent counts, queued questions, dismissal, settings, names, geometry and shortcuts. Add namespaced item identities and independent activity/attention through a compatibility adapter. Existing CLI output and PID-based commands remain backward compatible; new desktop item verbs use an explicit item reference and reject unsupported send/stop operations. Do not extend destructive CLI stop to a whole multi-session desktop app.
+3. One opt-in desktop helper: prove discovery, one reliable actionable state, explicit clear, freshness expiry, safe disable, recovery, and honest coverage in shadow mode. No production alerts until its fixture and live state matrix passes. Shadow mode records normalized comparisons locally within retention bounds.
+4. Panel integration and controlled navigation: use the existing visual grammar and settings; validate question plus working, review handoff, duplicate surfaces, stale records and exact targeting. Confirm idle versus finished distinctions with real observed lifecycle evidence. Owner tests real chord activation with app covered/minimized/maximized/snapped, preserving geometry and desktop expectations. Do not activate existing work merely to run tests.
+5. Second distinct adapter: prove the same interface against a different app/UI technology. Decide whether external executable plugins are worth maintaining and freeze only the stable minimal protocol. Review implementation and privacy before any local rollout or public release.
+
+Required automated cases include busy plus pending question; busy without question; historical and draft question mentions; answered/cleared request; a lost clear event recovered by a complete same-conversation snapshot; partial `none` refusing to clear attention; view replacement refusing to clear the old request; late/out-of-order/duplicate events; stale snapshot on restart; live attention preceding stale requests under Ctrl+Win+Z; hidden-stale and retention expiry; idle never becoming green; old completion rejected after a new turn; completion plus review handoff; adapter crash/hang/malformed output; queue flood; request-open followed by activity-only under backpressure; request-clear followed by a different request; queue overflow forcing scope resync rather than losing a lifecycle event; one app with several conversations; window/PID reuse; conversation switched after paint; duplicate CLI/desktop session; private label suppression; disabling an adapter; independent failures; and regression coverage for all current CLI behavior. Include a fake helper for failure injection and synthetic UIA control shapes. Avoid CPU stress or unrestricted parallel tests.
+
+The milestone is complete only when one real desktop app reliably exposes an actionable request and clear lifecycle, identifies its actual navigation scope, and passes bounded recovery/privacy/focus tests while existing CLI behavior remains intact. An attractive panel populated with guessed states is not the milestone.
+
+## Decisions for review
+
+Review whether the conversation identity and stale-request lifecycle are sufficient; whether first-party isolated helpers are the correct initial plugin seam; whether provider events/local metadata/UIA are ordered sensibly; whether the budgets and failure isolation fit this workstation; whether exact conversation navigation can be made safe; and whether the delivery stages are too broad. Identify concrete omissions or unjustified commitments. In particular, challenge any assumption that desktop-created sessions expose CLI hooks, background conversation states or usable deep links.
+
+## Sources and current code
+
+- [Claude desktop documentation](https://code.claude.com/docs/en/desktop) describes multiple sessions and app notification features; it does not establish an external attention API for this project.
+- [Microsoft UI Automation overview](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-uiautomationoverview), [threading requirements](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading), and [security boundaries](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-securityoverview) inform the proposed helper isolation and access limits.
+- [Microsoft Copilot app documentation](https://learn.microsoft.com/en-us/copilot/windows) identifies one Copilot surface; the owner's intended product still needs confirmation.
+- Current source: `cmd/agents-cli/sessions.go`, `watch.go`, `watch_state.go`, `watch_panel.go`, `watch_hotkeys.go`, `watch_foreground.go`, `watch_click.go`, `codex_questions.go` and their tests. Reviewers receive this plan as the common blind-review artifact; no private transcripts or live screenshots are included.
