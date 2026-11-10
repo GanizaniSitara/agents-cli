@@ -39,6 +39,7 @@ type watchReceipt struct {
 	ErrorCode         string                         `json:"error_code"`
 	ReaderStage       string                         `json:"reader_stage"`
 	LastReaderError   *watchReaderError              `json:"last_reader_error,omitempty"`
+	LastConsoleError  *watchReaderError              `json:"last_console_error,omitempty"`
 	ReaderErrorCounts map[string]uint64              `json:"reader_error_counts,omitempty"`
 	ReaderRestarts    int                            `json:"reader_restarts"`
 	ReadingPID        uint32                         `json:"reading_pid,omitempty"`
@@ -62,6 +63,7 @@ type watchApp struct {
 	problemCode       string
 	readerStage       string
 	lastReaderError   *watchReaderError
+	lastConsoleError  *watchReaderError
 	readerErrorCounts map[string]uint64
 	readerRestarts    int
 	readingPID        uint32
@@ -143,7 +145,7 @@ func runWatch(args []string) error {
 		for _, row := range r.Rows {
 			rows = append(rows, map[string]interface{}{"pid": row.Sample.PID, "tool": row.Sample.Tool, "name": firstNonEmpty(row.Sample.Name, row.Sample.Title), "desktop": row.Sample.Desktop, "waiting_on": firstNonEmpty(row.Sample.Reason, watchReason(row.Sample.State)), "stopped_for": time.Since(row.Since).Round(time.Second).String(), "agents": row.Sample.Agents, "phase": row.Sample.Phase})
 		}
-		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "error_code": r.ErrorCode, "reader_stage": r.ReaderStage, "last_reader_error": r.LastReaderError, "reader_error_counts": r.ReaderErrorCounts, "build_commit": r.BuildCommit, "coverage": r.Coverage, "shortcuts": r.Shortcuts, "reader_restarts": r.ReaderRestarts, "reading_pid": r.ReadingPID, "last_scan_ms": r.LastScanMillis})
+		emit(map[string]interface{}{"pid": r.PID, "updated": r.Updated, "stopped": rows, "sessions": r.Sessions, "error": r.Error, "error_code": r.ErrorCode, "reader_stage": r.ReaderStage, "last_reader_error": r.LastReaderError, "last_console_error": r.LastConsoleError, "reader_error_counts": r.ReaderErrorCounts, "build_commit": r.BuildCommit, "coverage": r.Coverage, "shortcuts": r.Shortcuts, "reader_restarts": r.ReaderRestarts, "reading_pid": r.ReadingPID, "last_scan_ms": r.LastScanMillis})
 		return nil
 	case "start":
 		exe, err := os.Executable()
@@ -415,6 +417,7 @@ func (a *watchApp) save() {
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
 	r.BuildCommit = buildCommit
 	r.ErrorCode, r.ReaderStage, r.LastReaderError, r.ReaderErrorCounts = a.problemCode, a.readerStage, a.lastReaderError, a.readerErrorCounts
+	r.LastConsoleError = a.lastConsoleError
 	r.Shortcuts = a.shortcuts
 	r.ReaderRestarts, r.ReadingPID, r.LastScanMillis = a.readerRestarts, a.readingPID, a.lastScanMillis
 	r.CurrentDesktop = watchCurrentDesktop()

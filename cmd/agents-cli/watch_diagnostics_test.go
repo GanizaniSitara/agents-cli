@@ -40,6 +40,7 @@ func TestWatchReaderNativeFailureCodes(t *testing.T) {
 func TestWatchReaderDiagnosticsSurviveRecovery(t *testing.T) {
 	a := &watchApp{dir: t.TempDir(), tracker: newWatchTracker(time.Second), readerStage: "read", readingPID: 77}
 	a.recordReaderError(watchReaderError{Code: "WR104", Detail: "reader watchdog expired"})
+	a.recordReaderError(watchReaderError{Code: "WR108", Stage: "read", PID: 88, Detail: "console unavailable"})
 	a.problem, a.problemCode = "", "" // successful reader recovery
 	a.save()
 	var r watchReceipt
@@ -52,6 +53,9 @@ func TestWatchReaderDiagnosticsSurviveRecovery(t *testing.T) {
 	}
 	if r.ErrorCode != "" || r.LastReaderError == nil || r.LastReaderError.Code != "WR104" || r.LastReaderError.PID != 77 || r.ReaderErrorCounts["WR104"] != 1 || r.LastReaderError.Time.IsZero() {
 		t.Fatalf("lost recovered failure: %+v", r)
+	}
+	if r.LastConsoleError == nil || r.LastConsoleError.PID != 88 {
+		t.Fatal("console error overwrote reader failure or was lost")
 	}
 	if watchReaderHeader("WR104") != "Agents | WR104 watchdog timeout" {
 		t.Fatal("header missing actionable code")

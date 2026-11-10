@@ -51,7 +51,11 @@ func (a *watchApp) recordReaderError(e watchReaderError) {
 	if e.PID == 0 && e.Stage == "read" {
 		e.PID = a.readingPID
 	}
-	a.lastReaderError = &e
+	if e.Code == "WR108" {
+		a.lastConsoleError = &e
+	} else {
+		a.lastReaderError = &e
+	}
 	if a.readerErrorCounts == nil {
 		a.readerErrorCounts = map[string]uint64{}
 	}

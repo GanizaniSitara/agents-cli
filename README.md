@@ -192,9 +192,11 @@ not evidence of an agent error or completion. `watch list` includes
 `reader_restarts`, `reading_pid`, and `last_scan_ms` for diagnosing busy machines.
 The header shows a reader error code. `watch list` also reports `error_code`,
 `reader_stage`, the running watcher's `build_commit`, `last_reader_error` (code,
-stage, PID when known, UTC time, detail and exit status when available), and
+stage, PID when known, UTC time, detail and exit status when available),
+`last_console_error` for individual unreadable targets, and
 `reader_error_counts`. The last error and counts survive recovery for the current
 watcher run. No console or conversation text is added to these diagnostics.
+Individual console failures do not overwrite the last whole-reader failure.
 
 | Code | Meaning |
 | --- | --- |
