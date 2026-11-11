@@ -276,7 +276,7 @@ func watchPanel(a *watchApp) error {
 			stoppedCount = 0
 			unknownCount = 0
 			for _, row := range rows {
-				if row.Stopped {
+				if row.Stopped && !row.Parked {
 					stoppedCount++
 				}
 				if row.Sample.State == "unknown" {

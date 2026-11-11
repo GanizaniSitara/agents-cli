@@ -22,11 +22,11 @@ func (c *watchFlashController) update(entries map[uint32]*watchEntry, current st
 		}
 		alive[s.HWND] = true
 		onDesktop := current != "" && s.DesktopID == current
-		if changed && onDesktop && entry.Stopped && !entry.Dismissed {
+		if changed && onDesktop && entry.Stopped && !entry.Dismissed && !entry.Parked {
 			entry.Attention = true
 		}
 		waiting := s.State == "prompt" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review"
-		on := onDesktop && waiting && entry.Stopped && !entry.Dismissed && entry.Attention
+		on := onDesktop && waiting && entry.Stopped && !entry.Dismissed && !entry.Parked && entry.Attention
 		previous, known := c.applied[s.HWND]
 		if !known || previous != on {
 			// Initial false clears flags left by an older watcher as well.

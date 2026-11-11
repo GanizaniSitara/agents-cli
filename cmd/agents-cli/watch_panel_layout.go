@@ -20,7 +20,7 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 	for _, entry := range entries {
 		s := entry.Sample
 		if current != "" && s.DesktopID == current {
-			if entry.Stopped || s.State == "unknown" || s.State == "error" || s.State == "busy" || s.Phase == "working" {
+			if entry.Parked || entry.Stopped || s.State == "unknown" || s.State == "error" || s.State == "busy" || s.Phase == "working" {
 				rows = append(rows, entry)
 			}
 			continue
@@ -98,6 +98,9 @@ func watchPanelCapacity(workHeight int32, summaryCount int) int {
 func watchPanelStates(rows []watchEntry) map[uint32]string {
 	states := make(map[uint32]string, len(rows))
 	for _, row := range rows {
+		if row.Parked {
+			continue
+		}
 		states[row.Sample.PID] = row.Sample.Started + "/" + row.Sample.State + "/" + row.Sample.Phase
 	}
 	return states

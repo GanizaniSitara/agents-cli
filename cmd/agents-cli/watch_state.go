@@ -60,7 +60,7 @@ func newWatchTracker(stable time.Duration) *watchTracker {
 	return &watchTracker{stable: stable, entries: map[uint32]*watchEntry{}}
 }
 
-func (w *watchTracker) observe(s watchSample, now time.Time) bool {
+func (w *watchTracker) observe(s watchSample, now time.Time) (notify bool) {
 	if s.Agents.Running != nil && *s.Agents.Running > 0 {
 		s.Working = true
 	}
@@ -76,12 +76,18 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		if e != nil && e.Sample.Started == s.Started && e.Sample.RootStarted == s.RootStarted && e.Sample.HWND == s.HWND {
 			// Child discovery can change without replacing the console window.
 			// Reset stop tracking, but keep its place within the same group.
-			e = &watchEntry{Sample: e.Sample, Order: e.Order}
+			e = &watchEntry{Sample: e.Sample, Order: e.Order, Parked: e.Parked}
 		} else {
 			e = &watchEntry{}
 		}
 		w.entries[s.PID] = e
 	}
+	defer func() {
+		if e.Parked {
+			e.Attention = false
+			notify = false
+		}
+	}()
 	old := e.Sample
 	if e.Order == 0 || watchPanelGroup(old) != watchPanelGroup(s) {
 		w.nextOrder++
@@ -91,9 +97,6 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 		e.Changed = now
 	}
 	e.Sample = s
-	if !watchCanPark(s) {
-		e.Parked = false
-	}
 	if s.PendingQuestions > 0 {
 		// A live queue is already an explicit input request, even while its
 		// running footer changes. Screen stability cannot debounce this case.
@@ -148,7 +151,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	}
 	e.Stopped, e.Since = true, e.Candidate
 	e.Dismissed = false
-	notify := e.Busy
+	notify = e.Busy
 	e.Attention = notify
 	e.Busy = false
 	return notify
@@ -162,7 +165,7 @@ func (w *watchTracker) dismiss(pid uint32) {
 }
 
 func watchCanPark(s watchSample) bool {
-	return s.State == "idle" && (s.Phase == "idle" || s.Phase == "active" || s.Phase == "") && !s.Working && s.PendingQuestions == 0
+	return s.PID != 0
 }
 
 func (w *watchTracker) togglePark(s watchSample) bool {
@@ -171,6 +174,7 @@ func (w *watchTracker) togglePark(s watchSample) bool {
 		return false
 	}
 	e.Parked = !e.Parked
+	e.Attention = !e.Parked && e.Stopped
 	return true
 }
 
@@ -185,7 +189,7 @@ func (w *watchTracker) prune(alive map[uint32]bool) {
 func (w *watchTracker) rows() []watchEntry {
 	rows := []watchEntry{}
 	for _, e := range w.entries {
-		if e.Stopped && !e.Dismissed {
+		if e.Stopped && !e.Dismissed && !e.Parked {
 			rows = append(rows, *e)
 		}
 	}

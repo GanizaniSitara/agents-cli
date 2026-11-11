@@ -147,10 +147,10 @@ chord on another PC, check its registration in Settings or the `shortcuts`
 section of `watch list`. With the shortcut Off or unavailable, the watcher does
 not intercept it, and it may reach the foreground application.
 
-Idle rows have a small **P** control below the number and dismiss button.
+All rows have a small **park** control beside the agent name.
 Parking moves the row to the bottom and displays **PARKED** on dark grey;
-Ctrl+Win+Z skips it. **^** unparks it. New work or a request for input clears
-parking automatically. Parking lasts for the current watcher run; it does not
+Ctrl+Win+Z skips it. **^** unparks it. Status changes do not clear parking;
+attention stays off until unparked. Parking lasts for the current watcher run; it does not
 stop or suspend the agent. Explicit numbered shortcuts and row clicks still work.
 
 Settings independently controls **Blink selected window**, **Bring selected

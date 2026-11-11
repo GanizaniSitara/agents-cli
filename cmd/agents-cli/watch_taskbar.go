@@ -53,7 +53,7 @@ type watchTaskbarController struct{ applied map[uintptr]uint32 }
 
 func watchTaskbarState(entry *watchEntry, current string) uint32 {
 	s := entry.Sample
-	if current == "" || s.DesktopID != current || !entry.Stopped || entry.Dismissed {
+	if current == "" || s.DesktopID != current || !entry.Stopped || entry.Dismissed || entry.Parked {
 		return 0
 	}
 	switch {
