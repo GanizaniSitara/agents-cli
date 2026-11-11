@@ -182,6 +182,12 @@ func helperMain(args []string) error {
 	pid := uint32(pid64)
 	var result interface{}
 	switch args[0] {
+	case "terminal-select":
+		var sample watchSample
+		if err := json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&sample); err != nil || sample.PID != pid {
+			return errors.New("invalid terminal selection identity")
+		}
+		result = map[string]string{"Problem": watchDoSelectTerminal(sample)}
 	case "peek":
 		above := 0
 		if len(args) > 2 {

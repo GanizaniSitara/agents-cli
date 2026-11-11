@@ -153,6 +153,10 @@ Ctrl+Win+Z skips it. **^** unparks it. Status changes do not clear parking;
 attention stays off until unparked. Parking lasts for the current watcher run; it does not
 stop or suspend the agent. Explicit numbered shortcuts and row clicks still work.
 
+Selecting a Windows Terminal session selects its tab before bringing the window
+forward. The console title must match exactly one tab in that window. Duplicate
+or overridden tab titles are refused; the reason is recorded in `clicks.jsonl`.
+
 Settings independently controls **Blink selected window**, **Bring selected
 window forward**, and **Allow selection to switch desktops**. Selection blinking
 uses one temporary title-bar band matching the selected row's colour, with the

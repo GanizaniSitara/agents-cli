@@ -65,15 +65,24 @@ func TestWatchConsolePresentationOwnership(t *testing.T) {
 	}
 }
 
-func TestWatchTerminalTabGuard(t *testing.T) {
-	for _, caption := range []string{"MY-001", "MY-001 - Windows Terminal"} {
-		if !watchTerminalTitleMatches("MY-001", caption) {
-			t.Fatal("active tab rejected")
-		}
-	}
-	for _, caption := range []string{"OTHER-002", "MY-001 extra", ""} {
-		if watchTerminalTitleMatches("MY-001", caption) {
-			t.Fatal("different tab accepted")
+func TestWatchTerminalTabUniqueCurrentTitle(t *testing.T) {
+	for _, test := range []struct {
+		title   string
+		names   []string
+		index   int
+		problem string
+	}{
+		{"MY-001", []string{"OTHER", "MY-001"}, 1, ""},
+		{"MY-001", []string{"MY-001", "OTHER"}, 0, ""},
+		{"MY-001", []string{"MY-001", "MY-001"}, -1, "terminal-tab-ambiguous"},
+		{"MY-001", []string{"MY-001 extra", "my-001"}, -1, "terminal-tab-not-found"},
+		{"MY-001", []string{"renamed by user"}, -1, "terminal-tab-not-found"},
+		{"", []string{""}, -1, "terminal-tab-title-empty"},
+		{"MY-001", nil, -1, "terminal-tab-not-found"},
+	} {
+		index, problem := watchTerminalTabIndex(test.title, test.names)
+		if index != test.index || problem != test.problem {
+			t.Fatalf("%q in %q: %d / %s", test.title, test.names, index, problem)
 		}
 	}
 }

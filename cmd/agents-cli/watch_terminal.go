@@ -1,17 +1,10 @@
 package main
 
 import (
-	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
-
-func watchTerminalTitleMatches(session, caption string) bool {
-	session = watchComparableTitle(session)
-	caption = watchComparableTitle(caption)
-	return session != "" && (strings.EqualFold(session, caption) || strings.EqualFold(session+" - Windows Terminal", caption))
-}
 
 // A ConPTY console window is a hidden compatibility window. Follow only its
 // actual ownership chain, never a title match or a process-name guess.
