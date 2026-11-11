@@ -288,14 +288,8 @@ func watchPanel(a *watchApp) error {
 					}
 				}
 			}
-			a.ui.step("timer.tracker-lock")
-			a.mu.Lock()
-			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
-			a.ui.step("timer.flash")
-			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
-			a.ui.step("timer.taskbar")
-			taskbarSignals.update(a.tracker.entries, newDesktop, taskbar.set)
+			allRows := a.panelSignals(newDesktop, &taskbarSignals, watchFlash, taskbar.set)
 			a.ui.step("timer.layout")
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, settings.includedDesktops())
 			foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
@@ -311,7 +305,6 @@ func watchPanel(a *watchApp) error {
 					unknownCount++
 				}
 			}
-			a.mu.Unlock()
 			// Only relevant status changes reopen the panel. Age ticks, working
 			// screen redraws and background desktop changes cannot wake it.
 			if wakeReady && newDesktop == currentDesktop && watchPanelNeedsWake(previousStates, wakeRows) && settings.Hidden {

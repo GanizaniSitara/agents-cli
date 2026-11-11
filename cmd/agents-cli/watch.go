@@ -662,7 +662,6 @@ func (a *watchApp) readWorker() (result error) {
 				}
 				a.coverage[s.Tool][s.State]++
 			}
-			a.flashes.update(a.tracker.entries, watchCurrentDesktop(), watchFlash)
 			a.save()
 			a.mu.Unlock()
 		}

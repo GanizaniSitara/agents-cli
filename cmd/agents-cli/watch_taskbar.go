@@ -68,17 +68,30 @@ func watchTaskbarState(entry *watchEntry, current string) uint32 {
 }
 
 func (c *watchTaskbarController) update(entries map[uint32]*watchEntry, current string, set func(uintptr, uint32) bool) {
-	if c.applied == nil {
-		c.applied = map[uintptr]uint32{}
-	}
-	alive := map[uintptr]bool{}
+	c.apply(watchTaskbarStates(entries, current), set)
+}
+
+func watchTaskbarStates(entries map[uint32]*watchEntry, current string) map[uintptr]uint32 {
+	states := map[uintptr]uint32{}
+	priority := map[uint32]int{0: 0, 2: 1, 8: 2, 4: 3}
 	for _, entry := range entries {
 		hwnd := entry.Sample.HWND
 		if hwnd == 0 {
 			continue
 		}
-		alive[hwnd] = true
 		state := watchTaskbarState(entry, current)
+		if old, ok := states[hwnd]; !ok || priority[state] > priority[old] {
+			states[hwnd] = state
+		}
+	}
+	return states
+}
+
+func (c *watchTaskbarController) apply(states map[uintptr]uint32, set func(uintptr, uint32) bool) {
+	if c.applied == nil {
+		c.applied = map[uintptr]uint32{}
+	}
+	for hwnd, state := range states {
 		if previous, ok := c.applied[hwnd]; !ok || previous != state {
 			if set(hwnd, state) {
 				c.applied[hwnd] = state
@@ -86,7 +99,7 @@ func (c *watchTaskbarController) update(entries map[uint32]*watchEntry, current 
 		}
 	}
 	for hwnd, state := range c.applied {
-		if !alive[hwnd] {
+		if _, alive := states[hwnd]; !alive {
 			if state != 0 {
 				set(hwnd, 0)
 			}
