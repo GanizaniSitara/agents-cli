@@ -18,12 +18,12 @@ func TestWatchShortcutWaitsForRelease(t *testing.T) {
 
 func TestWatchSelectionSettingsPersist(t *testing.T) {
 	dir := t.TempDir()
-	s := watchSettings{Shortcuts: "Ctrl+Alt+Shift", FirstRowShortcut: "Ctrl+Win+Z", DisableSelectionBlink: true, DisableForeground: true, DisableDesktopSwitch: true}
+	s := watchSettings{Shortcuts: "Ctrl+Alt+Shift", FirstRowShortcut: "Ctrl+Win+Z", DisableSelectionBlink: true, DisableForeground: true}
 	if err := saveWatchSettings(dir, s); err != nil {
 		t.Fatal(err)
 	}
 	got := loadWatchSettings(dir)
-	if !got.DisableSelectionBlink || !got.DisableForeground || !got.DisableDesktopSwitch || got.Shortcuts != s.Shortcuts || got.FirstRowShortcut != s.FirstRowShortcut {
+	if !got.DisableSelectionBlink || !got.DisableForeground || got.Shortcuts != s.Shortcuts || got.FirstRowShortcut != s.FirstRowShortcut {
 		t.Fatalf("settings lost: %+v", got)
 	}
 }
@@ -70,12 +70,12 @@ func TestWatchParkOrderingAndShortcut(t *testing.T) {
 		t.Fatal("parked row not last")
 	}
 	frame := watchPanelFrame{Rows: []watchEntry{parked, busy}}
-	p, ok := watchFirstRowTarget(frame)
+	p, ok := watchFirstRowTarget(frame, "here")
 	if !ok || p.Row.Sample.PID != 2 {
 		t.Fatal("shortcut did not skip parked row")
 	}
 	frame.Rows = frame.Rows[:1]
-	if _, ok := watchFirstRowTarget(frame); ok {
+	if _, ok := watchFirstRowTarget(frame, "here"); ok {
 		t.Fatal("shortcut selected only parked row")
 	}
 	if _, ok := watchShortcutRow(frame, watchHotkeyBase); !ok {

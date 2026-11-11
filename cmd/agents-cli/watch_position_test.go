@@ -34,12 +34,12 @@ func TestWatchSavedPositionAndMonitorRecovery(t *testing.T) {
 
 func TestWatchPositionPersists(t *testing.T) {
 	dir := t.TempDir()
-	want := watchSettings{Monitor: "portrait", Position: &watchPoint{-900, 125}, ExcludedDesktops: []string{"two"}}
+	want := watchSettings{Monitor: "portrait", Position: &watchPoint{-900, 125}, IncludedDesktops: []string{"two"}}
 	if err := saveWatchSettings(dir, want); err != nil {
 		t.Fatal(err)
 	}
 	got := loadWatchSettings(dir)
-	if got.Position == nil || *got.Position != *want.Position || got.Monitor != want.Monitor || len(got.ExcludedDesktops) != 1 {
+	if got.Position == nil || *got.Position != *want.Position || got.Monitor != want.Monitor || len(got.IncludedDesktops) != 1 {
 		t.Fatalf("settings lost: %+v", got)
 	}
 }

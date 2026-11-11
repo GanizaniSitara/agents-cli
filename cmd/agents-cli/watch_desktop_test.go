@@ -2,27 +2,34 @@ package main
 
 import "testing"
 
-func TestWatchDesktopFiltering(t *testing.T) {
+func TestWatchDesktopInclusionPersists(t *testing.T) {
 	s := watchSettings{}
-	for _, id := range []string{"one", "two"} {
-		if !s.monitorsDesktop(id) {
-			t.Fatal("all desktops should be enabled by default")
+	if s.includedDesktops()["two"] {
+		t.Fatal("background desktop should start excluded from view")
+	}
+	s.toggleDesktop("two")
+	if !s.includedDesktops()["two"] {
+		t.Fatal("include did not reveal desktop")
+	}
+	dir := t.TempDir()
+	if err := saveWatchSettings(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	loaded := loadWatchSettings(dir)
+	if !loaded.includedDesktops()["two"] {
+		t.Fatal("include did not survive restart")
+	}
+	loaded.toggleDesktop("two")
+	if loaded.includedDesktops()["two"] {
+		t.Fatal("uncheck did not hide desktop")
+	}
+	for _, pair := range [][2]string{{"two", "one"}, {"", "one"}, {"one", ""}} {
+		if watchDesktopSelectable(pair[0], pair[1]) {
+			t.Fatal("display-only/unknown desktop became activatable")
 		}
 	}
-	s.toggleDesktop("two")
-	if s.monitorsDesktop("two") || !s.monitorsDesktop("one") {
-		t.Fatal("desktop exclusion incorrect")
-	}
-	s.toggleDesktop("one")
-	if s.monitorsDesktop("") {
-		t.Fatal("unknown desktop must not bypass exclusions")
-	}
-	s.toggleDesktop("two")
-	if !s.monitorsDesktop("two") {
-		t.Fatal("toggle did not restore desktop")
-	}
-	if s.monitorsDesktop("one") {
-		t.Fatal("another toggle changed unrelated desktop")
+	if !watchDesktopSelectable("one", "one") {
+		t.Fatal("current desktop cannot activate")
 	}
 }
 

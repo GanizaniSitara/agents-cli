@@ -79,7 +79,6 @@ type watchApp struct {
 	consoleEvents     uint64
 	coverage          map[string]map[string]int
 	flashes           watchFlashController
-	expanded          map[string]bool
 	agentRecords      watchAgentRecords
 	foregroundLift    watchForegroundLift
 }
@@ -449,7 +448,7 @@ func (a *watchApp) save() {
 	r.Shortcuts = a.shortcuts
 	r.ReaderRestarts, r.ReadingPID, r.LastScanMillis = a.readerRestarts, a.readingPID, a.lastScanMillis
 	r.CurrentDesktop = watchCurrentDesktop()
-	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops(), a.expanded)
+	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops(), loadWatchSettings(a.dir).includedDesktops())
 	for _, summary := range r.PanelSections {
 		r.PanelSummary = append(r.PanelSummary, summary.Text)
 	}
@@ -603,16 +602,12 @@ func (a *watchApp) readWorker() (result error) {
 			alive := map[uint32]bool{}
 			if !batch.Partial {
 				for pid, root := range batch.Alive {
-					if entry := a.tracker.entries[pid]; entry != nil && entry.Sample.RootStarted == root && settings.monitorsDesktop(entry.Sample.DesktopID) {
+					if entry := a.tracker.entries[pid]; entry != nil && entry.Sample.RootStarted == root {
 						alive[pid] = true
 					}
 				}
 			}
 			for _, s := range batch.Samples {
-				if !settings.monitorsDesktop(s.DesktopID) {
-					watchFlash(s.HWND, false)
-					continue
-				}
 				alive[s.PID] = true
 				if a.tracker.observe(s, time.Now()) {
 					a.log(s)

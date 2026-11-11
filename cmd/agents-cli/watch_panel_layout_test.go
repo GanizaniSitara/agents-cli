@@ -40,7 +40,7 @@ func TestWatchPanelCurrentDesktopAndSummary(t *testing.T) {
 	if len(rows) != 2 || rows[0].Sample.PID != 1 || rows[1].Sample.PID != 2 {
 		t.Fatalf("current desktop rows: %+v", rows)
 	}
-	if len(summaries) != 2 || summaries[0].Text != "[+] Desktop 2 | 1 stopped | 1 working" {
+	if len(summaries) != 2 || summaries[0].Text != "[ ] Include Desktop 2 | 1 stopped | 1 working" {
 		t.Fatalf("summaries: %v", summaries)
 	}
 }
@@ -54,17 +54,17 @@ func TestWatchPanelExpandDesktopWithoutChangingAttention(t *testing.T) {
 		{Sample: watchSample{Session: Session{PID: 5, State: "prompt"}, DesktopID: "two", Desktop: "Desktop 2"}, Stopped: true},
 	}
 	desktops := []watchDesktop{{ID: "one", Name: "Desktop 1"}, {ID: "two", Name: "Desktop 2"}}
-	expanded := map[string]bool{"two": true}
-	rows, summaries := watchPanelLayout(entries, "one", desktops, expanded)
+	included := map[string]bool{"two": true}
+	rows, summaries := watchPanelLayout(entries, "one", desktops, included)
 	for i, pid := range []uint32{1, 2, 5, 4, 3} {
 		if len(rows) != 5 || rows[i].Sample.PID != pid {
-			t.Fatalf("expanded priority/stability: %+v", rows)
+			t.Fatalf("included priority/stability: %+v", rows)
 		}
 		if rows[i].Sample.Desktop == "" {
 			t.Fatal("desktop label lost")
 		}
 	}
-	if !summaries[0].Expanded || summaries[0].DesktopID != "two" {
+	if !summaries[0].Included || summaries[0].DesktopID != "two" {
 		t.Fatal("summary cannot identify collapse target")
 	}
 	if !entries[1].Attention {
@@ -78,11 +78,11 @@ func TestWatchPanelExpandDesktopWithoutChangingAttention(t *testing.T) {
 	}
 	flashes.update(flashEntries, "one", func(hwnd uintptr, on bool) {
 		if hwnd != 1 && on {
-			t.Fatal("expanded background row started flashing")
+			t.Fatal("included background row started flashing")
 		}
 	})
-	expanded["two"] = false
-	rows, _ = watchPanelLayout(entries, "one", desktops, expanded)
+	included["two"] = false
+	rows, _ = watchPanelLayout(entries, "one", desktops, included)
 	if len(rows) != 1 || rows[0].Sample.PID != 1 {
 		t.Fatal("collapse retained background rows")
 	}

@@ -115,7 +115,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 14
+			n = len(desktops) + 13
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -158,7 +158,7 @@ func watchPanel(a *watchApp) error {
 		switch msg {
 		case 0x312: // WM_HOTKEY: same targets and identity checks as explicit clicks
 			if wp == watchFirstRowHotkey {
-				if p, ok := watchFirstRowTarget(painted); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
+				if p, ok := watchFirstRowTarget(painted, currentDesktop); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
 					p.Time = time.Now()
 					p.Trigger = "first-row-shortcut"
 					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-received", false, false)
@@ -269,7 +269,7 @@ func watchPanel(a *watchApp) error {
 			newDesktop := watchCurrentDesktop()
 			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
 			taskbarSignals.update(a.tracker.entries, newDesktop, taskbar.set)
-			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, a.expanded)
+			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, settings.includedDesktops())
 			foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 			rows = watchActiveRows(rows, foreground)
 			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
@@ -413,11 +413,14 @@ func watchPanel(a *watchApp) error {
 			if p.Kind == "menu" {
 				i := (y - 34) / watchSettingsRowHeight
 				if i >= 0 && i < len(desktops) {
+					if desktops[i].ID == currentDesktop {
+						return 0
+					}
 					settings.toggleDesktop(desktops[i].ID)
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i >= len(desktops)+4 && i <= len(desktops)+8 {
+				} else if i >= len(desktops)+4 && i <= len(desktops)+7 {
 					switch i - len(desktops) {
 					case 4:
 						settings.DisableSelectionBlink = !settings.DisableSelectionBlink
@@ -428,31 +431,29 @@ func watchPanel(a *watchApp) error {
 							a.foregroundLift.release(watchLiftIdentity, watchSetLift)
 						}
 					case 6:
-						settings.DisableDesktopSwitch = !settings.DisableDesktopSwitch
-					case 7:
 						settings.MovePointerOnShortcut = !settings.MovePointerOnShortcut
-					case 8:
+					case 7:
 						settings.InterruptPolicyBlock = !settings.InterruptPolicyBlock
 					}
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(desktops)+9 {
+				} else if i == len(desktops)+8 {
 					settings.SelectionBlinkStyle = watchNextPulseStyle(settings.SelectionBlinkStyle)
 					watchCancelPulse()
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(desktops)+10 {
+				} else if i == len(desktops)+9 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+11 {
+				} else if i == len(desktops)+10 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+12 {
+				} else if i == len(desktops)+11 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(desktops) {
@@ -479,11 +480,9 @@ func watchPanel(a *watchApp) error {
 			if p.Kind == "summary" {
 				if summary := p.Summary; summary.Toggle {
 					a.mu.Lock()
-					if a.expanded == nil {
-						a.expanded = map[string]bool{}
-					}
-					a.expanded[summary.DesktopID] = !a.expanded[summary.DesktopID]
-					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
+					settings.toggleDesktop(summary.DesktopID)
+					_ = saveWatchSettings(a.dir, settings)
+					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
 					a.save()
 					a.mu.Unlock()
 					offset = 0
@@ -512,14 +511,14 @@ func watchPanel(a *watchApp) error {
 					a.mu.Lock()
 					a.tracker.togglePark(row.Sample)
 					a.save()
-					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
+					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
 					a.mu.Unlock()
 					return 0
 				}
 				a.mu.Lock()
 				a.tracker.dismiss(row.Sample.PID)
 				a.save()
-				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, a.expanded)
+				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
 				a.mu.Unlock()
 				watchFlash(row.Sample.HWND, false)
 				a.logClick(p, releaseY, state, "dismissed", false, false)
@@ -579,11 +578,15 @@ func watchPanel(a *watchApp) error {
 			if frame.Menu {
 				for i, d := range desktops {
 					prefix := "[ ] "
-					if settings.monitorsDesktop(d.ID) {
+					if settings.includedDesktops()[d.ID] {
 						prefix = "[x] "
 					}
 					top := int32(34 + i*watchSettingsRowHeight)
-					watchText(dc, prefix+"Include "+d.Name, 12, top+8, 350, top+35)
+					label := prefix + "Include " + d.Name
+					if d.ID == currentDesktop {
+						label = d.Name + " (current)"
+					}
+					watchText(dc, label, 12, top+8, 350, top+35)
 				}
 				top := int32(34 + len(desktops)*watchSettingsRowHeight)
 				watchText(dc, "Shortcuts: "+watchShortcutChoice(settings.Shortcuts)+"  [change]", 12, top+8, 350, top+35)
@@ -610,7 +613,6 @@ func watchPanel(a *watchApp) error {
 				}{
 					{"Blink selected window", settings.DisableSelectionBlink},
 					{"Bring selected window forward", settings.DisableForeground},
-					{"Allow selection to switch desktops", settings.DisableDesktopSwitch},
 					{"Move pointer on shortcut", !settings.MovePointerOnShortcut},
 					{"Interrupt policy block once (Ctrl+C)", !settings.InterruptPolicyBlock},
 				} {
@@ -682,6 +684,9 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SelectObject").Call(dc, font)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
+					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
+						meta += " (view only)"
+					}
 					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 270, descriptionTop+35)
 					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 328, descriptionTop+35)
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {

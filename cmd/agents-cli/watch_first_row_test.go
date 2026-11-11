@@ -87,28 +87,45 @@ func TestFirstRowShortcutRegistrationIndependent(t *testing.T) {
 }
 
 func TestFirstRowShortcutFollowsPaintedOrder(t *testing.T) {
-	row := func(pid uint32) watchEntry { return watchEntry{Sample: watchSample{Session: Session{PID: pid}}} }
+	row := func(pid uint32) watchEntry {
+		return watchEntry{Sample: watchSample{Session: Session{PID: pid}, DesktopID: "here"}}
+	}
 	frame := newWatchPanelFrame([]watchEntry{row(10), row(20)}, nil, 0, 2, false)
-	p, ok := watchFirstRowTarget(frame)
+	p, ok := watchFirstRowTarget(frame, "here")
 	if !ok || p.Row.Sample.PID != 10 {
 		t.Fatal("wrong first displayed row")
 	}
 	frame = newWatchPanelFrame([]watchEntry{row(20), row(10)}, nil, 0, 2, false)
-	p, ok = watchFirstRowTarget(frame)
+	p, ok = watchFirstRowTarget(frame, "here")
 	if !ok || p.Row.Sample.PID != 20 {
 		t.Fatal("shortcut remained tied to previous PID")
 	}
 	frame = newWatchPanelFrame([]watchEntry{row(20), row(10)}, nil, 1, 1, false)
-	p, ok = watchFirstRowTarget(frame)
+	p, ok = watchFirstRowTarget(frame, "here")
 	if !ok || p.Row.Sample.PID != 10 || p.RowIndex != 1 {
 		t.Fatal("shortcut ignored displayed scroll position")
 	}
 	frame.Menu = true
-	if _, ok := watchFirstRowTarget(frame); ok {
+	if _, ok := watchFirstRowTarget(frame, "here"); ok {
 		t.Fatal("Settings selected a hidden row")
 	}
-	if _, ok := watchFirstRowTarget(watchPanelFrame{}); ok {
+	if _, ok := watchFirstRowTarget(watchPanelFrame{}, "here"); ok {
 		t.Fatal("empty panel selected a session")
+	}
+}
+
+func TestFirstRowShortcutSkipsOtherDesktops(t *testing.T) {
+	frame := watchPanelFrame{Rows: []watchEntry{
+		{Sample: watchSample{Session: Session{PID: 1, State: "prompt"}, DesktopID: "two"}},
+		{Sample: watchSample{Session: Session{PID: 2, State: "idle"}, DesktopID: "one"}},
+	}}
+	p, ok := watchFirstRowTarget(frame, "one")
+	if !ok || p.Row.Sample.PID != 2 {
+		t.Fatal("included background session intercepted the activation shortcut")
+	}
+	frame.Rows = frame.Rows[:1]
+	if _, ok := watchFirstRowTarget(frame, "one"); ok {
+		t.Fatal("shortcut attempted to activate another desktop")
 	}
 }
 

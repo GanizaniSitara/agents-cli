@@ -16,7 +16,7 @@ body{max-width:960px;margin:28px auto;padding:0 24px 32px;color:#202020;backgrou
 agents-cli watch run      # foreground; keep this terminal open</pre>
 <p>Both show the same panel with session status and input requests.
 Click a row to bring the window forward.
-<code>Ctrl+Win+Z</code> selects the first unparked row; <code>Park</code> puts an idle session aside.
+<code>Ctrl+Win+Z</code> selects the first unparked row on this desktop; <code>park</code> puts an idle session aside.
 <code>Hide</code> keeps watching in the tray. <code>Exit</code> or <code>watch stop</code> stops only the watcher.</p>
 </section>
 
@@ -69,13 +69,15 @@ No automatic start at sign-in.</p>
 <h2>PANEL</h2>
 <table aria-label="Panel controls"><tbody>
 <tr><td>Click / double-click row</td><td>Bring forward / white locator pulse.</td></tr>
-<tr><td>Ctrl+Win+Z</td><td>First eligible displayed row; skips parked sessions.</td></tr>
+<tr><td>Ctrl+Win+Z</td><td>First eligible displayed row; skips parked sessions and other desktops.</td></tr>
 <tr><td>Ctrl+Alt+Shift+1–9,0</td><td>First ten displayed rows. Both shortcut sets are configurable.</td></tr>
-<tr><td>Park / ^</td><td>Move idle session to bottom / unpark. Parking lasts until watcher exit.</td></tr>
+<tr><td>park / ^</td><td>Move idle session to bottom / unpark. Parking lasts until watcher exit.</td></tr>
 <tr><td>x / Hide / Exit</td><td>Dismiss row / hide panel / stop watcher. Agent keeps running.</td></tr>
 <tr><td>Drag header</td><td>Move panel. Settings → Reset location restores its position.</td></tr>
 </tbody></table>
-<p>Settings controls selection blinking, foreground activation and desktop switching.
+<p>Include Desktop 2 shows its agents here, marked view only. The checkbox in Settings is the same choice.
+The watcher never switches desktops. Selection activates windows on the current desktop only.</p>
+<p>Settings controls selection blinking and foreground activation.
 Blink area: Header, Frame or Whole window. Whole window uses a translucent tint.
 Optional: move the mouse pointer on shortcuts; interrupt a policy block once with Ctrl+C.
 Both default off. Keyboard focus follows Bring selected window forward.

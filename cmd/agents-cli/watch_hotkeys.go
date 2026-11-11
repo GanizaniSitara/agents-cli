@@ -120,12 +120,12 @@ func watchRegisterFirstRowShortcut(choice string, register func(id, modifiers, k
 	return ""
 }
 
-func watchFirstRowTarget(frame watchPanelFrame) (watchPanelPress, bool) {
+func watchFirstRowTarget(frame watchPanelFrame, current string) (watchPanelPress, bool) {
 	if frame.Menu {
 		return watchPanelPress{}, false
 	}
 	for i, row := range frame.Rows {
-		if !row.Parked {
+		if !row.Parked && watchDesktopSelectable(row.Sample.DesktopID, current) {
 			p := frame.hit(20, 34+i*watchRowHeight+20)
 			return p, p.Kind == "row"
 		}
@@ -194,14 +194,11 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	// Only a session click or an explicit session shortcut calls this path.
 	settings := loadWatchSettings(a.dir)
 	pulseColour := watchPulseColour(row, loadWatchTheme(a.dir), p.Trigger == "double-click")
-	if settings.DisableDesktopSwitch {
-		manager, release := openWatchDesktopManager()
-		desktop, _ := windowWatchDesktop(manager, row.Sample.HWND, watchDesktops())
-		release()
-		if desktop == "" || desktop != watchCurrentDesktop() {
-			a.logClick(p, releaseY, state, "desktop-switch-disabled", false, false)
-			return
-		}
+	var cloaked uint32
+	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
+	if !watchDesktopSelectable(row.Sample.DesktopID, watchCurrentDesktop()) || int32(hr) < 0 || cloaked != 0 {
+		a.logClick(p, releaseY, state, "background-desktop-display-only", false, false)
+		return
 	}
 	if settings.DisableForeground {
 		if !settings.DisableSelectionBlink {

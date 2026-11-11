@@ -28,13 +28,12 @@ type watchSettings struct {
 	InterruptPolicyBlock  bool        `json:"interrupt_policy_block,omitempty"`
 	DisableSelectionBlink bool        `json:"disable_selection_blink,omitempty"`
 	DisableForeground     bool        `json:"disable_foreground,omitempty"`
-	DisableDesktopSwitch  bool        `json:"disable_desktop_switch,omitempty"`
 	Shortcuts             string      `json:"shortcuts,omitempty"`
 	FirstRowShortcut      string      `json:"first_row_shortcut,omitempty"`
 	Position              *watchPoint `json:"position,omitempty"`
 	Monitor               string      `json:"monitor"`
 	Hidden                bool        `json:"hidden"`
-	ExcludedDesktops      []string    `json:"excluded_desktops,omitempty"`
+	IncludedDesktops      []string    `json:"included_desktops,omitempty"`
 }
 
 func watchPositionMonitor(monitors []watchMonitor, settings watchSettings) watchMonitor {

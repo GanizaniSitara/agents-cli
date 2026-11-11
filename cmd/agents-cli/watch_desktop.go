@@ -66,26 +66,26 @@ func watchDesktops() []watchDesktop {
 	return out
 }
 
-func (s watchSettings) monitorsDesktop(id string) bool {
-	if len(s.ExcludedDesktops) > 0 && id == "" {
-		return false
+func (s watchSettings) includedDesktops() map[string]bool {
+	included := map[string]bool{}
+	for _, id := range s.IncludedDesktops {
+		included[id] = true
 	}
-	for _, excluded := range s.ExcludedDesktops {
-		if excluded == id {
-			return false
-		}
-	}
-	return true
+	return included
 }
 
 func (s *watchSettings) toggleDesktop(id string) {
-	for i, excluded := range s.ExcludedDesktops {
-		if excluded == id {
-			s.ExcludedDesktops = append(s.ExcludedDesktops[:i], s.ExcludedDesktops[i+1:]...)
+	for i, included := range s.IncludedDesktops {
+		if included == id {
+			s.IncludedDesktops = append(s.IncludedDesktops[:i], s.IncludedDesktops[i+1:]...)
 			return
 		}
 	}
-	s.ExcludedDesktops = append(s.ExcludedDesktops, id)
+	s.IncludedDesktops = append(s.IncludedDesktops, id)
+}
+
+func watchDesktopSelectable(sample, current string) bool {
+	return sample != "" && current != "" && sample == current
 }
 
 // The public IVirtualDesktopManager is stable across Windows 10/11. Keep COM

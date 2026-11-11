@@ -8,12 +8,12 @@ import (
 type watchPanelSummary struct {
 	DesktopID string `json:"desktop_id"`
 	Text      string `json:"text"`
-	Expanded  bool   `json:"expanded"`
+	Included  bool   `json:"included"`
 	Toggle    bool   `json:"toggle"`
 }
 
 // Background desktop rows are opt-in; opening a section changes only the view.
-func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesktop, expanded map[string]bool) ([]watchEntry, []watchPanelSummary) {
+func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesktop, included map[string]bool) ([]watchEntry, []watchPanelSummary) {
 	rows := []watchEntry{}
 	type counts struct{ stopped, working, unknown int }
 	totals := map[string]*counts{}
@@ -25,7 +25,7 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 			}
 			continue
 		}
-		if s.DesktopID != current && expanded[s.DesktopID] {
+		if s.DesktopID != current && included[s.DesktopID] {
 			rows = append(rows, entry)
 		}
 		c := totals[s.DesktopID]
@@ -42,7 +42,7 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 			c.stopped++
 		}
 	}
-	// Keep all stops (including idle/check) ahead of expanded working rows.
+	// Keep all stops (including idle/check) ahead of included working rows.
 	priority := func(row watchEntry) int {
 		if row.Parked {
 			return 6
@@ -65,11 +65,11 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 				if c.unknown > 0 {
 					text += fmt.Sprintf(" | %d unknown", c.unknown)
 				}
-				prefix := "[+] "
-				if expanded[desktop.ID] {
-					prefix = "[-] "
+				prefix := "[ ] Include "
+				if included[desktop.ID] {
+					prefix = "[x] Include "
 				}
-				summaries = append(summaries, watchPanelSummary{DesktopID: desktop.ID, Text: prefix + text, Expanded: expanded[desktop.ID], Toggle: desktop.ID != ""})
+				summaries = append(summaries, watchPanelSummary{DesktopID: desktop.ID, Text: prefix + text, Included: included[desktop.ID], Toggle: desktop.ID != ""})
 			}
 		}
 	}
