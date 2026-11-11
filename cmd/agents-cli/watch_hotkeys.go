@@ -175,6 +175,11 @@ func watchShortcutRow(frame watchPanelFrame, id uintptr) (watchPanelPress, bool)
 }
 
 func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
+	a.selectionID++
+	a.activateWatchRowSelected(p, releaseY, false)
+}
+
+func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, terminalSelected bool) {
 	row := p.Row
 	state := watchReadTarget(row.Sample)
 	problem := watchTargetProblem(row.Sample, state)
@@ -204,27 +209,13 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 		a.logClick(p, releaseY, state, "foreground-disabled", false, false)
 		return
 	}
-	if watchWindowClass(row.Sample.HWND) == "CASCADIA_HOSTING_WINDOW_CLASS" {
-		if problem = watchSelectTerminal(row.Sample); problem != "" {
-			a.logClick(p, releaseY, state, problem, false, false)
+	if !terminalSelected && watchWindowClass(row.Sample.HWND) == "CASCADIA_HOSTING_WINDOW_CLASS" {
+		if a.selectTerminal == nil {
+			a.logClick(p, releaseY, state, "terminal-selector-unavailable", false, false)
 			return
 		}
-		state = watchReadTarget(row.Sample)
-		problem = watchTargetProblem(row.Sample, state)
-		a.mu.Lock()
-		current = a.tracker.entries[row.Sample.PID]
-		if problem == "" && (current == nil || !watchSameClickSession(row.Sample, current.Sample)) {
-			problem = "session-identity-changed"
-		}
-		a.mu.Unlock()
-		hr, _, _ = watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
-		if problem == "" && (!watchDesktopSelectable(row.Sample.DesktopID, watchCurrentDesktop()) || int32(hr) < 0 || cloaked != 0) {
-			problem = "background-desktop-display-only"
-		}
-		if problem != "" {
-			a.logClick(p, releaseY, state, problem, false, false)
-			return
-		}
+		a.selectTerminal(watchTerminalRequest{Press: p, ReleaseY: releaseY, Generation: a.selectionID})
+		return
 	}
 	var before watchRect
 	watchUser.NewProc("GetWindowRect").Call(row.Sample.HWND, uintptr(unsafe.Pointer(&before)))

@@ -60,6 +60,8 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	selectionID       uint64 // panel thread only
+	selectTerminal    func(watchTerminalRequest)
 	policyQueue       chan watchSample
 	policyAttempts    watchPolicyAttempts
 	problemCode       string

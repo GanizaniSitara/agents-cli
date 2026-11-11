@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,6 +69,10 @@ func watchPanel(a *watchApp) error {
 	lastRender := ""
 	offset := 0
 	var hwnd uintptr
+	terminalRequests := make(chan watchTerminalRequest, 1)
+	terminalResults := make(chan watchTerminalResult, 1)
+	terminalContext, cancelTerminal := context.WithCancel(context.Background())
+	defer cancelTerminal()
 	shortcutProblem := ""
 	firstRowProblem := ""
 	unregisterShortcut := func(id uintptr) { watchUser.NewProc("UnregisterHotKey").Call(hwnd, id) }
@@ -156,6 +161,21 @@ func watchPanel(a *watchApp) error {
 	defer watchGDI.NewProc("DeleteObject").Call(inputFont)
 	proc := syscall.NewCallback(func(window uintptr, msg uint32, wp, lp uintptr) uintptr {
 		switch msg {
+		case 0x8002: // terminal helper completed; never block the UI on UIA
+			select {
+			case result := <-terminalResults:
+				request := result.Request
+				if request.Generation != a.selectionID {
+					return 0 // a newer explicit selection supersedes this one
+				}
+				if result.Problem != "" {
+					a.logClick(request.Press, request.ReleaseY, watchReadTarget(request.Press.Row.Sample), result.Problem, false, false)
+					return 0
+				}
+				a.activateWatchRowSelected(request.Press, request.ReleaseY, true)
+			default:
+			}
+			return 0
 		case 0x312: // WM_HOTKEY: same targets and identity checks as explicit clicks
 			if wp == watchFirstRowHotkey {
 				if p, ok := watchFirstRowTarget(painted, currentDesktop); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
@@ -734,6 +754,34 @@ func watchPanel(a *watchApp) error {
 		return fmt.Errorf("create panel: %v", err)
 	}
 	hwnd = window
+	a.selectTerminal = func(request watchTerminalRequest) {
+		select {
+		case terminalRequests <- request:
+		default:
+			// One helper at a time, with only the newest request queued.
+			select {
+			case <-terminalRequests:
+			default:
+			}
+			terminalRequests <- request
+		}
+	}
+	go func() {
+		for {
+			select {
+			case <-terminalContext.Done():
+				return
+			case request := <-terminalRequests:
+				result := watchTerminalResult{Request: request, Problem: watchSelectTerminal(terminalContext, request.Press.Row.Sample)}
+				select {
+				case terminalResults <- result:
+					watchUser.NewProc("PostMessageW").Call(window, 0x8002, 0, 0)
+				case <-terminalContext.Done():
+					return
+				}
+			}
+		}
+	}()
 	applyShortcuts()
 	applyFirstRowShortcut()
 	defer func() {

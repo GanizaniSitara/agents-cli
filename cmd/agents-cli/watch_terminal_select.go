@@ -17,12 +17,12 @@ import (
 // UI Automation can block in another application's provider. Isolate it from
 // both the panel thread and the sequential status reader, on explicit selection
 // only. The helper never types keys, changes titles or launches a Terminal.
-func watchSelectTerminal(s watchSample) string {
+func watchSelectTerminal(parent context.Context, s watchSample) string {
 	exe, err := os.Executable()
 	if err != nil {
 		return "terminal-helper-unavailable"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
 	input, _ := json.Marshal(s)
 	cmd := helperCommand(ctx, exe, string(input), "terminal-select", strconv.FormatUint(uint64(s.PID), 10))
@@ -36,6 +36,17 @@ func watchSelectTerminal(s watchSample) string {
 		return "terminal-helper-failed"
 	}
 	return result.Problem
+}
+
+type watchTerminalRequest struct {
+	Press      watchPanelPress
+	ReleaseY   int
+	Generation uint64
+}
+
+type watchTerminalResult struct {
+	Request watchTerminalRequest
+	Problem string
 }
 
 // Titles are not global identities. Only an exact, unique match inside the
