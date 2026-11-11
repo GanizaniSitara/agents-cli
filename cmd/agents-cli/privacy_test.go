@@ -36,6 +36,10 @@ func TestMain(m *testing.M) {
 	}
 	if mode := os.Getenv("AGENTS_CLI_TEST_READER_ERROR"); mode != "" {
 		switch mode {
+		case "desktop-watchdog":
+			fmt.Fprintln(os.Stdout, `{"partial":true,"stage":"desktop","current_desktop":"one","desktops":[{"id":"one","name":"Desktop 1"}]}`)
+			time.Sleep(300 * time.Millisecond)
+			os.Exit(2)
 		case "watchdog":
 			fmt.Fprintln(os.Stdout, `{"partial":true,"stage":"read","reading_pid":123}`)
 			os.Exit(2)

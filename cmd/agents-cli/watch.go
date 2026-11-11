@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -22,16 +23,18 @@ import (
 )
 
 type watchBatch struct {
-	Stage         string             `json:"stage,omitempty"`
-	Failures      []watchReaderError `json:"failures,omitempty"`
-	ReadingPID    uint32             `json:"reading_pid,omitempty"`
-	ScanMillis    int64              `json:"scan_ms,omitempty"`
-	Partial       bool               `json:"partial,omitempty"`
-	Alive         map[uint32]string  `json:"alive,omitempty"`
-	Unavailable   []uint32           `json:"unavailable,omitempty"`
-	Samples       []watchSample      `json:"samples"`
-	Error         string             `json:"error,omitempty"`
-	ConsoleEvents uint64             `json:"console_events"`
+	CurrentDesktop string             `json:"current_desktop,omitempty"`
+	Desktops       []watchDesktop     `json:"desktops,omitempty"`
+	Stage          string             `json:"stage,omitempty"`
+	Failures       []watchReaderError `json:"failures,omitempty"`
+	ReadingPID     uint32             `json:"reading_pid,omitempty"`
+	ScanMillis     int64              `json:"scan_ms,omitempty"`
+	Partial        bool               `json:"partial,omitempty"`
+	Alive          map[uint32]string  `json:"alive,omitempty"`
+	Unavailable    []uint32           `json:"unavailable,omitempty"`
+	Samples        []watchSample      `json:"samples"`
+	Error          string             `json:"error,omitempty"`
+	ConsoleEvents  uint64             `json:"console_events"`
 }
 
 type watchReceipt struct {
@@ -60,6 +63,7 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	desktop           atomic.Pointer[watchDesktopState]
 	ui                watchUIProbe
 	selectionID       uint64 // panel thread only
 	selectTerminal    func(watchTerminalRequest)
@@ -285,13 +289,19 @@ func watchWorker(afterPID, cooldownPID uint32) error {
 		if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
 			return err
 		}
+		batch.Stage = "desktop"
+		if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
+			return err
+		}
+		desktops = watchDesktops()
+		batch.Desktops, batch.CurrentDesktop = desktops, watchCurrentDesktop()
+		batch.Stage = "discovery"
 		adopted := readAdopted()
 		dirty := drain()
 		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 		eventCount += uint64(len(dirty))
 		batch.ConsoleEvents = eventCount
 		if time.Now().After(nextDiscovery) {
-			desktops = watchDesktops()
 			found, _, err := discover(discoverOpts{})
 			if err != nil {
 				batch.Error = err.Error()
@@ -469,8 +479,8 @@ func (a *watchApp) save() {
 	r.LastConsoleError = a.lastConsoleError
 	r.Shortcuts = a.shortcuts
 	r.ReaderRestarts, r.ReadingPID, r.LastScanMillis = a.readerRestarts, a.readingPID, a.lastScanMillis
-	r.CurrentDesktop = watchCurrentDesktop()
-	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, watchDesktops(), loadWatchSettings(a.dir).includedDesktops())
+	r.CurrentDesktop = a.currentDesktop()
+	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, a.desktopList(), loadWatchSettings(a.dir).includedDesktops())
 	for _, summary := range r.PanelSections {
 		r.PanelSummary = append(r.PanelSummary, summary.Text)
 	}
@@ -591,6 +601,7 @@ func (a *watchApp) readWorker() (result error) {
 		case err := <-fail:
 			return err
 		case batch := <-updates:
+			a.acceptDesktopState(batch)
 			if !timer.Stop() {
 				select {
 				case <-timer.C:

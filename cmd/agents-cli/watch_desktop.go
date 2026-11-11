@@ -15,6 +15,33 @@ type watchDesktop struct {
 	Name string `json:"name"`
 }
 
+type watchDesktopState struct {
+	Current  string
+	Desktops []watchDesktop
+}
+
+// The reader is the only process that polls desktop registry state. UI and
+// receipt paths use its immutable last result, even during reader recovery.
+func (a *watchApp) currentDesktop() string {
+	if state := a.desktop.Load(); state != nil {
+		return state.Current
+	}
+	return ""
+}
+
+func (a *watchApp) desktopList() []watchDesktop {
+	if state := a.desktop.Load(); state != nil {
+		return state.Desktops
+	}
+	return nil
+}
+
+func (a *watchApp) acceptDesktopState(batch watchBatch) {
+	if batch.Desktops != nil && batch.CurrentDesktop != "" {
+		a.desktop.Store(&watchDesktopState{Current: batch.CurrentDesktop, Desktops: append([]watchDesktop(nil), batch.Desktops...)})
+	}
+}
+
 func watchCurrentDesktop() string {
 	var session uint32
 	k32.NewProc("ProcessIdToSessionId").Call(uintptr(windows.GetCurrentProcessId()), uintptr(unsafe.Pointer(&session)))

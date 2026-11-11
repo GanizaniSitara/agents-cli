@@ -36,6 +36,7 @@ func watchPreferRead(sessions []Session, pid uint32) []Session {
 // each completed row before the next read; partial batches cannot remove rows.
 func watchPublishProgress(batch watchBatch, published *int, encode func(any) error, reset func(time.Duration) bool) error {
 	progress := watchBatch{Partial: true, Stage: batch.Stage, ReadingPID: batch.ReadingPID, Samples: batch.Samples[*published:], Error: batch.Error, ConsoleEvents: batch.ConsoleEvents}
+	progress.Desktops, progress.CurrentDesktop = batch.Desktops, batch.CurrentDesktop
 	if err := encode(progress); err != nil {
 		return err
 	}

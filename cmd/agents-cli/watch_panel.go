@@ -58,7 +58,7 @@ func watchPanel(a *watchApp) error {
 	menu := false
 	helpLabel := "Help"
 	monitors := watchMonitors()
-	desktops := watchDesktops()
+	desktops := a.desktopList()
 	taskbar, releaseTaskbar := openWatchTaskbar()
 	defer releaseTaskbar()
 	taskbarSignals := watchTaskbarController{}
@@ -100,7 +100,7 @@ func watchPanel(a *watchApp) error {
 	dragging := false
 	var dragOffset watchPoint
 	capacity := 1
-	currentDesktop := watchCurrentDesktop()
+	currentDesktop := a.currentDesktop()
 	var previousStates map[uint32]string
 	wakeReady := false
 	var tray watchTrayData
@@ -288,7 +288,8 @@ func watchPanel(a *watchApp) error {
 					}
 				}
 			}
-			newDesktop := watchCurrentDesktop()
+			newDesktop := a.currentDesktop()
+			desktops = a.desktopList()
 			allRows := a.panelSignals(newDesktop, &taskbarSignals, watchFlash, taskbar.set)
 			a.ui.step("timer.layout")
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, settings.includedDesktops())
@@ -426,7 +427,7 @@ func watchPanel(a *watchApp) error {
 					menu = !menu
 					theme = loadWatchTheme(a.dir)
 					monitors = watchMonitors()
-					desktops = watchDesktops()
+					desktops = a.desktopList()
 				}
 				resize()
 				return 0

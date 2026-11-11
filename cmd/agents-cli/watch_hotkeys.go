@@ -198,7 +198,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	pulseColour := watchPulseColour(row, loadWatchTheme(a.dir), p.Trigger == "double-click")
 	var cloaked uint32
 	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
-	if !watchDesktopSelectable(row.Sample.DesktopID, watchCurrentDesktop()) || int32(hr) < 0 || cloaked != 0 {
+	if !watchDesktopSelectable(row.Sample.DesktopID, a.currentDesktop()) || int32(hr) < 0 || cloaked != 0 {
 		a.logClick(p, releaseY, state, "background-desktop-display-only", false, false)
 		return
 	}
