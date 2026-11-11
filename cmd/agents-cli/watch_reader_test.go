@@ -20,6 +20,23 @@ func TestWatchForegroundSubmissionBypassesScreenCache(t *testing.T) {
 	}
 }
 
+func TestWatchReadTimeoutCooldownIsPerConsoleAndBounded(t *testing.T) {
+	now := time.Now()
+	until := now.Add(30 * time.Second)
+	if !watchReadCoolingDown(10, 10, now, until) {
+		t.Fatal("timed-out console not cooled down")
+	}
+	if watchReadCoolingDown(11, 10, now, until) {
+		t.Fatal("healthy console delayed")
+	}
+	if watchReadCoolingDown(10, 10, until, until) {
+		t.Fatal("console never retried")
+	}
+	if watchReadCoolingDown(10, 0, now, until) {
+		t.Fatal("ordinary startup cooled down")
+	}
+}
+
 // Ten slow synthetic reads exceed the former whole-scan four-second limit.
 // This child never discovers, attaches to, or writes to a real console.
 func watchSlowScanFixture() int {

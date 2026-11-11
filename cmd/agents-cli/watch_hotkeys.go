@@ -178,6 +178,9 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	row := p.Row
 	state := watchReadTarget(row.Sample)
 	problem := watchTargetProblem(row.Sample, state)
+	if problem == "" && watchWindowClass(row.Sample.HWND) == "CASCADIA_HOSTING_WINDOW_CLASS" && !watchTerminalTitleMatches(row.Sample.Title, state.WindowTitle) {
+		problem = "terminal-tab-not-active"
+	}
 	a.mu.Lock()
 	current := a.tracker.entries[row.Sample.PID]
 	if problem == "" && (current == nil || !watchSameClickSession(row.Sample, current.Sample)) {
@@ -221,6 +224,9 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
 	if set != 0 {
 		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
+		if settings.MovePointerOnShortcut && (p.Trigger == "first-row-shortcut" || p.Trigger == "numbered-shortcut") {
+			watchMovePointer(row.Sample)
+		}
 	}
 	if !settings.DisableSelectionBlink {
 		watchPulseWindow(row.Sample, pulseColour, settings.SelectionBlinkStyle)

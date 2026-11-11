@@ -7,6 +7,10 @@ const watchReadDeadline = 4 * time.Second
 // Allow a bounded read, the normal two-second pause and scheduling slack.
 const watchHeartbeatTimeout = 9 * time.Second
 
+func watchReadCoolingDown(pid, failed uint32, now, until time.Time) bool {
+	return failed != 0 && pid == failed && now.Before(until)
+}
+
 func watchScreenCacheLifetime(hwnd, foreground uintptr) time.Duration {
 	if hwnd != 0 && hwnd == foreground {
 		return 0 // submissions must not depend on console-change events

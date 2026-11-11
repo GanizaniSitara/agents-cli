@@ -60,6 +60,8 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	policyQueue       chan watchSample
+	policyAttempts    watchPolicyAttempts
 	problemCode       string
 	readerStage       string
 	lastReaderError   *watchReaderError
@@ -92,11 +94,14 @@ func watchDirectory(p parsed) (string, error) {
 
 func runWatch(args []string) error {
 	if args[0] == "_watch-worker" {
-		var after uint64
-		if len(args) == 2 {
+		var after, cooldown uint64
+		if len(args) >= 2 {
 			after, _ = strconv.ParseUint(args[1], 10, 32)
 		}
-		return watchWorker(uint32(after))
+		if len(args) >= 3 {
+			cooldown, _ = strconv.ParseUint(args[2], 10, 32)
+		}
+		return watchWorker(uint32(after), uint32(cooldown))
 	}
 	if len(args) == 1 || args[1] == "--help" || args[1] == "help" {
 		printHelp()
@@ -196,7 +201,7 @@ func runWatch(args []string) error {
 	}
 	defer windows.CloseHandle(mutex)
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
-	app := &watchApp{tracker: newWatchTracker(stable), dir: dir, stop: make(chan struct{})}
+	app := &watchApp{tracker: newWatchTracker(stable), dir: dir, stop: make(chan struct{}), policyQueue: make(chan watchSample, 16), policyAttempts: watchPolicyAttempts{}}
 	if p.has("monitor") {
 		number, err := p.intFlag("monitor", 0)
 		if err != nil {
@@ -229,6 +234,7 @@ func runWatch(args []string) error {
 		}
 	}()
 	app.save()
+	go app.policyInterruptLoop()
 	go func() { defer close(collected); app.collect() }()
 	return watchPanel(app)
 }
@@ -236,7 +242,7 @@ func runWatch(args []string) error {
 // One persistent detached copy attaches sequentially, reusing the established
 // classifier. There is no per-window/per-tick process creation. Its watchdog
 // bounds even a blocked Windows syscall, independently of the parent's heartbeat.
-func watchWorker(afterPID uint32) error {
+func watchWorker(afterPID, cooldownPID uint32) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
@@ -257,6 +263,7 @@ func watchWorker(afterPID uint32) error {
 	nextDiscovery := time.Time{}
 	encoder := json.NewEncoder(os.Stdout)
 	var eventCount uint64
+	cooldownUntil := time.Now().Add(30 * time.Second)
 	for {
 		scanStarted := time.Now()
 		deadline := time.AfterFunc(watchReadDeadline, func() { os.Exit(2) })
@@ -311,6 +318,10 @@ func watchWorker(afterPID uint32) error {
 				continue
 			}
 			batch.Alive[s.PID] = rootStarted.Format(time.RFC3339Nano)
+			if watchReadCoolingDown(s.PID, cooldownPID, time.Now(), cooldownUntil) {
+				batch.Unavailable = append(batch.Unavailable, s.PID)
+				continue
+			}
 			previous := cache[s.PID]
 			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && previous.sample.State != "unknown" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < watchScreenCacheLifetime(previous.sample.HWND, foreground) {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
@@ -319,8 +330,15 @@ func watchWorker(afterPID uint32) error {
 				batch.Samples = append(batch.Samples, sample)
 				continue
 			}
+			step := func(stage string) error {
+				batch.Stage = stage
+				return watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset)
+			}
+			if err := step("read.runtime"); err != nil {
+				return err
+			}
 			work := agyRuntimeWork(s, runtimeProcesses, commandLine, startTime)
-			r := doPeek(s.PID, 0)
+			r := peekWithBlankRetry(func() *peekResult { return doPeekProgress(s.PID, 0, step) }, time.Sleep)
 			if r.Error != "" {
 				batch.Failures = append(batch.Failures, watchReaderError{Code: "WR108", Stage: "read", PID: s.PID, Detail: r.Error})
 				if previous.sample.HWND != 0 && previous.sample.Started == s.Started && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) {
@@ -339,12 +357,15 @@ func watchWorker(afterPID uint32) error {
 				}
 				continue
 			}
+			if err := step("read.window"); err != nil {
+				return err
+			}
 			hwnd, _, _ := k32.NewProc("GetConsoleWindow").Call()
-			visible, _, _ := watchUser.NewProc("IsWindowVisible").Call(hwnd)
-			if visible == 0 {
+			hwnd = watchConsolePresentation(hwnd)
+			if hwnd == 0 {
 				batch.Unavailable = append(batch.Unavailable, s.PID)
 				continue
-			} // message-only ConPTY handles cannot be flashed
+			} // Detached or unowned pseudo consoles have no presentation window.
 			s.Title = r.Title
 			digest := sha256.Sum256([]byte(strings.Join(r.Lines, "\n")))
 			signature := hex.EncodeToString(digest[:8])
@@ -355,8 +376,14 @@ func watchWorker(afterPID uint32) error {
 			}
 			desktopID, desktop := previous.sample.DesktopID, previous.sample.Desktop
 			if previous.sample.RootStarted != rootStarted.Format(time.RFC3339Nano) || previous.sample.HWND != hwnd || time.Since(previous.desktopRead) >= 5*time.Second {
+				if err := step("read.desktop"); err != nil {
+					return err
+				}
 				desktopID, desktop = windowWatchDesktop(manager, hwnd, desktops)
 				previous.desktopRead = time.Now()
+			}
+			if err := step("read.classify"); err != nil {
+				return err
 			}
 			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop, Context: watchContext(r.Lines)}
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
@@ -381,7 +408,7 @@ func watchWorker(afterPID uint32) error {
 			if sample.Agents.Running != nil && *sample.Agents.Running > 0 {
 				sample.Working = true
 			}
-			if sample.Agents.Running != nil && *sample.Agents.Running > 0 && sample.PendingQuestions == 0 {
+			if sample.Agents.Running != nil && *sample.Agents.Running > 0 && sample.PendingQuestions == 0 && sample.State != "error" {
 				sample.State = "busy"
 				if sample.Phase != "error" {
 					sample.Phase = "working"
@@ -453,7 +480,13 @@ func (a *watchApp) collect() {
 		a.problemCode = failure.Code
 		a.recordReaderError(*failure)
 		a.readerRestarts++
-		a.tracker.unavailable("reader reconnecting; status unavailable", time.Now())
+		if failure.Code == "WR104" && a.readingPID != 0 && strings.HasPrefix(a.readerStage, "read") {
+			if entry := a.tracker.entries[a.readingPID]; entry != nil {
+				entry.unavailable("console timed out; cooling down", time.Now())
+			}
+		} else {
+			a.tracker.unavailable("reader reconnecting; status unavailable", time.Now())
+		}
 		a.save()
 		a.mu.Unlock()
 		select {
@@ -474,7 +507,11 @@ func (a *watchApp) readWorker() (result error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, "_watch-worker", strconv.FormatUint(uint64(a.readingPID), 10))
+	var cooldownPID uint32
+	if a.lastReaderError != nil && a.lastReaderError.Code == "WR104" && strings.HasPrefix(a.lastReaderError.Stage, "read") {
+		cooldownPID = a.lastReaderError.PID
+	}
+	cmd := exec.CommandContext(ctx, exe, "_watch-worker", strconv.FormatUint(uint64(a.readingPID), 10), strconv.FormatUint(uint64(cooldownPID), 10))
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.BELOW_NORMAL_PRIORITY_CLASS, HideWindow: true}
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -552,6 +589,12 @@ func (a *watchApp) readWorker() (result error) {
 				a.recordReaderError(failure)
 			}
 			a.readingPID = batch.ReadingPID
+			if batch.Partial && len(batch.Samples) == 0 && len(batch.Failures) == 0 && batch.Error == "" {
+				// Progress updates only refresh the watchdog and current stage.
+				// Avoid disk writes and desktop COM queries for every syscall.
+				a.mu.Unlock()
+				continue
+			}
 			if !batch.Partial {
 				a.lastScanMillis = batch.ScanMillis
 			}
@@ -573,6 +616,13 @@ func (a *watchApp) readWorker() (result error) {
 				alive[s.PID] = true
 				if a.tracker.observe(s, time.Now()) {
 					a.log(s)
+				}
+				if a.policyAttempts != nil && a.policyAttempts.ready(s, settings.InterruptPolicyBlock) {
+					select {
+					case a.policyQueue <- s:
+						a.policyAttempts[s.PID] = s.RootStarted
+					default: // Retry enqueueing next scan; never block the reader.
+					}
 				}
 			}
 			if !batch.Partial {

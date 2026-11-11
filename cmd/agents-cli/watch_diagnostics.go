@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -48,7 +49,7 @@ func (a *watchApp) recordReaderError(e watchReaderError) {
 	if e.Stage == "" {
 		e.Stage = a.readerStage
 	}
-	if e.PID == 0 && e.Stage == "read" {
+	if e.PID == 0 && (e.Stage == "read" || strings.HasPrefix(e.Stage, "read.")) {
 		e.PID = a.readingPID
 	}
 	if e.Code == "WR108" {

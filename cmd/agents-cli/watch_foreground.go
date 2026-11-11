@@ -9,6 +9,23 @@ import (
 
 var watchDWM = windows.NewLazySystemDLL("dwmapi.dll")
 
+func watchMovePointer(s watchSample) bool {
+	foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+	if foreground != s.HWND || !watchLiftIdentity(s) {
+		return false
+	}
+	var rect watchRect
+	if ok, _, _ := watchUser.NewProc("GetClientRect").Call(s.HWND, uintptr(unsafe.Pointer(&rect))); ok == 0 {
+		return false
+	}
+	point := watchPoint{(rect.Left + rect.Right) / 2, (rect.Top + rect.Bottom) / 2}
+	if ok, _, _ := watchUser.NewProc("ClientToScreen").Call(s.HWND, uintptr(unsafe.Pointer(&point))); ok == 0 {
+		return false
+	}
+	ok, _, _ := watchUser.NewProc("SetCursorPos").Call(uintptr(point.X), uintptr(point.Y))
+	return ok != 0
+}
+
 // Only explicit selections may temporarily join the topmost band. The panel
 // thread owns this state and releases it when focus leaves or the watcher exits.
 type watchForegroundLift struct {

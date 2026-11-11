@@ -115,7 +115,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 12
+			n = len(desktops) + 14
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -417,7 +417,7 @@ func watchPanel(a *watchApp) error {
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i >= len(desktops)+4 && i <= len(desktops)+6 {
+				} else if i >= len(desktops)+4 && i <= len(desktops)+8 {
 					switch i - len(desktops) {
 					case 4:
 						settings.DisableSelectionBlink = !settings.DisableSelectionBlink
@@ -429,26 +429,30 @@ func watchPanel(a *watchApp) error {
 						}
 					case 6:
 						settings.DisableDesktopSwitch = !settings.DisableDesktopSwitch
+					case 7:
+						settings.MovePointerOnShortcut = !settings.MovePointerOnShortcut
+					case 8:
+						settings.InterruptPolicyBlock = !settings.InterruptPolicyBlock
 					}
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(desktops)+7 {
+				} else if i == len(desktops)+9 {
 					settings.SelectionBlinkStyle = watchNextPulseStyle(settings.SelectionBlinkStyle)
 					watchCancelPulse()
 					_ = saveWatchSettings(a.dir, settings)
 					resize()
 					return 0
-				} else if i == len(desktops)+8 {
+				} else if i == len(desktops)+10 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+9 {
+				} else if i == len(desktops)+11 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+10 {
+				} else if i == len(desktops)+12 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(desktops) {
@@ -607,6 +611,8 @@ func watchPanel(a *watchApp) error {
 					{"Blink selected window", settings.DisableSelectionBlink},
 					{"Bring selected window forward", settings.DisableForeground},
 					{"Allow selection to switch desktops", settings.DisableDesktopSwitch},
+					{"Move pointer on shortcut", !settings.MovePointerOnShortcut},
+					{"Interrupt policy block once (Ctrl+C)", !settings.InterruptPolicyBlock},
 				} {
 					top += watchSettingsRowHeight
 					prefix := "[x] "

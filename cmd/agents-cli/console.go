@@ -261,14 +261,34 @@ func peekWithBlankRetry(read func() *peekResult, sleep func(time.Duration)) *pee
 }
 
 func doPeekOnce(pid uint32, above int) *peekResult {
+	return doPeekProgress(pid, above, func(string) error { return nil })
+}
+
+func doPeekProgress(pid uint32, above int, progress func(string) error) *peekResult {
 	r := &peekResult{Lines: []string{}}
+	step := func(stage string) bool {
+		if err := progress(stage); err != nil {
+			r.Error = err.Error()
+			return false
+		}
+		return true
+	}
+	if !step("read.attach") {
+		return r
+	}
 	if err := attach(pid); err != nil {
 		r.Error = err.Error()
 		return r
 	}
 	title := make([]uint16, 1024)
+	if !step("read.title") {
+		return r
+	}
 	if n, _, _ := pGetConsoleTitleW.Call(uintptr(unsafe.Pointer(&title[0])), uintptr(len(title))); n > 0 {
 		r.Title = windows.UTF16ToString(title[:n])
+	}
+	if !step("read.open") {
+		return r
 	}
 	h, err := openConsole("CONOUT$")
 	if err != nil {
@@ -277,6 +297,9 @@ func doPeekOnce(pid uint32, above int) *peekResult {
 	}
 	defer windows.CloseHandle(h)
 	var info screenBufferInfo
+	if !step("read.bounds") {
+		return r
+	}
 	if ok, _, e := pGetConsoleScreenBufferInfo.Call(uintptr(h), uintptr(unsafe.Pointer(&info))); ok == 0 {
 		r.Error = fmt.Sprintf("GetConsoleScreenBufferInfo: %v", e)
 		return r
@@ -300,6 +323,9 @@ func doPeekOnce(pid uint32, above int) *peekResult {
 	buf := make([]uint16, count)
 	var read uint32
 	at := uint32(uint16(top)) << 16
+	if !step("read.screen") {
+		return r
+	}
 	if ok, _, e := pReadConsoleOutputCharacterW.Call(uintptr(h), uintptr(unsafe.Pointer(&buf[0])), uintptr(count), uintptr(at), uintptr(unsafe.Pointer(&read))); ok == 0 {
 		r.Error = fmt.Sprintf("ReadConsoleOutputCharacter: %v", e)
 		return r
