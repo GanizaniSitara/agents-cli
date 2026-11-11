@@ -80,13 +80,13 @@ The watcher never switches desktops. Selection activates windows on the current 
 <p>Windows Terminal: selection also selects the session's tab. Its console title must match one unique tab;
 duplicate or overridden tab titles are refused (see <code>clicks.jsonl</code>).</p>
 <p>Settings controls selection blinking and foreground activation.
-<p>Suggest session names is off by default. Enable it, then click <b>name?</b> on an unnamed row
-to accept, edit or dismiss a suggestion from a visible user request. Accept changes the console/tab title once;
-existing useful names are preserved. Terminal tabs must allow application titles. No model calls are made.</p>
 Blink area: Header, Frame or Whole window. Whole window uses a translucent tint.
 Optional: move the mouse pointer on shortcuts; interrupt a policy block once with Ctrl+C.
 Both default off. Keyboard focus follows Bring selected window forward.
 A normal pulse matches the row colour.</p>
+<p>Suggest session names is off by default. Enable it, then click <b>name?</b> on an unnamed row
+to accept, edit or dismiss a suggestion from a visible user request. Accept changes the console/tab title once;
+existing useful names are preserved. Terminal tabs must allow application titles. No model calls are made.</p>
 <p><span class="blue">IDLE</span>: idle, not proof of completion.
 <span class="amber">NEEDS INPUT / QUESTION / REVIEW</span>: check the session.
 <span class="red">ERROR / BLOCKED</span>: error, exhausted quota or policy denial.

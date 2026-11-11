@@ -105,7 +105,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	class.Size = uint32(unsafe.Sizeof(class))
 	watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
 	defer watchUser.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(className)), instance)
-	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Suggested session name"))), 0x00c80000, 200, 200, 520, 210, 0, 0, instance, 0)
+	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Suggested session name"))), 0x00c80000, 200, 200, 520, 210, 0, 0, instance, 0)
 	if window == 0 {
 		review.Error = "Could not open name review."
 		return review
