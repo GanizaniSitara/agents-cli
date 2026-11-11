@@ -30,6 +30,15 @@ var (
 )
 
 func main() {
+	// An owner-opened editor waits for its owner, not the console-operation
+	// deadline. Its parent cancels it when the watcher exits; apply is bounded.
+	if len(os.Args) > 2 && os.Args[1] == "_attach" && os.Args[2] == "name-review" {
+		if err := helperMain(os.Args[2:]); err != nil {
+			emitError(err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && (os.Args[1] == "watch" || os.Args[1] == "_watch-worker") {
 		if err := runWatch(os.Args[1:]); err != nil {
 			emitError(err)

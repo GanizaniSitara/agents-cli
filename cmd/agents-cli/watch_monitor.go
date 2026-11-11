@@ -23,6 +23,7 @@ type watchMonitor struct {
 }
 
 type watchSettings struct {
+	SuggestSessionNames   bool        `json:"suggest_session_names,omitempty"`
 	SelectionBlinkStyle   string      `json:"selection_blink_style,omitempty"`
 	MovePointerOnShortcut bool        `json:"move_pointer_on_shortcut,omitempty"`
 	InterruptPolicyBlock  bool        `json:"interrupt_policy_block,omitempty"`

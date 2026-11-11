@@ -7,20 +7,22 @@ import (
 
 type watchSample struct {
 	Session
-	HWND             uintptr     `json:"hwnd"`
-	Signature        string      `json:"signature"`
-	DesktopID        string      `json:"desktop_id"`
-	Desktop          string      `json:"desktop"`
-	Agents           watchAgents `json:"agents"`
-	Phase            string      `json:"phase"`
-	Reason           string      `json:"reason,omitempty"`
-	Context          string      `json:"context,omitempty"`
-	RootStarted      string      `json:"root_started"`
-	WindowPID        uint32      `json:"window_pid"`
-	WindowStarted    string      `json:"window_started"`
-	WorkProcesses    int         `json:"work_processes,omitempty"`
-	PendingQuestions int         `json:"pending_questions,omitempty"`
-	Working          bool        `json:"working,omitempty"`
+	SuggestedName      string      `json:"suggested_name,omitempty"`
+	NamingAgentStarted string      `json:"naming_agent_started,omitempty"`
+	HWND               uintptr     `json:"hwnd"`
+	Signature          string      `json:"signature"`
+	DesktopID          string      `json:"desktop_id"`
+	Desktop            string      `json:"desktop"`
+	Agents             watchAgents `json:"agents"`
+	Phase              string      `json:"phase"`
+	Reason             string      `json:"reason,omitempty"`
+	Context            string      `json:"context,omitempty"`
+	RootStarted        string      `json:"root_started"`
+	WindowPID          uint32      `json:"window_pid"`
+	WindowStarted      string      `json:"window_started"`
+	WorkProcesses      int         `json:"work_processes,omitempty"`
+	PendingQuestions   int         `json:"pending_questions,omitempty"`
+	Working            bool        `json:"working,omitempty"`
 }
 
 type watchEntry struct {

@@ -81,10 +81,14 @@ func watchTerminalConsoleTitle() string {
 }
 
 func watchTerminalOwnerValid(s watchSample) bool {
+	return watchTerminalOwnerMatches(s, false)
+}
+
+func watchTerminalOwnerMatches(s watchSample, allowCloaked bool) bool {
 	hwnd, _, _ := k32.NewProc("GetConsoleWindow").Call()
 	var cloaked uint32
 	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(s.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
-	return int32(hr) >= 0 && cloaked == 0 && watchWindowClass(s.HWND) == "CASCADIA_HOSTING_WINDOW_CLASS" &&
+	return int32(hr) >= 0 && (allowCloaked || cloaked == 0) && watchWindowClass(s.HWND) == "CASCADIA_HOSTING_WINDOW_CLASS" &&
 		watchTargetProblem(s, watchReadTarget(s)) == "" && watchConsolePresentation(hwnd) == s.HWND
 }
 
@@ -113,12 +117,19 @@ func (o *watchUIAObject) name() (string, bool) {
 }
 
 func watchDoSelectTerminal(s watchSample) string {
+	return watchDoTerminalTab(s, false)
+}
+
+func watchDoTerminalTab(s watchSample, verifyOnly bool) string {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	if attach(s.PID) != nil || !watchTerminalOwnerValid(s) {
+	if attach(s.PID) != nil || !watchTerminalOwnerMatches(s, verifyOnly) {
 		return "terminal-console-changed"
 	}
 	title := watchTerminalConsoleTitle()
+	if verifyOnly {
+		title = s.Title
+	}
 	ole := windows.NewLazySystemDLL("ole32.dll")
 	hr, _, _ := ole.NewProc("CoInitializeEx").Call(0, 0) // MTA, separate helper
 	if int32(hr) < 0 {
@@ -181,6 +192,9 @@ func watchDoSelectTerminal(s watchSample) string {
 	index, problem := watchTerminalTabIndex(title, names)
 	if problem != "" {
 		return problem
+	}
+	if verifyOnly {
+		return ""
 	}
 	element := elements[index]
 	patternIID, _ := windows.GUIDFromString("{A8EFA66A-0FDA-421A-9194-38021F3578EA}")

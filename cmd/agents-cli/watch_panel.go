@@ -73,6 +73,17 @@ func watchPanel(a *watchApp) error {
 	terminalResults := make(chan watchTerminalResult, 1)
 	terminalContext, cancelTerminal := context.WithCancel(context.Background())
 	defer cancelTerminal()
+	nameRequests := make(chan watchSample)
+	go func() {
+		for {
+			select {
+			case <-terminalContext.Done():
+				return
+			case sample := <-nameRequests:
+				watchReviewName(terminalContext, a.dir, sample)
+			}
+		}
+	}()
 	a.ui.step("panel.start")
 	go a.monitorPanel(terminalContext)
 	shortcutProblem := ""
@@ -122,7 +133,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 13
+			n = len(desktops) + 14
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -467,15 +478,19 @@ func watchPanel(a *watchApp) error {
 					resize()
 					return 0
 				} else if i == len(desktops)+9 {
+					settings.SuggestSessionNames = !settings.SuggestSessionNames
+					_ = saveWatchSettings(a.dir, settings)
+					return 0
+				} else if i == len(desktops)+10 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+10 {
+				} else if i == len(desktops)+11 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+11 {
+				} else if i == len(desktops)+12 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(desktops) {
@@ -495,6 +510,15 @@ func watchPanel(a *watchApp) error {
 				}
 				menu = false
 				resize()
+				return 0
+			}
+			if p.Kind == "name" {
+				if settings.SuggestSessionNames && p.Row.Sample.SuggestedName != "" {
+					select {
+					case nameRequests <- p.Row.Sample:
+					default:
+					}
+				}
 				return 0
 			}
 			// Desktop summaries only change the panel view. Never fall through
@@ -568,6 +592,11 @@ func watchPanel(a *watchApp) error {
 			frame := painted
 			if !pressed.Active {
 				frame = newWatchPanelFrame(rows, summaries, offset, capacity, menu)
+				for i := range frame.Rows {
+					if !settings.SuggestSessionNames || frame.Rows[i].Parked {
+						frame.Rows[i].Sample.SuggestedName = ""
+					}
+				}
 				frame.Generation = painted.Generation + 1
 				var rect watchRect
 				watchUser.NewProc("GetWindowRect").Call(window, uintptr(unsafe.Pointer(&rect)))
@@ -648,6 +677,12 @@ func watchPanel(a *watchApp) error {
 				top += watchSettingsRowHeight
 				watchText(dc, "Blink area: "+watchPulseStyle(settings.SelectionBlinkStyle)+"  [change]", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
+				nameToggle := "[ ] Suggest session names"
+				if settings.SuggestSessionNames {
+					nameToggle = "[x] Suggest session names"
+				}
+				watchText(dc, nameToggle, 12, top+8, 350, top+35)
+				top += watchSettingsRowHeight
 				watchText(dc, helpLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				watchText(dc, "Exit", 12, top+8, 350, top+35)
@@ -710,7 +745,11 @@ func watchPanel(a *watchApp) error {
 						meta += " (view only)"
 					}
 					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 270, descriptionTop+35)
-					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 328, descriptionTop+35)
+					toolLabel := row.Sample.Tool
+					if settings.SuggestSessionNames && row.Sample.SuggestedName != "" {
+						toolLabel = "name?"
+					}
+					watchText(dc, toolLabel, 276, descriptionTop+18, 328, descriptionTop+35)
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}

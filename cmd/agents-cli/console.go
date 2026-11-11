@@ -182,12 +182,30 @@ func helperMain(args []string) error {
 	pid := uint32(pid64)
 	var result interface{}
 	switch args[0] {
-	case "terminal-select":
+	case "name-review", "name-apply":
+		var review watchNameReview
+		if err := json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&review); err != nil || review.Sample.PID != pid {
+			return errors.New("invalid naming identity")
+		}
+		if args[0] == "name-review" {
+			result = watchNameDialog(review, true)
+		} else {
+			if !loadWatchSettings(review.Dir).SuggestSessionNames {
+				result = errJSON(errors.New("Suggest session names is disabled."))
+			} else {
+				result = errJSON(watchDoRename(review.Sample, review.Name))
+			}
+		}
+	case "terminal-select", "terminal-title":
 		var sample watchSample
 		if err := json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&sample); err != nil || sample.PID != pid {
 			return errors.New("invalid terminal selection identity")
 		}
-		result = map[string]string{"Problem": watchDoSelectTerminal(sample)}
+		if args[0] == "terminal-title" {
+			result = map[string]string{"Problem": watchDoTerminalTab(sample, true)}
+		} else {
+			result = map[string]string{"Problem": watchDoSelectTerminal(sample)}
+		}
 	case "peek":
 		above := 0
 		if len(args) > 2 {

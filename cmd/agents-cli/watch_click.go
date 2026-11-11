@@ -78,6 +78,9 @@ func (f watchPanelFrame) hit(x, y int) watchPanelPress {
 	case (y-34)/watchRowHeight < len(f.Rows):
 		i := (y - 34) / watchRowHeight
 		p.Kind, p.Row, p.RowIndex = "row", f.Rows[i], f.Offset+i
+		if x >= 270 && x < 330 && (y-34)%watchRowHeight >= 34 && p.Row.Sample.SuggestedName != "" {
+			p.Kind = "name"
+		}
 	default:
 		if i := watchPanelSummaryIndex(y, len(f.Rows), len(f.Rows), len(f.Summaries)); i >= 0 {
 			p.Kind, p.Summary = "summary", f.Summaries[i]

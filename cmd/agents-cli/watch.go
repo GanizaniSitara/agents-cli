@@ -107,7 +107,11 @@ func runWatch(args []string) error {
 		if len(args) >= 3 {
 			cooldown, _ = strconv.ParseUint(args[2], 10, 32)
 		}
-		return watchWorker(uint32(after), uint32(cooldown))
+		dir, _ := watchDirectory(parsed{})
+		if len(args) >= 4 {
+			dir = args[3]
+		}
+		return watchWorker(uint32(after), uint32(cooldown), dir)
 	}
 	if len(args) == 1 || args[1] == "--help" || args[1] == "help" {
 		printHelp()
@@ -259,7 +263,7 @@ func runWatch(args []string) error {
 // One persistent detached copy attaches sequentially, reusing the established
 // classifier. There is no per-window/per-tick process creation. Its watchdog
 // bounds even a blocked Windows syscall, independently of the parent's heartbeat.
-func watchWorker(afterPID, cooldownPID uint32) error {
+func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
@@ -297,6 +301,8 @@ func watchWorker(afterPID, cooldownPID uint32) error {
 		batch.Desktops, batch.CurrentDesktop = desktops, watchCurrentDesktop()
 		batch.Stage = "discovery"
 		adopted := readAdopted()
+		namingEnabled := loadWatchSettings(dir).SuggestSessionNames
+		names := watchReadNames(dir)
 		dirty := drain()
 		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 		eventCount += uint64(len(dirty))
@@ -358,6 +364,7 @@ func watchWorker(afterPID, cooldownPID uint32) error {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s
+				watchApplyNameRecord(&sample, names, namingEnabled)
 				batch.Samples = append(batch.Samples, sample)
 				continue
 			}
@@ -420,6 +427,18 @@ func watchWorker(afterPID, cooldownPID uint32) error {
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
 			sample.WindowPID = watchWindowPID(hwnd)
 			sample.WindowStarted = startTime(sample.WindowPID).Format(time.RFC3339Nano)
+			if namingEnabled || len(names) > 0 {
+				sample.NamingAgentStarted = startTime(s.AgentPID).Format(time.RFC3339Nano)
+			}
+			if namingEnabled && time.Since(rootStarted) >= 15*time.Second {
+				if previous.sample.RootStarted == sample.RootStarted && previous.sample.AgentPID == sample.AgentPID && previous.sample.NamingAgentStarted == sample.NamingAgentStarted {
+					sample.SuggestedName = previous.sample.SuggestedName
+				}
+				if sample.SuggestedName == "" {
+					sample.SuggestedName = watchSuggestName(s, r.Lines)
+				}
+			}
+			watchApplyNameRecord(&sample, names, namingEnabled)
 			if s.Tool != "agy" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
 				sample.Phase, sample.Reason, sample.Agents = previous.sample.Phase, previous.sample.Reason, previous.sample.Agents
 			} else {
@@ -542,7 +561,7 @@ func (a *watchApp) readWorker() (result error) {
 	if a.lastReaderError != nil && a.lastReaderError.Code == "WR104" && strings.HasPrefix(a.lastReaderError.Stage, "read") {
 		cooldownPID = a.lastReaderError.PID
 	}
-	cmd := exec.CommandContext(ctx, exe, "_watch-worker", strconv.FormatUint(uint64(a.readingPID), 10), strconv.FormatUint(uint64(cooldownPID), 10))
+	cmd := exec.CommandContext(ctx, exe, "_watch-worker", strconv.FormatUint(uint64(a.readingPID), 10), strconv.FormatUint(uint64(cooldownPID), 10), a.dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.BELOW_NORMAL_PRIORITY_CLASS, HideWindow: true}
 	if output, err := os.OpenFile(filepath.Join(a.dir, "watcher.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
 		cmd.Stderr = output
