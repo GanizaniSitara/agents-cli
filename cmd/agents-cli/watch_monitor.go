@@ -23,6 +23,7 @@ type watchMonitor struct {
 }
 
 type watchSettings struct {
+	SelectionBlinkStyle   string      `json:"selection_blink_style,omitempty"`
 	DisableSelectionBlink bool        `json:"disable_selection_blink,omitempty"`
 	DisableForeground     bool        `json:"disable_foreground,omitempty"`
 	DisableDesktopSwitch  bool        `json:"disable_desktop_switch,omitempty"`

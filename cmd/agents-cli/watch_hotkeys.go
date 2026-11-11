@@ -202,7 +202,7 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 	}
 	if settings.DisableForeground {
 		if !settings.DisableSelectionBlink {
-			watchPulseWindow(row.Sample, pulseColour)
+			watchPulseWindow(row.Sample, pulseColour, settings.SelectionBlinkStyle)
 		}
 		a.logClick(p, releaseY, state, "foreground-disabled", false, false)
 		return
@@ -223,7 +223,7 @@ func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
 		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
 	}
 	if !settings.DisableSelectionBlink {
-		watchPulseWindow(row.Sample, pulseColour)
+		watchPulseWindow(row.Sample, pulseColour, settings.SelectionBlinkStyle)
 	}
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)
 	go func() {

@@ -115,7 +115,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 11
+			n = len(desktops) + 12
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -434,15 +434,21 @@ func watchPanel(a *watchApp) error {
 					resize()
 					return 0
 				} else if i == len(desktops)+7 {
+					settings.SelectionBlinkStyle = watchNextPulseStyle(settings.SelectionBlinkStyle)
+					watchCancelPulse()
+					_ = saveWatchSettings(a.dir, settings)
+					resize()
+					return 0
+				} else if i == len(desktops)+8 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+8 {
+				} else if i == len(desktops)+9 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+9 {
+				} else if i == len(desktops)+10 {
 					settings.Position = nil
 					_ = saveWatchSettings(a.dir, settings)
 				} else if i == len(desktops) {
@@ -609,6 +615,8 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, prefix+option.label, 12, top+8, 350, top+35)
 				}
+				top += watchSettingsRowHeight
+				watchText(dc, "Blink area: "+watchPulseStyle(settings.SelectionBlinkStyle)+"  [change]", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				watchText(dc, helpLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight

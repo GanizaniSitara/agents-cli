@@ -76,3 +76,25 @@ func TestWatchCancelPulse(t *testing.T) {
 		t.Fatal("pulse not cancelled")
 	}
 }
+
+func TestWatchPulseStyleCycle(t *testing.T) {
+	if watchPulseStyle("") != "Header" || watchPulseStyle("invalid") != "Header" {
+		t.Fatal("existing settings must retain header pulses")
+	}
+	style := ""
+	for _, want := range []string{"Frame", "Whole window", "Header"} {
+		style = watchNextPulseStyle(style)
+		if style != want {
+			t.Fatalf("pulse style %q, want %q", style, want)
+		}
+	}
+	dir := t.TempDir()
+	settings := watchSettings{SelectionBlinkStyle: "Whole window", DisableForeground: true}
+	if err := saveWatchSettings(dir, settings); err != nil {
+		t.Fatal(err)
+	}
+	loaded := loadWatchSettings(dir)
+	if loaded.SelectionBlinkStyle != "Whole window" || !loaded.DisableForeground {
+		t.Fatal("pulse style did not persist independently of foreground choice")
+	}
+}
