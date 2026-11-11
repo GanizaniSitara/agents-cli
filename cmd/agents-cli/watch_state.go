@@ -48,7 +48,7 @@ func watchActiveRows(rows []watchEntry, foreground uintptr) []watchEntry {
 	result := append([]watchEntry(nil), rows...)
 	for i := range result {
 		s := &result[i].Sample
-		if !result[i].Parked && foreground != 0 && s.HWND == foreground && s.State != "busy" && s.Phase != "error" {
+		if !result[i].Parked && foreground != 0 && s.HWND == foreground && s.State != "busy" && s.State != "error" && s.Phase != "error" && s.Phase != "blocked" {
 			s.Phase, s.Reason = "active", "active window"
 			result[i].Stopped = false
 		}
@@ -64,7 +64,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) bool {
 	if s.Agents.Running != nil && *s.Agents.Running > 0 {
 		s.Working = true
 	}
-	if s.Agents.Running != nil && *s.Agents.Running > 0 && s.PendingQuestions == 0 {
+	if s.Agents.Running != nil && *s.Agents.Running > 0 && s.PendingQuestions == 0 && s.State != "error" {
 		s.State = "busy"
 		if s.Phase != "error" {
 			s.Phase = "working"

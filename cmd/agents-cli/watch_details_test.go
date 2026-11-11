@@ -7,6 +7,44 @@ import (
 	"time"
 )
 
+func TestWatchCurrentQuotaAndPolicyFailures(t *testing.T) {
+	for _, tc := range []struct{ text, phase string }{
+		{"You've hit your usage limit. Try again later.", "error"},
+		{"Error: quota exceeded", "error"},
+		{"You have exhausted your premium request allowance.", "error"},
+		{"No remaining credits", "error"},
+		{"Error: This command is blocked by your organization's policy.", "blocked"},
+		{"Request denied by policy", "blocked"},
+		{"Blocked by enterprise policy", "blocked"},
+		{"Policy violation: tool execution not allowed", "blocked"},
+	} {
+		for _, tool := range []string{"copilot", "codex", "claude", "vibe", "agy"} {
+			if phase, _ := watchPhase(tool, []string{tc.text, ">"}, "idle"); phase != tc.phase {
+				t.Errorf("%s %q: %s, want %s", tool, tc.text, phase, tc.phase)
+			}
+		}
+	}
+	for _, lines := range [][]string{
+		{"Error: quota exceeded", "Retry succeeded", ">"},
+		{"Request denied by policy", "Command completed successfully", ">"},
+		{`> explain "Request denied by policy"`, ">"},
+		{"The documentation explains quota exceeded and policy violation messages.", ">"},
+	} {
+		phase, _ := watchPhase("copilot", lines, "busy")
+		if phase == "blocked" || phase == "error" {
+			t.Fatalf("history/draft/recovery became a current failure: %v", lines)
+		}
+	}
+	theme := defaultWatchTheme()
+	if theme.rowColour("blocked") != theme.rowColour("error") || watchProminentStatus("blocked") != "BLOCKED" {
+		t.Fatal("policy block must have red BLOCKED presentation")
+	}
+	rows := watchActiveRows([]watchEntry{{Sample: watchSample{Session: Session{State: "error"}, HWND: 10, Phase: "blocked"}}}, 10)
+	if rows[0].Sample.Phase != "blocked" {
+		t.Fatal("focusing a blocked session hid its failure")
+	}
+}
+
 func TestVisibleAgentCountsAndRunningGate(t *testing.T) {
 	for _, tool := range []string{"claude", "codex", "copilot"} {
 		a := watchAgentDetails(tool, []string{"old answer: 99 agents running", "────────", "❯", "────────", "2/3 agents running"})

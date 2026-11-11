@@ -21,6 +21,8 @@ var (
 	agentSummary     = regexp.MustCompile(`(?i)\bagents?:?\s+(\d+)\s*\(\s*(\d+)\s+running\s*\)`)
 	quotaAlert       = regexp.MustCompile(`(?i)^(?:you(?:'ve|’ve) (?:hit|reached) (?:your |the )?(?:usage|rate|weekly|monthly|session|token|credit) limit|you(?:'re|’re) out of (?:usage|credits|tokens)|(?:usage|rate|weekly|monthly|session|token|credit) limit (?:reached|exceeded)|quota (?:exceeded|exhausted)|out of quota|insufficient credits)`)
 	completionBanner = regexp.MustCompile(`(?i)^(?:task (?:complete|completed)|all done|completed successfully|work complete)[.!]?$`)
+	policyBlock      = regexp.MustCompile(`(?i)^(?:(?:this |the )?(?:request|command|tool|action|operation|execution|model) (?:is |was |has been )?(?:blocked|denied|disallowed|not allowed|disabled).{0,100}\bpolicy\b|(?:blocked|denied|disallowed) by (?:your |the |an? )?(?:(?:organization|organisation|enterprise|security|admin|administrator)\S* )?policy\b|policy (?:violation|denied|blocked)\b)`)
+	quotaExhausted   = regexp.MustCompile(`(?i)^(?:you have (?:exhausted|exceeded) (?:your |the )?(?:premium |monthly |weekly |daily )?(?:requests?|usage|credits?|tokens?|quota)\b|you have reached (?:your |the )?(?:premium |monthly |weekly |daily )?(?:request|usage|credit|token) (?:limit|quota)\b|you(?:'ve|’ve) hit your limit\b|you have no (?:premium requests|credits|tokens) left\b|(?:no|not enough) (?:remaining )?(?:credits|tokens|premium requests)\b|(?:premium )?request (?:limit|quota) (?:reached|exceeded|exhausted)\b)`)
 	ownerQuestion    = regexp.MustCompile(`(?i)\b(?:do you|would you|could (?:you|i|we)|can (?:you|i|we)|may (?:i|we)|should (?:i|we)|shall (?:i|we)|which|what|how|when|where|who|does (?:that|this)|is (?:it|that|this)|are you)\b[^?]*\?`)
 )
 
@@ -135,15 +137,25 @@ func watchPhase(tool string, lines []string, state string) (string, string) {
 		}
 	}
 	tail := trimBlankTail(lines)
+	latest := strings.Trim(strings.TrimSpace(watchLastOutput(tail)), "│ ║!✕×■⚠")
+	for _, prefix := range []string{"api error:", "error:", "fatal:"} {
+		if strings.HasPrefix(strings.ToLower(latest), prefix) {
+			latest = strings.TrimSpace(latest[len(prefix):])
+			break
+		}
+	}
+	if quotaAlert.MatchString(latest) || quotaExhausted.MatchString(latest) {
+		return "error", "usage limit / quota"
+	}
+	if policyBlock.MatchString(latest) {
+		return "blocked", "blocked by policy"
+	}
 	start := len(tail) - 18
 	if start < 0 {
 		start = 0
 	}
 	for _, line := range tail[start:] {
 		text := strings.Trim(strings.TrimSpace(line), "│ ║!✕×■⚠")
-		if quotaAlert.MatchString(text) {
-			return "error", "usage limit / quota"
-		}
 		lower := strings.ToLower(text)
 		if state != "busy" && (strings.HasPrefix(lower, "error:") || strings.HasPrefix(lower, "api error:") || strings.HasPrefix(lower, "fatal:") || strings.HasPrefix(lower, "connection failed")) {
 			return "error", "error on screen"

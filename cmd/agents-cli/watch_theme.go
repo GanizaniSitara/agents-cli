@@ -77,7 +77,7 @@ func (t watchTheme) rowColour(phase string) uintptr {
 		hex = t.Working
 	case "finished":
 		hex = t.Finished
-	case "error":
+	case "error", "blocked":
 		hex = t.Error
 	}
 	return t.colour(hex)
@@ -103,6 +103,8 @@ func watchProminentStatus(phase string) string {
 		return "FINISHED"
 	case "error":
 		return "ERROR"
+	case "blocked":
+		return "BLOCKED"
 	}
 	return ""
 }

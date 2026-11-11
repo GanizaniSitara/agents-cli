@@ -368,7 +368,7 @@ func watchWorker(afterPID uint32) error {
 				sample.Phase, sample.Reason = watchPhase(s.Tool, r.Lines, s.State)
 				sample.Agents = watchAgentDetails(s.Tool, r.Lines)
 			}
-			if sample.Phase == "error" {
+			if sample.Phase == "error" || sample.Phase == "blocked" {
 				sample.State = "error"
 			}
 			sample.WorkProcesses = work

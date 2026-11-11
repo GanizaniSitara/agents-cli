@@ -504,7 +504,7 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			if x >= 330 {
-				if (y-34)%watchRowHeight >= 36 {
+				if (y-34)%watchRowHeight >= 34 {
 					a.mu.Lock()
 					a.tracker.togglePark(row.Sample)
 					a.save()
@@ -683,11 +683,11 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, "x", 336, top+18, 358, top+36)
 					if row.Parked || watchCanPark(row.Sample) {
-						label := "Park"
+						label := "park"
 						if row.Parked {
 							label = "^"
 						}
-						watchText(dc, label, 330, top+36, 360, top+55)
+						watchText(dc, label, 330, descriptionTop+18, 360, descriptionTop+35)
 					}
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
