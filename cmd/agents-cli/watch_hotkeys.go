@@ -228,6 +228,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	// SwitchToThisWindow can post SC_RESTORE even for an existing window.
 	// Foreground activation alone lets the shell follow the explicit selection
 	// across desktops without an additional restore request.
+	a.ui.step("selection.foreground")
 	set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
 	if set != 0 {
 		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
@@ -236,6 +237,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 		}
 	}
 	if !settings.DisableSelectionBlink {
+		a.ui.step("selection.blink")
 		watchPulseWindow(row.Sample, pulseColour, settings.SelectionBlinkStyle)
 	}
 	a.logClick(p, releaseY, state, "activation-requested", true, set != 0)

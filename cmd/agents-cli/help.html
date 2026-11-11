@@ -98,6 +98,8 @@ Detection is heuristic; the console is authoritative.</p>
 WR103 invalid data       WR104 watchdog timeout
 WR105 reader exited      WR106 pipe failure
 WR107 discovery failed   WR108 console unreadable</pre>
+<p><code>watch\watcher.log</code>: startup, shutdown, fatal errors and slow panel stack snapshots.
+The previous log is retained when a launch rotates a file over 1 MB.</p>
 <p class="muted">Local files: %LOCALAPPDATA%\agents-cli (watcher state, send/stop logs).
 Review before sharing: status and click logs may include private names/titles.
 Logs begin with the updated EXE; they cannot recover earlier activity.</p>

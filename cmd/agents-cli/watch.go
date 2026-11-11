@@ -60,6 +60,7 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	ui                watchUIProbe
 	selectionID       uint64 // panel thread only
 	selectTerminal    func(watchTerminalRequest)
 	policyQueue       chan watchSample
@@ -159,8 +160,12 @@ func runWatch(args []string) error {
 			return err
 		}
 		childArgs := append([]string{"watch", "run"}, args[2:]...)
-		cmd := exec.Command(exe, childArgs...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.BELOW_NORMAL_PRIORITY_CLASS, HideWindow: true}
+		output, err := openWatchOutput(dir)
+		if err != nil {
+			return fmt.Errorf("watcher diagnostic log: %w", err)
+		}
+		defer output.Close()
+		cmd := watchBackgroundCommand(exe, childArgs, output)
 		if err := cmd.Start(); err != nil {
 			return err
 		}
@@ -237,7 +242,14 @@ func runWatch(args []string) error {
 	app.save()
 	go app.policyInterruptLoop()
 	go func() { defer close(collected); app.collect() }()
-	return watchPanel(app)
+	watchRuntimeEvent(dir, "started", "", 0)
+	err = watchPanel(app)
+	stage := "normal"
+	if err != nil {
+		stage = "error"
+	}
+	watchRuntimeEvent(dir, "exit", stage, 0)
+	return err
 }
 
 // One persistent detached copy attaches sequentially, reusing the established
@@ -522,6 +534,10 @@ func (a *watchApp) readWorker() (result error) {
 	}
 	cmd := exec.CommandContext(ctx, exe, "_watch-worker", strconv.FormatUint(uint64(a.readingPID), 10), strconv.FormatUint(uint64(cooldownPID), 10))
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.BELOW_NORMAL_PRIORITY_CLASS, HideWindow: true}
+	if output, err := os.OpenFile(filepath.Join(a.dir, "watcher.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
+		cmd.Stderr = output
+		defer output.Close()
+	}
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return watchReaderFailure("WR101", "startup", err)

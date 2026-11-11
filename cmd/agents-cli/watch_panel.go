@@ -73,6 +73,8 @@ func watchPanel(a *watchApp) error {
 	terminalResults := make(chan watchTerminalResult, 1)
 	terminalContext, cancelTerminal := context.WithCancel(context.Background())
 	defer cancelTerminal()
+	a.ui.step("panel.start")
+	go a.monitorPanel(terminalContext)
 	shortcutProblem := ""
 	firstRowProblem := ""
 	unregisterShortcut := func(id uintptr) { watchUser.NewProc("UnregisterHotKey").Call(hwnd, id) }
@@ -160,6 +162,8 @@ func watchPanel(a *watchApp) error {
 	inputFont, _, _ := watchGDI.NewProc("CreateFontW").Call(uintptr(fontHeight), 0, 0, 0, 700, 0, 0, 0, 1, 0, 0, 5, 0, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Segoe UI"))))
 	defer watchGDI.NewProc("DeleteObject").Call(inputFont)
 	proc := syscall.NewCallback(func(window uintptr, msg uint32, wp, lp uintptr) uintptr {
+		leave := a.ui.enter(fmt.Sprintf("message.%x", msg))
+		defer leave()
 		switch msg {
 		case 0x8002: // terminal helper completed; never block the UI on UIA
 			select {
@@ -284,11 +288,15 @@ func watchPanel(a *watchApp) error {
 					}
 				}
 			}
+			a.ui.step("timer.tracker-lock")
 			a.mu.Lock()
 			allRows := a.tracker.panelRows()
 			newDesktop := watchCurrentDesktop()
+			a.ui.step("timer.flash")
 			a.flashes.update(a.tracker.entries, newDesktop, watchFlash)
+			a.ui.step("timer.taskbar")
 			taskbarSignals.update(a.tracker.entries, newDesktop, taskbar.set)
+			a.ui.step("timer.layout")
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, settings.includedDesktops())
 			foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 			rows = watchActiveRows(rows, foreground)
@@ -735,6 +743,7 @@ func watchPanel(a *watchApp) error {
 			}
 			return 0
 		case 2:
+			watchRuntimeEvent(a.dir, "window-destroyed", "", 0)
 			watchUser.NewProc("PostQuitMessage").Call(0)
 			return 0
 		}
@@ -802,6 +811,7 @@ func watchPanel(a *watchApp) error {
 	resize()
 	watchUser.NewProc("SetTimer").Call(hwnd, 1, 1000, 0)
 	var msg watchMessage
+	a.ui.step("idle")
 	for {
 		r, _, err := watchUser.NewProc("GetMessageW").Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 		if int32(r) == -1 {
