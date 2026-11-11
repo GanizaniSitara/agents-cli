@@ -14,8 +14,28 @@ func TestWatchForegroundSubmissionBypassesScreenCache(t *testing.T) {
 		t.Fatal("focused session can retain stale waiting state after submission")
 	}
 	for _, pair := range [][2]uintptr{{10, 20}, {10, 0}, {0, 0}} {
-		if watchScreenCacheLifetime(pair[0], pair[1]) != 10*time.Second {
+		if ttl := watchScreenCacheLifetime(pair[0], pair[1]); ttl <= 0 || ttl > 3*time.Second {
 			t.Fatal("background or unknown window lost its bounded cache")
+		}
+	}
+}
+
+func TestWatchFocusedReadPrecedesBackgroundWithoutReorderingRest(t *testing.T) {
+	sessions := []Session{{PID: 1}, {PID: 2}, {PID: 3}, {PID: 4}}
+	ordered := watchPreferRead(sessions, 3)
+	for i, pid := range []uint32{3, 1, 2, 4} {
+		if ordered[i].PID != pid {
+			t.Fatalf("read order: %+v", ordered)
+		}
+	}
+	if sessions[0].PID != 1 || sessions[2].PID != 3 {
+		t.Fatal("changed discovery order in place")
+	}
+	for _, pid := range []uint32{0, 99} {
+		for i, s := range watchPreferRead(sessions, pid) {
+			if s.PID != sessions[i].PID {
+				t.Fatal("unknown foreground disturbed fairness")
+			}
 		}
 	}
 }

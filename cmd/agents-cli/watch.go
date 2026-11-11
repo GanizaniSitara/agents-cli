@@ -285,7 +285,7 @@ func watchWorker(afterPID, cooldownPID uint32) error {
 				nextDiscovery = time.Now().Add(2 * time.Second)
 			} else {
 				sessions = found
-				nextDiscovery = time.Now().Add(15 * time.Second)
+				nextDiscovery = time.Now().Add(5 * time.Second)
 			}
 		}
 		if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
@@ -299,7 +299,15 @@ func watchWorker(afterPID, cooldownPID uint32) error {
 				break
 			}
 		}
-		for _, s := range watchReadOrder(sessions, afterPID) {
+		ordered := watchReadOrder(sessions, afterPID)
+		var focusedPID uint32
+		for _, s := range ordered {
+			if cached := cache[s.PID]; foreground != 0 && cached.sample.HWND == foreground {
+				focusedPID = s.PID
+				break
+			}
+		}
+		for _, s := range watchPreferRead(ordered, focusedPID) {
 			batch.Stage = "read"
 			batch.ReadingPID = s.PID
 			if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {

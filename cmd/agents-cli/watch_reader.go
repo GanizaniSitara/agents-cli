@@ -15,7 +15,21 @@ func watchScreenCacheLifetime(hwnd, foreground uintptr) time.Duration {
 	if hwnd != 0 && hwnd == foreground {
 		return 0 // submissions must not depend on console-change events
 	}
-	return 10 * time.Second
+	// At the normal two-second cadence this permits only one cached scan.
+	// A missed console event must not leave a waiting row stale for ten seconds.
+	return 3 * time.Second
+}
+
+func watchPreferRead(sessions []Session, pid uint32) []Session {
+	for i, s := range sessions {
+		if pid != 0 && s.PID == pid && i > 0 {
+			ordered := make([]Session, 0, len(sessions))
+			ordered = append(ordered, s)
+			ordered = append(ordered, sessions[:i]...)
+			return append(ordered, sessions[i+1:]...)
+		}
+	}
+	return sessions
 }
 
 // A progressing scan can take longer than one read's hard deadline. Publish
