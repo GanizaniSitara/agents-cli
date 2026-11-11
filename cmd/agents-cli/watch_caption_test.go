@@ -41,6 +41,22 @@ func TestWatchCaptionNativePaint(t *testing.T) {
 			t.Fatalf("painted colour %#x, want %#x", actual, wanted)
 		}
 	}
+	watchConfigurePulse(hwnd, "Header", true)
+	var alpha byte
+	var key, flags uint32
+	ok, _, _ := watchUser.NewProc("GetLayeredWindowAttributes").Call(hwnd, uintptr(unsafe.Pointer(&key)), uintptr(unsafe.Pointer(&alpha)), uintptr(unsafe.Pointer(&flags)))
+	if ok == 0 || alpha != 100 || flags&2 == 0 {
+		t.Fatalf("Terminal pulse is opaque: alpha=%d flags=%d", alpha, flags)
+	}
+	watchUser.NewProc("SendMessageW").Call(hwnd, 0x318, dc, 4)
+	for y := uintptr(2); y < 22; y++ {
+		for x := uintptr(6); x < 150; x++ {
+			pixel, _, _ := watchGDI.NewProc("GetPixel").Call(dc, x, y)
+			if pixel != 0xFFFFFF {
+				t.Fatalf("Terminal pulse drew copied caption text at %d,%d", x, y)
+			}
+		}
+	}
 	actual, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 	if actual != foreground {
 		t.Fatal("caption painting stole focus")
@@ -74,6 +90,23 @@ func TestWatchCancelPulse(t *testing.T) {
 	watchCancelPulse()
 	if watchPulseGeneration.Load() == before {
 		t.Fatal("pulse not cancelled")
+	}
+}
+
+func TestWatchTerminalPulseKeepsOriginalHeaderVisible(t *testing.T) {
+	for _, style := range []string{"", "Header", "Whole window"} {
+		alpha, noText := watchPulseAppearance(style, true)
+		if alpha == 0 || alpha >= 255 || !noText {
+			t.Fatalf("Terminal %q hides or replaces its header: alpha=%d noText=%v", style, alpha, noText)
+		}
+	}
+	alpha, noText := watchPulseAppearance("Frame", true)
+	if alpha != 255 || !noText {
+		t.Fatal("frame should remain an opaque text-free border")
+	}
+	alpha, noText = watchPulseAppearance("Header", false)
+	if alpha != 255 || noText {
+		t.Fatal("classic console header changed")
 	}
 }
 

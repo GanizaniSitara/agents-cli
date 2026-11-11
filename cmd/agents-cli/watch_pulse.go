@@ -61,6 +61,21 @@ func watchNextPulseStyle(style string) string {
 	}
 }
 
+func watchPulseAppearance(style string, terminal bool) (alpha uintptr, noText bool) {
+	if watchPulseStyle(style) == "Whole window" || (terminal && watchPulseStyle(style) == "Header") {
+		return 100, true
+	}
+	return 255, watchPulseStyle(style) != "Header"
+}
+
+func watchConfigurePulse(overlay uintptr, style string, terminal bool) {
+	alpha, noText := watchPulseAppearance(style, terminal)
+	if noText {
+		watchUser.NewProc("SetPropW").Call(overlay, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIPulseNoText"))), 1)
+	}
+	watchUser.NewProc("SetLayeredWindowAttributes").Call(overlay, 0, alpha, 2)
+}
+
 func watchPulseBounds(target uintptr, style string) (watchRect, bool) {
 	if watchPulseStyle(style) == "Header" {
 		return watchPulseCaption(target)
@@ -101,10 +116,16 @@ func watchPulseWindow(sample watchSample, colour uintptr, style string) {
 				return
 			}
 			if pulse == 0 {
-				// Opaque, click-through band; the original window stays untouched.
+				// Terminal draws tabs in its header. Tint those existing tabs;
+				// never cover them with an opaque copy of the window's title.
+				terminal := watchWindowClass(target) == "CASCADIA_HOSTING_WINDOW_CLASS"
+				title := watchWindowTitle(target)
+				if terminal {
+					title = ""
+				}
 				overlay, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x080800A8,
 					uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLISelectionHeader"))),
-					uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(watchWindowTitle(target)))),
+					uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(title))),
 					0x80000000, 0, 0, 0, 0, 0, 0, 0, 0)
 				if overlay == 0 {
 					return
@@ -112,13 +133,7 @@ func watchPulseWindow(sample watchSample, colour uintptr, style string) {
 				if ok, _, _ := watchUser.NewProc("SetPropW").Call(overlay, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIPulseColour"))), colour+1); ok == 0 {
 					return
 				}
-				alpha := uintptr(255)
-				if style == "Whole window" {
-					alpha = 100
-				}
-				if style != "Header" {
-					watchUser.NewProc("SetPropW").Call(overlay, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIPulseNoText"))), 1)
-				}
+				watchConfigurePulse(overlay, style, terminal)
 				if style == "Frame" {
 					width, height := uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top)
 					if width <= 16 || height <= 16 {
@@ -145,7 +160,6 @@ func watchPulseWindow(sample watchSample, colour uintptr, style string) {
 						return
 					}
 				}
-				watchUser.NewProc("SetLayeredWindowAttributes").Call(overlay, 0, alpha, 2)
 			}
 			watchUser.NewProc("SetWindowPos").Call(overlay, ^uintptr(0), uintptr(r.Left), uintptr(r.Top), uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), 0x10|0x40)
 			watchUser.NewProc("UpdateWindow").Call(overlay)
