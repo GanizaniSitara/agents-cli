@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+func TestWatchForegroundSubmissionBypassesScreenCache(t *testing.T) {
+	if watchScreenCacheLifetime(10, 10) != 0 {
+		t.Fatal("focused session can retain stale waiting state after submission")
+	}
+	for _, pair := range [][2]uintptr{{10, 20}, {10, 0}, {0, 0}} {
+		if watchScreenCacheLifetime(pair[0], pair[1]) != 10*time.Second {
+			t.Fatal("background or unknown window lost its bounded cache")
+		}
+	}
+}
+
 // Ten slow synthetic reads exceed the former whole-scan four-second limit.
 // This child never discovers, attaches to, or writes to a real console.
 func watchSlowScanFixture() int {

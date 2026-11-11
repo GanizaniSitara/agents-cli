@@ -267,6 +267,7 @@ func watchWorker(afterPID uint32) error {
 		}
 		adopted := readAdopted()
 		dirty := drain()
+		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 		eventCount += uint64(len(dirty))
 		batch.ConsoleEvents = eventCount
 		if time.Now().After(nextDiscovery) {
@@ -311,7 +312,7 @@ func watchWorker(afterPID uint32) error {
 			}
 			batch.Alive[s.PID] = rootStarted.Format(time.RFC3339Nano)
 			previous := cache[s.PID]
-			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && previous.sample.State != "unknown" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < 10*time.Second {
+			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && previous.sample.State != "unknown" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < watchScreenCacheLifetime(previous.sample.HWND, foreground) {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s

@@ -7,6 +7,13 @@ const watchReadDeadline = 4 * time.Second
 // Allow a bounded read, the normal two-second pause and scheduling slack.
 const watchHeartbeatTimeout = 9 * time.Second
 
+func watchScreenCacheLifetime(hwnd, foreground uintptr) time.Duration {
+	if hwnd != 0 && hwnd == foreground {
+		return 0 // submissions must not depend on console-change events
+	}
+	return 10 * time.Second
+}
+
 // A progressing scan can take longer than one read's hard deadline. Publish
 // each completed row before the next read; partial batches cannot remove rows.
 func watchPublishProgress(batch watchBatch, published *int, encode func(any) error, reset func(time.Duration) bool) error {
