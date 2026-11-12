@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -53,7 +51,7 @@ func watchPanel(a *watchApp) error {
 	defer a.foregroundLift.release(watchLiftIdentity, watchSetLift)
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	name := windows.StringToUTF16Ptr("AgentsCLIWatchPanel")
-	settings := loadWatchSettings(a.dir)
+	settings := a.currentSettings()
 	theme := loadWatchTheme(a.dir)
 	menu := false
 	helpLabel := "Help"
@@ -159,7 +157,7 @@ func watchPanel(a *watchApp) error {
 		watchUser.NewProc("GetWindowRect").Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 		settings.Position = &watchPoint{rect.Left, rect.Top}
 		settings.Monitor = watchPositionMonitor(monitors, settings).Device
-		_ = saveWatchSettings(a.dir, settings)
+		a.persistSettings(settings)
 		resize()
 	}
 	moveDrag := func() {
@@ -223,7 +221,7 @@ func watchPanel(a *watchApp) error {
 			}
 			if lp == 0x202 {
 				settings.Hidden = false
-				_ = saveWatchSettings(a.dir, settings)
+				a.persistSettings(settings)
 				watchUser.NewProc("ShowWindow").Call(window, 4)
 				resize()
 			}
@@ -280,11 +278,9 @@ func watchPanel(a *watchApp) error {
 				}
 				return 0
 			}
-			if token, err := os.ReadFile(filepath.Join(a.dir, "stop")); err == nil {
-				if string(token) == startTime(uint32(os.Getpid())).Format(time.RFC3339Nano) {
-					watchUser.NewProc("DestroyWindow").Call(window)
-					return 0
-				}
+			if a.exitRequested.Load() {
+				watchUser.NewProc("DestroyWindow").Call(window)
+				return 0
 			}
 			// A nonactivating window may not receive mouse-up outside its
 			// visible area. Cancel that abandoned press without activating.
@@ -321,7 +317,7 @@ func watchPanel(a *watchApp) error {
 			// screen redraws and background desktop changes cannot wake it.
 			if wakeReady && newDesktop == currentDesktop && watchPanelNeedsWake(previousStates, wakeRows) && settings.Hidden {
 				settings.Hidden = false
-				_ = saveWatchSettings(a.dir, settings)
+				a.persistSettings(settings)
 				watchUser.NewProc("ShowWindow").Call(window, 4)
 			}
 			previousStates = watchPanelStates(wakeRows)
@@ -430,7 +426,7 @@ func watchPanel(a *watchApp) error {
 			if y < 34 {
 				if x >= 316 {
 					settings.Hidden = true
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					watchUser.NewProc("ShowWindow").Call(window, 0)
 					return 0
 				}
@@ -450,7 +446,7 @@ func watchPanel(a *watchApp) error {
 						return 0
 					}
 					settings.toggleDesktop(desktops[i].ID)
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					resize()
 					return 0
 				} else if i >= len(desktops)+4 && i <= len(desktops)+7 {
@@ -468,18 +464,18 @@ func watchPanel(a *watchApp) error {
 					case 7:
 						settings.InterruptPolicyBlock = !settings.InterruptPolicyBlock
 					}
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					resize()
 					return 0
 				} else if i == len(desktops)+8 {
 					settings.SelectionBlinkStyle = watchNextPulseStyle(settings.SelectionBlinkStyle)
 					watchCancelPulse()
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					resize()
 					return 0
 				} else if i == len(desktops)+9 {
 					settings.SuggestSessionNames = !settings.SuggestSessionNames
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					return 0
 				} else if i == len(desktops)+10 {
 					helpLabel = "Help"
@@ -492,17 +488,17 @@ func watchPanel(a *watchApp) error {
 					return 0
 				} else if i == len(desktops)+12 {
 					settings.Position = nil
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 				} else if i == len(desktops) {
 					settings.Shortcuts = watchNextShortcut(settings.Shortcuts)
 					applyShortcuts()
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					resize()
 					return 0
 				} else if i == len(desktops)+2 {
 					settings.FirstRowShortcut = watchNextFirstRowShortcut(settings.FirstRowShortcut)
 					applyFirstRowShortcut()
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					resize()
 					return 0
 				} else if i == len(desktops)+1 || i == len(desktops)+3 {
@@ -527,7 +523,7 @@ func watchPanel(a *watchApp) error {
 				if summary := p.Summary; summary.Toggle {
 					a.mu.Lock()
 					settings.toggleDesktop(summary.DesktopID)
-					_ = saveWatchSettings(a.dir, settings)
+					a.persistSettings(settings)
 					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
 					a.save()
 					a.mu.Unlock()
@@ -776,7 +772,7 @@ func watchPanel(a *watchApp) error {
 			}
 			return 0
 		case 2:
-			watchRuntimeEvent(a.dir, "window-destroyed", "", 0)
+			go watchRuntimeEvent(a.dir, "window-destroyed", "", 0)
 			watchUser.NewProc("PostQuitMessage").Call(0)
 			return 0
 		}

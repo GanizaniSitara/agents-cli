@@ -63,6 +63,10 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	exitRequested     atomic.Bool
+	settings          atomic.Pointer[watchSettings]
+	output            *watchOutput
+	started           string
 	desktop           atomic.Pointer[watchDesktopState]
 	ui                watchUIProbe
 	selectionID       uint64 // panel thread only
@@ -245,12 +249,24 @@ func runWatch(args []string) error {
 		}
 	}
 	collected := make(chan struct{})
+	app.started = startTime(uint32(os.Getpid())).Format(time.RFC3339Nano)
+	app.rememberSettings(loadWatchSettings(dir))
+	app.output = &watchOutput{}
+	outputDone := make(chan struct{})
+	go func() { defer close(outputDone); app.writeOutput() }()
+	go app.monitorStop()
 	defer func() {
 		close(app.stop)
 		// Let the collector cancel and reap its own reader before exiting.
 		select {
 		case <-collected:
 		case <-time.After(2 * time.Second):
+		}
+		// Normal exit flushes pending settings; a stuck filesystem must not
+		// turn watcher exit into an unbounded wait.
+		select {
+		case <-outputDone:
+		case <-time.After(250 * time.Millisecond):
 		}
 	}()
 	app.save()
@@ -497,23 +513,23 @@ func normalizeWatchStart(v string) string {
 	return t.Format(time.RFC3339)
 }
 
-func (a *watchApp) save() {
-	r := watchReceipt{PID: uint32(os.Getpid()), Started: startTime(uint32(os.Getpid())).Format(time.RFC3339Nano), Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
+func (a *watchApp) save() []byte {
+	r := watchReceipt{PID: uint32(os.Getpid()), Started: a.started, Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
 	r.BuildCommit = buildCommit
 	r.ErrorCode, r.ReaderStage, r.LastReaderError, r.ReaderErrorCounts = a.problemCode, a.readerStage, a.lastReaderError, a.readerErrorCounts
 	r.LastConsoleError = a.lastConsoleError
 	r.Shortcuts = a.shortcuts
 	r.ReaderRestarts, r.ReadingPID, r.LastScanMillis = a.readerRestarts, a.readingPID, a.lastScanMillis
 	r.CurrentDesktop = a.currentDesktop()
-	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, a.desktopList(), loadWatchSettings(a.dir).includedDesktops())
+	r.PanelRows, r.PanelSections = watchPanelLayout(r.Sessions, r.CurrentDesktop, a.desktopList(), a.currentSettings().includedDesktops())
 	for _, summary := range r.PanelSections {
 		r.PanelSummary = append(r.PanelSummary, summary.Text)
 	}
 	b, _ := json.MarshalIndent(r, "", "  ")
-	tmp := filepath.Join(a.dir, "status.tmp")
-	if err := os.WriteFile(tmp, b, 0600); err == nil {
-		_ = windows.MoveFileEx(windows.StringToUTF16Ptr(tmp), windows.StringToUTF16Ptr(filepath.Join(a.dir, "status.json")), windows.MOVEFILE_REPLACE_EXISTING)
+	if a.output != nil {
+		a.output.queueStatus(b)
 	}
+	return b
 }
 
 func (a *watchApp) collect() {
@@ -660,7 +676,7 @@ func (a *watchApp) readWorker() (result error) {
 				a.lastScanMillis = batch.ScanMillis
 			}
 			a.consoleEvents = batch.ConsoleEvents
-			settings := loadWatchSettings(a.dir)
+			settings := a.currentSettings()
 			alive := map[uint32]bool{}
 			if !batch.Partial {
 				for pid, root := range batch.Alive {
@@ -672,7 +688,7 @@ func (a *watchApp) readWorker() (result error) {
 			for _, s := range batch.Samples {
 				alive[s.PID] = true
 				if a.tracker.observe(s, time.Now()) {
-					a.log(s)
+					a.queueEvent(s)
 				}
 				if a.policyAttempts != nil && a.policyAttempts.ready(s, settings.InterruptPolicyBlock) {
 					select {
@@ -702,15 +718,6 @@ func (a *watchApp) readWorker() (result error) {
 			a.mu.Unlock()
 		}
 	}
-}
-
-func (a *watchApp) log(s watchSample) {
-	f, err := os.OpenFile(filepath.Join(a.dir, "events.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_ = json.NewEncoder(f).Encode(map[string]interface{}{"time": time.Now().Format(time.RFC3339), "pid": s.PID, "name": firstNonEmpty(s.Name, s.Title, strconv.Itoa(int(s.PID))), "waiting_on": firstNonEmpty(s.Reason, watchReason(s.State))})
 }
 
 func watchReason(state string) string {

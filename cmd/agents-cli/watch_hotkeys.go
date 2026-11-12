@@ -194,7 +194,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 		return
 	}
 	// Only a session click or an explicit session shortcut calls this path.
-	settings := loadWatchSettings(a.dir)
+	settings := a.currentSettings()
 	pulseColour := watchPulseColour(row, loadWatchTheme(a.dir), p.Trigger == "double-click")
 	var cloaked uint32
 	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)

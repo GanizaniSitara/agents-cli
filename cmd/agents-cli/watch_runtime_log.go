@@ -52,7 +52,7 @@ func watchRuntimeEvent(dir, event, stage string, elapsed time.Duration) {
 		Stage  string    `json:"stage,omitempty"`
 		Millis int64     `json:"elapsed_ms,omitempty"`
 	}{time.Now(), os.Getpid(), buildCommit, event, stage, elapsed.Milliseconds()})
-	if event == "panel-stall" {
+	if event == "panel-stall" || event == "output-stall" {
 		// Local diagnostic stack addresses/function names, not console buffers.
 		// One bounded snapshot per blocked operation; never a polling trace.
 		buf := make([]byte, 64<<10)
@@ -99,6 +99,11 @@ func (a *watchApp) monitorPanel(ctx context.Context) {
 		case now := <-tick.C:
 			if stage := a.ui.stalled(now); stage != nil {
 				watchRuntimeEvent(a.dir, "panel-stall", stage.name, now.Sub(stage.at))
+			}
+			if a.output != nil {
+				if stage := a.output.probe.stalled(now); stage != nil {
+					watchRuntimeEvent(a.dir, "output-stall", stage.name, now.Sub(stage.at))
+				}
 			}
 		}
 	}

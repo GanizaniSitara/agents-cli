@@ -29,7 +29,7 @@ func (a *watchApp) policyInterruptLoop() {
 		case <-a.stop:
 			return
 		case s := <-a.policyQueue:
-			if !loadWatchSettings(a.dir).InterruptPolicyBlock || watchTargetProblem(s, watchReadTarget(s)) != "" {
+			if !a.currentSettings().InterruptPolicyBlock || watchTargetProblem(s, watchReadTarget(s)) != "" {
 				continue
 			}
 			// Re-read immediately before interrupting: an old policy message
@@ -41,7 +41,7 @@ func (a *watchApp) policyInterruptLoop() {
 			if phase, _ := watchPhase(s.Tool, r.Lines, guessState(s.Tool, r.Lines)); phase != "blocked" {
 				continue
 			}
-			if !loadWatchSettings(a.dir).InterruptPolicyBlock || watchTargetProblem(s, watchReadTarget(s)) != "" {
+			if !a.currentSettings().InterruptPolicyBlock || watchTargetProblem(s, watchReadTarget(s)) != "" {
 				continue
 			}
 			select {

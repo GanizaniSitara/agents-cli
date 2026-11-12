@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -42,12 +40,8 @@ func TestWatchReaderDiagnosticsSurviveRecovery(t *testing.T) {
 	a.recordReaderError(watchReaderError{Code: "WR104", Detail: "reader watchdog expired"})
 	a.recordReaderError(watchReaderError{Code: "WR108", Stage: "read", PID: 88, Detail: "console unavailable"})
 	a.problem, a.problemCode = "", "" // successful reader recovery
-	a.save()
+	b := a.save()
 	var r watchReceipt
-	b, err := os.ReadFile(filepath.Join(a.dir, "status.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := json.Unmarshal(b, &r); err != nil {
 		t.Fatal(err)
 	}

@@ -11,11 +11,7 @@ func TestShortcutHealthRecordsRegistrationAndCollision(t *testing.T) {
 	a := &watchApp{dir: t.TempDir(), tracker: newWatchTracker(0)}
 	a.recordShortcut("numbered", "Ctrl+Alt+Shift", "")
 	a.recordShortcut("first_row", "Ctrl+Win+Z", "Unavailable: Ctrl+Win+Z; row 1 shortcut off")
-	a.save()
-	b, err := os.ReadFile(filepath.Join(a.dir, "status.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := a.save()
 	var receipt watchReceipt
 	if err := json.Unmarshal(b, &receipt); err != nil {
 		t.Fatal(err)
