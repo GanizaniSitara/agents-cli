@@ -740,12 +740,11 @@ func watchPanel(a *watchApp) error {
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
-					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 270, descriptionTop+35)
-					toolLabel := row.Sample.Tool
+					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 212, descriptionTop+35)
+					watchText(dc, row.Sample.Tool, 218, descriptionTop+18, 274, descriptionTop+35)
 					if settings.SuggestSessionNames && row.Sample.SuggestedName != "" {
-						toolLabel = "name?"
+						watchText(dc, "name?", 276, descriptionTop+18, 328, descriptionTop+35)
 					}
-					watchText(dc, toolLabel, 276, descriptionTop+18, 328, descriptionTop+35)
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}
