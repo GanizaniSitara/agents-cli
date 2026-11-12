@@ -6,7 +6,7 @@
 // agent, reads their screens, and writes keystrokes into their input buffers.
 //
 // House rules, shared with tasks-cli / oneshot-cli / mailkeep: a local binary,
-// JSON on stdout and nothing else, errors as JSON with a non-zero exit, no
+// JSON data on stdout, plain-text help, errors as JSON with a non-zero exit, no
 // daemon, no port, no MCP.
 //
 // Console access runs in a hidden child copy of this binary (the `_attach`
@@ -119,7 +119,22 @@ func emitError(err error) {
 }
 
 func printHelp() {
-	emit(map[string]string{"help": `agents-cli — list, read and drive agent TUIs (Claude, Codex, agy, Qwen, OpenCode, Copilot, Vibe)
+	fmt.Print(`agents-cli - watch, list, read and drive agent sessions
+
+WATCH
+  agents-cli watch start                 run the panel in the background
+  agents-cli watch run                   run the panel in the foreground
+  agents-cli watch list                  watcher status and sessions (JSON)
+  agents-cli watch stop                  exit the watcher; leave agents running
+  agents-cli help --open                 open the offline quick guide
+
+EXAMPLES
+  agents-cli ls
+  agents-cli tail 1234 --lines 20
+  agents-cli send 1234 "Check the latest test result"
+  agents-cli key 1234 enter
+
+COMMANDS
 
   ls    [--tool T] [--all] [--fast]        sessions: launch-info + process scan + adopted
   mute|unmute <ref>                       persistently disable/enable screen polling
@@ -133,9 +148,7 @@ func printHelp() {
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
   stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
   sends [--since 1d] [--limit 50]          read send/key audit (metadata only)
-  help --open                            open the included offline quick guide
-  watch start|run [--monitor N] [--stable 2s]  low-priority taskbar/tray watcher
-  watch list|stop                          stopped windows / stop only the watcher
+  watch start|run [--monitor N] [--stable 2s]
   watch monitors|desktops                  available screens and virtual desktops
   version
 
@@ -145,8 +158,9 @@ discovery and stdin (defaults: ls 60s, others 30s). Console helpers are capped a
 After a send timeout, inspect tail before retrying: input may already be delivered.
 
 <ref> is a pid (root cmd or agent process), a launch-info task slug, a label from
-'name', or a unique substring of the name/title. Output is JSON. Claude-to-Claude
+'name', or a unique substring of the name/title. Command data is JSON; help is text.
+Supported agents: Claude, Codex, agy, Qwen, OpenCode, Copilot and Vibe. Claude-to-Claude
 messaging should keep using the native SendMessage; 'send' refuses that pairing
 unless --force.
-`})
+`)
 }

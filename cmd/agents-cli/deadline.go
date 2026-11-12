@@ -55,6 +55,9 @@ func commandLimit(args []string) (time.Duration, error) {
 	if len(args) == 0 {
 		return limit, nil
 	}
+	if len(args) > 1 && (args[1] == "--help" || args[1] == "-h") {
+		return limit, nil
+	}
 	switch args[0] {
 	case "_attach":
 		return 15 * time.Second, nil

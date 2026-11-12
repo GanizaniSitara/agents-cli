@@ -113,7 +113,13 @@ func runWatch(args []string) error {
 		}
 		return watchWorker(uint32(after), uint32(cooldown), dir)
 	}
-	if len(args) == 1 || args[1] == "--help" || args[1] == "help" {
+	help := len(args) == 1
+	for _, arg := range args[1:] {
+		if arg == "--help" || arg == "-h" {
+			help = true
+		}
+	}
+	if help || args[1] == "help" {
 		printHelp()
 		return nil
 	}
