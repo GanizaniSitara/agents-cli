@@ -46,6 +46,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 				setText(status, "Applying title…")
 				applying = true
 				go func(r watchNameReview) {
+					r.Action = "accept" // Only the explicit Rename button authorizes application.
 					exe, _ := os.Executable()
 					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 					defer cancel()
@@ -105,7 +106,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	class.Size = uint32(unsafe.Sizeof(class))
 	watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
 	defer watchUser.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(className)), instance)
-	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Suggested session name"))), 0x00c80000, 200, 200, 520, 210, 0, 0, instance, 0)
+	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, 200, 200, 520, 270, 0, 0, instance, 0)
 	if window == 0 {
 		review.Error = "Could not open name review."
 		return review
@@ -116,13 +117,15 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 		watchUser.NewProc("SendMessageW").Call(child, 0x30, font, 1)
 		return child
 	}
-	create("STATIC", "Session "+strconv.FormatUint(uint64(review.Sample.PID), 10)+": accept changes its window or tab title.", 0, 14, 12, 480, 20, 0)
-	edit = create("EDIT", review.Name, 0x00810080, 14, 40, 480, 26, 10)
+	create("STATIC", "Current window/tab name:", 0, 14, 12, 480, 20, 0)
+	create("EDIT", review.Sample.Title, 0x00800880, 14, 34, 480, 26, 11) // Read-only; long titles can be scrolled.
+	create("STATIC", "Proposed name:", 0, 14, 68, 480, 20, 0)
+	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
-	status = create("STATIC", "Edit the suggestion, accept it, or dismiss it for this session.", 0, 14, 74, 480, 40, 0)
-	create("BUTTON", "Accept", 0x10001, 14, 120, 100, 28, 1)
-	create("BUTTON", "Dismiss", 0x10000, 124, 120, 100, 28, 3)
-	create("BUTTON", "Cancel", 0x10000, 234, 120, 100, 28, 2)
+	status = create("STATIC", "Only Rename changes the window/tab title. Cancel keeps its current name.", 0, 14, 124, 480, 40, 0)
+	create("BUTTON", "Rename", 0x10000, 14, 176, 100, 28, 1)
+	create("BUTTON", "Dismiss", 0x10000, 124, 176, 100, 28, 3)
+	create("BUTTON", "Cancel", 0x10001, 234, 176, 100, 28, 2)
 	if show {
 		// Detached helpers start hidden. SetWindowPos avoids the first
 		// ShowWindow call being overridden by STARTUPINFO's SW_HIDE.

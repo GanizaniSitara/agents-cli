@@ -169,12 +169,20 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 	if s.HWND == 0 {
 		t.Fatal("fixture has no real console")
 	}
+	// Conhost updates its caption asynchronously after SetConsoleTitleW.
+	initialDeadline := time.Now().Add(time.Second)
+	for watchWindowTitle(s.HWND) != s.Title && time.Now().Before(initialDeadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := watchWindowTitle(s.HWND); got != s.Title {
+		t.Fatalf("fixture initial caption %q, want %q", got, s.Title)
+	}
 	dir := t.TempDir()
 	if err := saveWatchSettings(dir, watchSettings{SuggestSessionNames: true}); err != nil {
 		t.Fatal(err)
 	}
-	apply := func(sample watchSample, name string) error {
-		r := watchNameReview{Dir: dir, Sample: sample, Name: name}
+	applyReview := func(sample watchSample, name, action string) error {
+		r := watchNameReview{Dir: dir, Sample: sample, Name: name, Action: action}
 		input, _ := json.Marshal(r)
 		cmd := helperCommand(ctx, os.Args[0], string(input), "name-apply", strconv.FormatUint(uint64(sample.PID), 10))
 		cmd.Env = append(os.Environ(), "AGENTS_CLI_TEST_NAME_HELPER=1")
@@ -184,6 +192,15 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 		}
 		return helperErr(out)
 	}
+	for _, action := range []string{"", "dismiss", "cancel"} {
+		if err := applyReview(s, "Unapproved title", action); err == nil || !strings.Contains(err.Error(), "explicit confirmation") {
+			t.Fatalf("unapproved action %q: %v", action, err)
+		}
+		if got := watchWindowTitle(s.HWND); got != "codex" {
+			t.Fatalf("unapproved rename changed title to %q", got)
+		}
+	}
+	apply := func(sample watchSample, name string) error { return applyReview(sample, name, "accept") }
 	stale := s
 	stale.RootStarted = "reused"
 	if apply(stale, "Wrong session") == nil {
@@ -221,6 +238,9 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 			if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) {
 				edit := watchDialogItem(h, 10)
 				if edit != 0 && watchDialogItem(h, 3) != 0 {
+					if got := watchWindowTitle(watchDialogItem(h, 11)); got != s.Title {
+						t.Errorf("confirmation current title %q, want %q", got, s.Title)
+					}
 					watchUser.NewProc("SetWindowTextW").Call(edit, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Edited approved title"))))
 					watchUser.NewProc("PostMessageW").Call(h, 0x111, 1, 0)
 					return
