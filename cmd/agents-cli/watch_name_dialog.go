@@ -129,7 +129,9 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
 	defer watchUser.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(className)), instance)
 	position := watchNameDialogOrigin(400, 214)
-	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, uintptr(position.X), uintptr(position.Y), 400, 214, 0, 0, instance, 0)
+	// An owned window stays above its owner even when the watcher refresh raises it.
+	owner, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIWatchPanel"))), 0)
+	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, uintptr(position.X), uintptr(position.Y), 400, 214, owner, 0, instance, 0)
 	if window == 0 {
 		review.Error = "Could not open name review."
 		return review
@@ -159,7 +161,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	if show {
 		// Detached helpers start hidden. SetWindowPos avoids the first
 		// ShowWindow call being overridden by STARTUPINFO's SW_HIDE.
-		watchUser.NewProc("SetWindowPos").Call(window, 0, 0, 0, 0, 0, 0x1|0x2|0x4|0x40)
+		watchUser.NewProc("SetWindowPos").Call(window, ^uintptr(0), 0, 0, 0, 0, 0x1|0x2|0x40)
 		watchUser.NewProc("SetForegroundWindow").Call(window)
 		watchSelectNameEdit(edit, true)
 	}

@@ -186,6 +186,11 @@ func TestWatchNameDialogCancelNative(t *testing.T) {
 				h, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLINameReview"))), 0)
 				if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) && watchDialogItem(h, 5) != 0 {
 					var rect watchRect
+					panel, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIWatchPanel"))), 0)
+					owner, _, _ := watchUser.NewProc("GetWindow").Call(h, 4) // GW_OWNER
+					if owner != panel {
+						t.Error("rename dialog must be owned by watcher to stay above refreshes")
+					}
 					watchUser.NewProc("GetWindowRect").Call(h, uintptr(unsafe.Pointer(&rect)))
 					want := watchNameDialogOrigin(400, 214)
 					if rect.Left != want.X || rect.Top != want.Y {
@@ -317,8 +322,8 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 					if def != 0x534b0001 {
 						t.Errorf("Rename is not the default: %x", def)
 					}
-					// Send Enter through the real dialog keyboard path, not WM_COMMAND.
-					watchUser.NewProc("PostMessageW").Call(edit, 0x100, 13, 1)
+					// Exercise the actual button click handler without activating the hidden fixture.
+					watchUser.NewProc("PostMessageW").Call(watchDialogItem(h, 1), 0xf5, 0, 0) // BM_CLICK
 					return
 				}
 			}
