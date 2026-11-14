@@ -17,13 +17,17 @@ import (
 )
 
 type watchNameRecord struct {
-	Name      string `json:"name,omitempty"`
-	Dismissed bool   `json:"dismissed,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Dismissed  bool   `json:"dismissed,omitempty"`
+	Suggestion string `json:"suggestion,omitempty"`
 }
 
 func watchApplyNameRecord(s *watchSample, names map[string]watchNameRecord, enabled bool) {
 	if r, ok := names[watchNameKey(*s)]; ok {
 		s.SuggestedName = ""
+		if r.Suggestion != "" && enabled && watchGenericTitle(s.Session) {
+			s.SuggestedName = r.Suggestion
+		}
 		if r.Name != "" && s.Name == "" && (s.Title == r.Name || watchGenericTitle(s.Session)) {
 			s.Name = r.Name
 		}
@@ -128,7 +132,7 @@ func watchSuggestName(s Session, lines []string) string {
 			continue
 		}
 		skip := false
-		for _, prefix := range []string{"ask codex", "try ", "type your", "help ", "git ", "npm ", "go ", "python ", "curl ", "user:", "system:", "please rename", "rename title", "rename this window"} {
+		for _, prefix := range []string{"ask codex", "try ", "type your", "help ", "git ", "npm ", "go ", "python ", "curl ", "user:", "system:", "please rename", "rename title", "rename this window", "agents-cli naming request"} {
 			if strings.HasPrefix(lower, prefix) {
 				skip = true
 			}

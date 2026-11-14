@@ -182,13 +182,20 @@ func helperMain(args []string) error {
 	pid := uint32(pid64)
 	var result interface{}
 	switch args[0] {
-	case "name-review", "name-apply":
+	case "name-review", "name-apply", "name-suggest":
 		var review watchNameReview
 		if err := json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&review); err != nil || review.Sample.PID != pid {
 			return errors.New("invalid naming identity")
 		}
 		if args[0] == "name-review" {
 			result = watchNameDialog(review, true)
+		} else if args[0] == "name-suggest" {
+			name, err := watchAskAgentName(review)
+			review.Name = name
+			if err != nil {
+				review.Error = err.Error()
+			}
+			result = review
 		} else {
 			if review.Action != "accept" {
 				result = errJSON(errors.New("Rename requires explicit confirmation."))

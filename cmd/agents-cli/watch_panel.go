@@ -509,7 +509,7 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			if p.Kind == "name" {
-				if settings.SuggestSessionNames && p.Row.Sample.SuggestedName != "" {
+				if settings.SuggestSessionNames && watchCanReviewName(p.Row.Sample) {
 					select {
 					case nameRequests <- p.Row.Sample:
 					default:
@@ -591,6 +591,7 @@ func watchPanel(a *watchApp) error {
 				for i := range frame.Rows {
 					if !settings.SuggestSessionNames || frame.Rows[i].Parked {
 						frame.Rows[i].Sample.SuggestedName = ""
+						frame.Rows[i].Sample.NamingAgentStarted = ""
 					}
 				}
 				frame.Generation = painted.Generation + 1
@@ -742,7 +743,7 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 212, descriptionTop+35)
 					watchText(dc, row.Sample.Tool, 218, descriptionTop+18, 274, descriptionTop+35)
-					if settings.SuggestSessionNames && row.Sample.SuggestedName != "" {
+					if settings.SuggestSessionNames && watchCanReviewName(row.Sample) {
 						watchText(dc, "name?", 276, descriptionTop+18, 328, descriptionTop+35)
 					}
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {

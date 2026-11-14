@@ -48,6 +48,9 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	defer runtime.UnlockOSThread()
 	var edit, status, window uintptr
 	applying := false
+	suggesting := false
+	suggestions := make(chan watchNameReview, 1)
+	var cancelSuggestion context.CancelFunc
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	setText := func(h uintptr, text string) {
 		watchUser.NewProc("SetWindowTextW").Call(h, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(text))))
@@ -55,6 +58,11 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	proc := syscall.NewCallback(func(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		switch msg {
 		case 0x10:
+			if suggesting && cancelSuggestion != nil {
+				cancelSuggestion()
+				watchUser.NewProc("DestroyWindow").Call(hwnd)
+				return 0
+			}
 			if applying {
 				return 0
 			}
@@ -96,6 +104,11 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 				watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 1), 0)
 				return 0
 			case 2:
+				if suggesting && cancelSuggestion != nil {
+					cancelSuggestion()
+					watchUser.NewProc("DestroyWindow").Call(hwnd)
+					return 0
+				}
 				if applying {
 					return 0
 				}
@@ -108,7 +121,47 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 				review.Action = "dismiss"
 				watchUser.NewProc("DestroyWindow").Call(hwnd)
 				return 0
+			case 4:
+				if applying {
+					return 0
+				}
+				applying, suggesting = true, true
+				setText(status, "Asking this agent for a name (up to one minute). No title change.")
+				watchUser.NewProc("EnableWindow").Call(edit, 0)
+				watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 1), 0)
+				watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 4), 0)
+				ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+				cancelSuggestion = cancel
+				go func(r watchNameReview) {
+					defer cancel()
+					r.Action = "suggest"
+					input, _ := json.Marshal(r)
+					exe, _ := os.Executable()
+					cmd := helperCommand(ctx, exe, string(input), "name-suggest", strconv.FormatUint(uint64(r.Sample.PID), 10))
+					cmd.WaitDelay = 250 * time.Millisecond
+					out, err := cmd.Output()
+					var result watchNameReview
+					if err != nil || json.Unmarshal(out, &result) != nil {
+						result.Error = "Naming request failed or timed out. Check the agent before retrying."
+					}
+					suggestions <- result
+					watchUser.NewProc("PostMessageW").Call(hwnd, 0x8002, 0, 0)
+				}(review)
+				return 0
 			}
+		case 0x8002:
+			result := <-suggestions
+			applying, suggesting = false, false
+			watchUser.NewProc("EnableWindow").Call(edit, 1)
+			watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 1), 1)
+			watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 4), 1)
+			if result.Error != "" {
+				setText(status, result.Error)
+			} else {
+				setText(edit, result.Name)
+				setText(status, "Agent suggestion ready. Edit it or click Rename to apply.")
+			}
+			return 0
 		case 0x8001:
 			applying = false
 			problem := <-nameDialogResults
@@ -151,7 +204,8 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	create("STATIC", "Proposed name:", 0, 14, 68, 480, 20, 0)
 	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
-	status = create("STATIC", "Only Rename changes the window/tab title. Cancel keeps its current name.", 0, 14, 124, 480, 40, 0)
+	status = create("STATIC", "Ask agent sends a naming request to this idle session. Only Rename changes its title.", 0, 14, 124, 480, 40, 0)
+	create("BUTTON", "Ask agent", 0x10000, 14, 176, 100, 28, 4)
 	create("BUTTON", "Rename", 0x10000, 174, 176, 100, 28, 1)
 	create("BUTTON", "Dismiss", 0x10000, 284, 176, 100, 28, 3)
 	create("BUTTON", "Cancel", 0x10001, 394, 176, 100, 28, 2)
