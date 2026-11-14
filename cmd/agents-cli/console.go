@@ -200,7 +200,7 @@ func helperMain(args []string) error {
 			if review.Action != "accept" {
 				result = errJSON(errors.New("Rename requires explicit confirmation."))
 			} else {
-				result = errJSON(watchDoRename(review.Sample, review.Name))
+				result = errJSON(watchApplyReviewedName(review))
 			}
 		}
 	case "terminal-select", "terminal-title":

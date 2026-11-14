@@ -60,6 +60,9 @@ func commandLimit(args []string) (time.Duration, error) {
 	}
 	switch args[0] {
 	case "_attach":
+		if len(args) > 1 && args[1] == "name-apply" {
+			return 30 * time.Second, nil
+		}
 		if len(args) > 1 && args[1] == "name-suggest" {
 			return 75 * time.Second, nil
 		}

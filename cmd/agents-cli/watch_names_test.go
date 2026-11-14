@@ -196,13 +196,17 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 					if start != 0 || end != uint32(len("Fix refresh hangs")) {
 						t.Errorf("name must start selected for overwrite: %d..%d", start, end)
 					}
+					checked, _, _ := watchUser.NewProc("SendMessageW").Call(watchDialogItem(h, 5), 0xf0, 0, 0)
+					if checked != 1 {
+						t.Error("requested native session rename not selected")
+					}
 					watchUser.NewProc("PostMessageW").Call(h, 0x111, id, 0)
 					return
 				}
 				time.Sleep(10 * time.Millisecond)
 			}
 		}(tc.id)
-		got := watchNameDialog(watchNameReview{Name: "Fix refresh hangs"}, false)
+		got := watchNameDialog(watchNameReview{Name: "Fix refresh hangs", Sample: watchSample{Session: Session{Tool: "agy"}}, RenameSession: true}, false)
 		<-done
 		if got.Action != tc.want {
 			t.Fatalf("action %q want %q", got.Action, tc.want)

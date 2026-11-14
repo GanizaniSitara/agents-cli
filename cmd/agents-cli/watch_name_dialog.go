@@ -77,16 +77,18 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 				var text [256]uint16
 				watchUser.NewProc("GetWindowTextW").Call(edit, uintptr(unsafe.Pointer(&text[0])), uintptr(len(text)))
 				review.Name = windows.UTF16ToString(text[:])
+				checked, _, _ := watchUser.NewProc("SendMessageW").Call(watchDialogItem(hwnd, 5), 0xf0, 0, 0) // BM_GETCHECK
+				review.RenameSession = checked == 1
 				if !watchValidName(review.Name) {
 					setText(status, "Use 1–80 characters, without control characters.")
 					return 0
 				}
-				setText(status, "Applying title…")
+				setText(status, "Applying rename…")
 				applying = true
 				go func(r watchNameReview) {
 					r.Action = "accept" // Only the explicit Rename button authorizes application.
 					exe, _ := os.Executable()
-					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 					defer cancel()
 					input, _ := json.Marshal(r)
 					cmd := helperCommand(ctx, exe, string(input), "name-apply", strconv.FormatUint(uint64(r.Sample.PID), 10))
@@ -94,7 +96,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 					out, err := cmd.Output()
 					problem := ""
 					if err != nil {
-						problem = "Title helper failed or timed out."
+						problem = "Rename timed out or failed. Check the session before retrying."
 					} else if err = helperErr(out); err != nil {
 						problem = err.Error()
 					}
@@ -209,14 +211,22 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
 	watchSelectNameEdit(edit, false)
-	status = create("STATIC", "Ask agent sends a naming request to this idle session. Only Rename changes its title.", 0, 14, 124, 480, 40, 0)
-	create("BUTTON", "Ask agent", 0x10000, 14, 176, 100, 28, 4)
-	create("BUTTON", "Rename", 0x10001, 174, 176, 100, 28, 1)
-	create("BUTTON", "Dismiss", 0x10000, 284, 176, 100, 28, 3)
-	create("BUTTON", "Cancel", 0x10000, 394, 176, 100, 28, 2)
+	if watchHarnessRenameSupported(review.Sample.Tool) {
+		check := create("BUTTON", "Also rename the harness session (requires idle)", 0x10003, 14, 124, 480, 22, 5)
+		if review.RenameSession {
+			watchUser.NewProc("SendMessageW").Call(check, 0xf1, 1, 0) // BM_SETCHECK
+		}
+	} else {
+		create("STATIC", "Window/tab title only for this harness.", 0, 14, 124, 480, 22, 0)
+	}
+	status = create("STATIC", "Ask agent requests a suggestion. Rename applies the changes selected above.", 0, 14, 150, 480, 40, 0)
+	create("BUTTON", "Ask agent", 0x10000, 14, 196, 100, 28, 4)
+	create("BUTTON", "Rename", 0x10001, 174, 196, 100, 28, 1)
+	create("BUTTON", "Dismiss", 0x10000, 284, 196, 100, 28, 3)
+	create("BUTTON", "Cancel", 0x10000, 394, 196, 100, 28, 2)
 	if !loadWatchSettings(review.Dir).SuggestSessionNames {
 		watchUser.NewProc("EnableWindow").Call(watchDialogItem(window, 4), 0)
-		setText(status, "Rename changes this window/tab title. Enable naming suggestions in Settings to use Ask agent.")
+		setText(status, "Rename applies the selected changes. Enable naming suggestions in Settings to use Ask agent.")
 	}
 	if show {
 		// Detached helpers start hidden. SetWindowPos avoids the first
