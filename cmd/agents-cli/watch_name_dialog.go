@@ -16,10 +16,7 @@ import (
 // A separate, explicitly opened window keeps editing and native title work off
 // the watcher thread. Nothing is shown until the owner clicks "rename".
 func watchNameDialogPosition(anchor, area watchRect, width, height int32) watchPoint {
-	p := watchPoint{anchor.Right + 8, anchor.Top}
-	if p.X+width > area.Right {
-		p.X = anchor.Left - width - 8
-	}
+	p := watchPoint{anchor.Left, anchor.Top}
 	return watchPanelPosition(area, width, height, &p)
 }
 

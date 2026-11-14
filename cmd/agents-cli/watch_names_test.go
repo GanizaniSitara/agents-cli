@@ -39,17 +39,17 @@ func watchNameFixtureMain() bool {
 	return true
 }
 
-func TestWatchNameDialogNearPanel(t *testing.T) {
+func TestWatchNameDialogOverPanel(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		anchor, area watchRect
 		want         watchPoint
 	}{
-		{"right", watchRect{20, 40, 380, 440}, watchRect{0, 0, 1920, 1040}, watchPoint{388, 40}},
-		{"left", watchRect{1550, 40, 1910, 440}, watchRect{0, 0, 1920, 1040}, watchPoint{1022, 40}},
-		{"bottom", watchRect{20, 800, 380, 1040}, watchRect{0, 0, 1920, 1040}, watchPoint{388, 770}},
-		{"negative monitor", watchRect{-370, -700, -10, -300}, watchRect{-1080, -1000, 0, 920}, watchPoint{-898, -700}},
-		{"narrow monitor", watchRect{40, 20, 400, 500}, watchRect{0, 0, 800, 600}, watchPoint{0, 20}},
+		{"right", watchRect{20, 40, 380, 440}, watchRect{0, 0, 1920, 1040}, watchPoint{20, 40}},
+		{"left", watchRect{1550, 40, 1910, 440}, watchRect{0, 0, 1920, 1040}, watchPoint{1400, 40}},
+		{"bottom", watchRect{20, 800, 380, 1040}, watchRect{0, 0, 1920, 1040}, watchPoint{20, 770}},
+		{"negative monitor", watchRect{-370, -700, -10, -300}, watchRect{-1080, -1000, 0, 920}, watchPoint{-520, -700}},
+		{"narrow monitor", watchRect{40, 20, 400, 500}, watchRect{0, 0, 800, 600}, watchPoint{40, 20}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := watchNameDialogPosition(tc.anchor, tc.area, 520, 270); got != tc.want {
