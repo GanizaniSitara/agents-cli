@@ -152,9 +152,9 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
 	status = create("STATIC", "Only Rename changes the window/tab title. Cancel keeps its current name.", 0, 14, 124, 480, 40, 0)
-	create("BUTTON", "Rename", 0x10000, 14, 176, 100, 28, 1)
-	create("BUTTON", "Dismiss", 0x10000, 124, 176, 100, 28, 3)
-	create("BUTTON", "Cancel", 0x10001, 234, 176, 100, 28, 2)
+	create("BUTTON", "Rename", 0x10000, 174, 176, 100, 28, 1)
+	create("BUTTON", "Dismiss", 0x10000, 284, 176, 100, 28, 3)
+	create("BUTTON", "Cancel", 0x10001, 394, 176, 100, 28, 2)
 	if show {
 		// Detached helpers start hidden. SetWindowPos avoids the first
 		// ShowWindow call being overridden by STARTUPINFO's SW_HIDE.
