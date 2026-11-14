@@ -50,6 +50,7 @@ func TestWatchNameSuggestionConservative(t *testing.T) {
 		{[]string{"› Ask Codex to do anything"}, ""},
 		{[]string{"❯ git status --short"}, ""},
 		{[]string{"› /rename this session"}, ""},
+		{[]string{"> Please rename title of this window to whichever conversation", "● Ran 3 commands"}, ""},
 		{[]string{"› https://private.example/path investigate this"}, ""},
 	} {
 		if got := watchSuggestName(s, tc.lines); got != tc.want {
@@ -133,8 +134,14 @@ func TestWatchNameSettingsAndDecisionsPersist(t *testing.T) {
 }
 
 func TestWatchNameHitIsNotActivation(t *testing.T) {
-	row := watchEntry{Sample: watchSample{SuggestedName: "Fix refresh hangs"}}
+	row := watchEntry{Sample: watchSample{Session: Session{Title: "Command Prompt - agy --dangerously-skip-permissions", Tool: "agy"}, SuggestedName: "Fix refresh hangs"}}
+	if got := watchRowDescription(row.Sample); got != "Suggested: Fix refresh hangs" {
+		t.Fatalf("suggestion not displayed: %q", got)
+	}
 	f := newWatchPanelFrame([]watchEntry{row}, nil, 0, 1, false)
+	if p := f.hit(100, 60); p.Kind != "name" {
+		t.Fatalf("clicking displayed suggestion must review, got %s", p.Kind)
+	}
 	if p := f.hit(290, 74); p.Kind != "name" {
 		t.Fatalf("got %s", p.Kind)
 	}

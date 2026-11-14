@@ -81,6 +81,9 @@ func (f watchPanelFrame) hit(x, y int) watchPanelPress {
 		if x >= 270 && x < 330 && (y-34)%watchRowHeight >= 34 && p.Row.Sample.SuggestedName != "" {
 			p.Kind = "name"
 		}
+		if x >= 12 && x < 330 && (y-34)%watchRowHeight >= 22 && (y-34)%watchRowHeight < 34 && p.Row.Sample.SuggestedName != "" {
+			p.Kind = "name"
+		}
 	default:
 		if i := watchPanelSummaryIndex(y, len(f.Rows), len(f.Rows), len(f.Summaries)); i >= 0 {
 			p.Kind, p.Summary = "summary", f.Summaries[i]
@@ -91,6 +94,13 @@ func (f watchPanelFrame) hit(x, y int) watchPanelPress {
 }
 
 func watchRowLabel(s watchSample) string { return firstNonEmpty(s.Name, s.Title, fmt.Sprint(s.PID)) }
+
+func watchRowDescription(s watchSample) string {
+	if s.SuggestedName != "" {
+		return "Suggested: " + s.SuggestedName
+	}
+	return watchRowLabel(s)
+}
 
 type watchTargetState struct {
 	Exists, RootAlive bool

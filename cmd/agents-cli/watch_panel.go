@@ -733,7 +733,7 @@ func watchPanel(a *watchApp) error {
 					if inputFont != 0 && phase != "working" {
 						watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 					}
-					watchText(dc, watchRowLabel(row.Sample), 12, descriptionTop, 328, descriptionTop+18)
+					watchText(dc, watchRowDescription(row.Sample), 12, descriptionTop, 328, descriptionTop+18)
 					watchGDI.NewProc("SelectObject").Call(dc, font)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")

@@ -128,7 +128,7 @@ func watchSuggestName(s Session, lines []string) string {
 			continue
 		}
 		skip := false
-		for _, prefix := range []string{"ask codex", "try ", "type your", "help ", "git ", "npm ", "go ", "python ", "curl ", "user:", "system:"} {
+		for _, prefix := range []string{"ask codex", "try ", "type your", "help ", "git ", "npm ", "go ", "python ", "curl ", "user:", "system:", "please rename", "rename title", "rename this window"} {
 			if strings.HasPrefix(lower, prefix) {
 				skip = true
 			}
