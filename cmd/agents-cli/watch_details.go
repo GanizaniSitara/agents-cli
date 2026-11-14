@@ -125,6 +125,13 @@ func (a watchAgents) label() string {
 	return fmt.Sprintf("agents: ?/%d running", *a.Total)
 }
 
+func watchRowActivity(s watchSample) string {
+	if s.Phase == "active" && s.Working {
+		return "working | " + s.Agents.label()
+	}
+	return s.Agents.label()
+}
+
 // Bare idle is deliberately distinct from an explicit completion. Each TUI
 // can also use its empty composer after asking a natural-language question.
 func watchPhase(tool string, lines []string, state string) (string, string) {

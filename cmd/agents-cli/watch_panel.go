@@ -740,7 +740,7 @@ func watchPanel(a *watchApp) error {
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
-					watchText(dc, meta+" | "+row.Sample.Agents.label(), 12, descriptionTop+18, 212, descriptionTop+35)
+					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, descriptionTop+18, 212, descriptionTop+35)
 					watchText(dc, row.Sample.Tool, 218, descriptionTop+18, 274, descriptionTop+35)
 					if watchCanReviewName(row.Sample) {
 						watchText(dc, "rename", 276, descriptionTop+18, 328, descriptionTop+35)
