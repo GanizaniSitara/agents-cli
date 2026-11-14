@@ -193,8 +193,8 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	class.Size = uint32(unsafe.Sizeof(class))
 	watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
 	defer watchUser.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(className)), instance)
-	position := watchNameDialogOrigin(520, 270)
-	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, uintptr(position.X), uintptr(position.Y), 520, 270, 0, 0, instance, 0)
+	position := watchNameDialogOrigin(520, 214)
+	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, uintptr(position.X), uintptr(position.Y), 520, 214, 0, 0, instance, 0)
 	if window == 0 {
 		review.Error = "Could not open name review."
 		return review
@@ -205,26 +205,24 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 		watchUser.NewProc("SendMessageW").Call(child, 0x30, font, 1)
 		return child
 	}
-	create("STATIC", "Current window/tab name:", 0, 14, 12, 480, 20, 0)
-	create("EDIT", review.Sample.Title, 0x00800880, 14, 34, 480, 26, 11) // Read-only; long titles can be scrolled.
-	create("STATIC", "Proposed name:", 0, 14, 68, 480, 20, 0)
-	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
+	create("STATIC", "Name:", 0, 14, 12, 480, 20, 0)
+	edit = create("EDIT", review.Name, 0x00810080, 14, 34, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
 	watchSelectNameEdit(edit, false)
 	// Child creation order is the keyboard tab order: name, Rename, other actions, checkbox.
-	create("BUTTON", "Rename", 0x10001, 174, 196, 100, 28, 1)
-	create("BUTTON", "Ask agent", 0x10000, 14, 196, 100, 28, 4)
-	create("BUTTON", "Dismiss", 0x10000, 284, 196, 100, 28, 3)
-	create("BUTTON", "Cancel", 0x10000, 394, 196, 100, 28, 2)
+	create("BUTTON", "Rename", 0x10001, 174, 140, 100, 28, 1)
+	create("BUTTON", "Ask agent", 0x10000, 14, 140, 100, 28, 4)
+	create("BUTTON", "Dismiss", 0x10000, 284, 140, 100, 28, 3)
+	create("BUTTON", "Cancel", 0x10000, 394, 140, 100, 28, 2)
 	if watchHarnessRenameSupported(review.Sample.Tool) {
-		check := create("BUTTON", "Also rename the harness session (requires idle)", 0x10003, 14, 124, 480, 22, 5)
+		check := create("BUTTON", "Also rename the harness session (requires idle)", 0x10003, 14, 68, 480, 22, 5)
 		if review.RenameSession {
 			watchUser.NewProc("SendMessageW").Call(check, 0xf1, 1, 0) // BM_SETCHECK
 		}
 	} else {
-		create("STATIC", "Window/tab title only for this harness.", 0, 14, 124, 480, 22, 0)
+		create("STATIC", "Window/tab title only for this harness.", 0, 14, 68, 480, 22, 0)
 	}
-	status = create("STATIC", "Ask agent requests a suggestion. Rename applies the changes selected above.", 0, 14, 150, 480, 40, 0)
+	status = create("STATIC", "Ask agent requests a suggestion. Rename applies the changes selected above.", 0, 14, 94, 480, 40, 0)
 	if !loadWatchSettings(review.Dir).SuggestSessionNames {
 		watchUser.NewProc("EnableWindow").Call(watchDialogItem(window, 4), 0)
 		setText(status, "Rename applies the selected changes. Enable naming suggestions in Settings to use Ask agent.")

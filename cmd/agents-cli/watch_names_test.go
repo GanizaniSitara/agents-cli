@@ -187,7 +187,7 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 				if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) && watchDialogItem(h, 5) != 0 {
 					var rect watchRect
 					watchUser.NewProc("GetWindowRect").Call(h, uintptr(unsafe.Pointer(&rect)))
-					want := watchNameDialogOrigin(520, 270)
+					want := watchNameDialogOrigin(520, 214)
 					if rect.Left != want.X || rect.Top != want.Y {
 						t.Errorf("native rename dialog at %+v, want %+v", rect, want)
 					}
@@ -306,8 +306,8 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 			if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) {
 				edit := watchDialogItem(h, 10)
 				if edit != 0 && watchDialogItem(h, 3) != 0 {
-					if got := watchWindowTitle(watchDialogItem(h, 11)); got != s.Title {
-						t.Errorf("confirmation current title %q, want %q", got, s.Title)
+					if got := watchWindowTitle(edit); got != s.Title {
+						t.Errorf("editable current name %q, want %q", got, s.Title)
 					}
 					watchUser.NewProc("SetWindowTextW").Call(edit, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Edited approved title"))))
 					def, _, _ := watchUser.NewProc("SendMessageW").Call(h, 0x400, 0, 0)
@@ -322,7 +322,7 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}()
-	review := watchNameDialog(watchNameReview{Dir: dir, Sample: s, Name: "Original suggestion"}, false)
+	review := watchNameDialog(watchNameReview{Dir: dir, Sample: s, Name: s.Title}, false)
 	<-clickDone
 	if review.Action != "accept" || review.Name != "Edited approved title" {
 		t.Fatalf("review %+v", review)
