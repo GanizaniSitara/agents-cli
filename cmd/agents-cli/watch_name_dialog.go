@@ -57,6 +57,8 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	}
 	proc := syscall.NewCallback(func(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		switch msg {
+		case 0x400: // DM_GETDEFID: IsDialogMessage routes Enter to Rename.
+			return 0x534b0001 // DC_HASDEFID | button 1
 		case 0x10:
 			if suggesting && cancelSuggestion != nil {
 				cancelSuggestion()
@@ -209,9 +211,9 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	watchSelectNameEdit(edit, false)
 	status = create("STATIC", "Ask agent sends a naming request to this idle session. Only Rename changes its title.", 0, 14, 124, 480, 40, 0)
 	create("BUTTON", "Ask agent", 0x10000, 14, 176, 100, 28, 4)
-	create("BUTTON", "Rename", 0x10000, 174, 176, 100, 28, 1)
+	create("BUTTON", "Rename", 0x10001, 174, 176, 100, 28, 1)
 	create("BUTTON", "Dismiss", 0x10000, 284, 176, 100, 28, 3)
-	create("BUTTON", "Cancel", 0x10001, 394, 176, 100, 28, 2)
+	create("BUTTON", "Cancel", 0x10000, 394, 176, 100, 28, 2)
 	if !loadWatchSettings(review.Dir).SuggestSessionNames {
 		watchUser.NewProc("EnableWindow").Call(watchDialogItem(window, 4), 0)
 		setText(status, "Rename changes this window/tab title. Enable naming suggestions in Settings to use Ask agent.")

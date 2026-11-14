@@ -302,7 +302,12 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 						t.Errorf("confirmation current title %q, want %q", got, s.Title)
 					}
 					watchUser.NewProc("SetWindowTextW").Call(edit, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Edited approved title"))))
-					watchUser.NewProc("PostMessageW").Call(h, 0x111, 1, 0)
+					def, _, _ := watchUser.NewProc("SendMessageW").Call(h, 0x400, 0, 0)
+					if def != 0x534b0001 {
+						t.Errorf("Rename is not the default: %x", def)
+					}
+					// Send Enter through the real dialog keyboard path, not WM_COMMAND.
+					watchUser.NewProc("PostMessageW").Call(edit, 0x100, 13, 1)
 					return
 				}
 			}
