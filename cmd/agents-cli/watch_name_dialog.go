@@ -211,6 +211,11 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
 	watchSelectNameEdit(edit, false)
+	// Child creation order is the keyboard tab order: name, Rename, other actions, checkbox.
+	create("BUTTON", "Rename", 0x10001, 174, 196, 100, 28, 1)
+	create("BUTTON", "Ask agent", 0x10000, 14, 196, 100, 28, 4)
+	create("BUTTON", "Dismiss", 0x10000, 284, 196, 100, 28, 3)
+	create("BUTTON", "Cancel", 0x10000, 394, 196, 100, 28, 2)
 	if watchHarnessRenameSupported(review.Sample.Tool) {
 		check := create("BUTTON", "Also rename the harness session (requires idle)", 0x10003, 14, 124, 480, 22, 5)
 		if review.RenameSession {
@@ -220,10 +225,6 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 		create("STATIC", "Window/tab title only for this harness.", 0, 14, 124, 480, 22, 0)
 	}
 	status = create("STATIC", "Ask agent requests a suggestion. Rename applies the changes selected above.", 0, 14, 150, 480, 40, 0)
-	create("BUTTON", "Ask agent", 0x10000, 14, 196, 100, 28, 4)
-	create("BUTTON", "Rename", 0x10001, 174, 196, 100, 28, 1)
-	create("BUTTON", "Dismiss", 0x10000, 284, 196, 100, 28, 3)
-	create("BUTTON", "Cancel", 0x10000, 394, 196, 100, 28, 2)
 	if !loadWatchSettings(review.Dir).SuggestSessionNames {
 		watchUser.NewProc("EnableWindow").Call(watchDialogItem(window, 4), 0)
 		setText(status, "Rename applies the selected changes. Enable naming suggestions in Settings to use Ask agent.")

@@ -184,7 +184,7 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 			deadline := time.Now().Add(2 * time.Second)
 			for time.Now().Before(deadline) {
 				h, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLINameReview"))), 0)
-				if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) && watchDialogItem(h, 3) != 0 {
+				if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) && watchDialogItem(h, 5) != 0 {
 					var rect watchRect
 					watchUser.NewProc("GetWindowRect").Call(h, uintptr(unsafe.Pointer(&rect)))
 					want := watchNameDialogOrigin(520, 270)
@@ -192,6 +192,10 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 						t.Errorf("native rename dialog at %+v, want %+v", rect, want)
 					}
 					var start, end uint32
+					next, _, _ := watchUser.NewProc("GetNextDlgTabItem").Call(h, watchDialogItem(h, 10), 0)
+					if next != watchDialogItem(h, 1) {
+						t.Error("Tab from name must go directly to Rename")
+					}
 					watchUser.NewProc("SendMessageW").Call(watchDialogItem(h, 10), 0xb0, uintptr(unsafe.Pointer(&start)), uintptr(unsafe.Pointer(&end))) // EM_GETSEL
 					if start != 0 || end != uint32(len("Fix refresh hangs")) {
 						t.Errorf("name must start selected for overwrite: %d..%d", start, end)
