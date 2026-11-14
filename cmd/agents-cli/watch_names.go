@@ -75,6 +75,14 @@ func watchGenericTitle(s Session) bool {
 	if t == "" || t == "command prompt" || t == "cmd" || t == "cmd.exe" || t == "windows powershell" {
 		return true
 	}
+	// AGY leaves its launch command as the console title. This permission
+	// switch describes how it was started, not what the conversation is about.
+	if s.Tool == "agy" {
+		fields := strings.Fields(t)
+		if len(fields) == 2 && (fields[0] == "agy" || fields[0] == "agy.exe") && fields[1] == "--dangerously-skip-permissions" {
+			return true
+		}
+	}
 	for _, tool := range []string{"codex", "claude", "copilot", "vibe", "agy", "qwen", "opencode"} {
 		if t == tool || t == tool+".exe" || strings.HasPrefix(t, tool+" resume ") || strings.HasPrefix(t, tool+" --resume ") {
 			return true

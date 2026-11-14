@@ -69,6 +69,28 @@ func TestWatchNameSuggestionConservative(t *testing.T) {
 	}
 }
 
+func TestWatchNameAGYLaunchTitle(t *testing.T) {
+	lines := []string{"> prepare piano arpeggios for practice", "  continued request", "○ Thought for 3s", "● Ran lilypond", ">"}
+	for _, title := range []string{"Command Prompt - agy  --dangerously-skip-permissions", "Administrator: agy.exe --dangerously-skip-permissions", "agy"} {
+		s := Session{Tool: "agy", Title: title}
+		if got := watchSuggestName(s, lines); got != "Prepare piano arpeggios for practice" {
+			t.Fatalf("%q suggestion %q", title, got)
+		}
+		if got := watchSuggestName(s, []string{"> unsubmitted piano arpeggios request", "? for shortcuts"}); got != "" {
+			t.Fatalf("draft suggested %q", got)
+		}
+	}
+	for _, s := range []Session{
+		{Tool: "agy", Title: "LapCasa Release & QA"},
+		{Tool: "agy", Title: "agy --dangerously-skip-permissions", Name: "Existing task"},
+		{Tool: "agy", Title: "agy --dangerously-skip-permissions piano practice"},
+	} {
+		if got := watchSuggestName(s, lines); got != "" {
+			t.Fatalf("named session %+v suggested %q", s, got)
+		}
+	}
+}
+
 func TestWatchNameSettingsAndDecisionsPersist(t *testing.T) {
 	dir := t.TempDir()
 	if loadWatchSettings(dir).SuggestSessionNames {
