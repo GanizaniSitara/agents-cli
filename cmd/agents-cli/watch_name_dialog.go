@@ -15,6 +15,34 @@ import (
 
 // A separate, explicitly opened window keeps editing and native title work off
 // the watcher thread. Nothing is shown until the owner clicks "name?".
+func watchNameDialogPosition(anchor, area watchRect, width, height int32) watchPoint {
+	p := watchPoint{anchor.Right + 8, anchor.Top}
+	if p.X+width > area.Right {
+		p.X = anchor.Left - width - 8
+	}
+	return watchPanelPosition(area, width, height, &p)
+}
+
+func watchNameDialogOrigin(width, height int32) watchPoint {
+	panel, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLIWatchPanel"))), 0)
+	var anchor watchRect
+	if panel != 0 {
+		if ok, _, _ := watchUser.NewProc("GetWindowRect").Call(panel, uintptr(unsafe.Pointer(&anchor))); ok != 0 {
+			monitor, _, _ := watchUser.NewProc("MonitorFromWindow").Call(panel, 2) // nearest monitor
+			var info struct {
+				Size         uint32
+				Bounds, Work watchRect
+				Flags        uint32
+			}
+			info.Size = uint32(unsafe.Sizeof(info))
+			if ok, _, _ := watchUser.NewProc("GetMonitorInfoW").Call(monitor, uintptr(unsafe.Pointer(&info))); ok != 0 {
+				return watchNameDialogPosition(anchor, info.Work, width, height)
+			}
+		}
+	}
+	return watchPanelPosition(selectWatchMonitor(watchMonitors(), "").Work, width, height, nil)
+}
+
 func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -106,7 +134,8 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	class.Size = uint32(unsafe.Sizeof(class))
 	watchUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
 	defer watchUser.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(className)), instance)
-	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, 200, 200, 520, 270, 0, 0, instance, 0)
+	position := watchNameDialogOrigin(520, 270)
+	window, _, _ = watchUser.NewProc("CreateWindowExW").Call(0x8, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Confirm session rename"))), 0x00c80000, uintptr(position.X), uintptr(position.Y), 520, 270, 0, 0, instance, 0)
 	if window == 0 {
 		review.Error = "Could not open name review."
 		return review

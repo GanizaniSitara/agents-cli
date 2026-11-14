@@ -39,6 +39,26 @@ func watchNameFixtureMain() bool {
 	return true
 }
 
+func TestWatchNameDialogNearPanel(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		anchor, area watchRect
+		want         watchPoint
+	}{
+		{"right", watchRect{20, 40, 380, 440}, watchRect{0, 0, 1920, 1040}, watchPoint{388, 40}},
+		{"left", watchRect{1550, 40, 1910, 440}, watchRect{0, 0, 1920, 1040}, watchPoint{1022, 40}},
+		{"bottom", watchRect{20, 800, 380, 1040}, watchRect{0, 0, 1920, 1040}, watchPoint{388, 770}},
+		{"negative monitor", watchRect{-370, -700, -10, -300}, watchRect{-1080, -1000, 0, 920}, watchPoint{-898, -700}},
+		{"narrow monitor", watchRect{40, 20, 400, 500}, watchRect{0, 0, 800, 600}, watchPoint{0, 20}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := watchNameDialogPosition(tc.anchor, tc.area, 520, 270); got != tc.want {
+				t.Fatalf("got %+v want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestWatchNameSuggestionConservative(t *testing.T) {
 	s := Session{Title: "Command Prompt - codex", Tool: "codex"}
 	for _, tc := range []struct {
@@ -165,6 +185,12 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 			for time.Now().Before(deadline) {
 				h, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLINameReview"))), 0)
 				if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) && watchDialogItem(h, 3) != 0 {
+					var rect watchRect
+					watchUser.NewProc("GetWindowRect").Call(h, uintptr(unsafe.Pointer(&rect)))
+					want := watchNameDialogOrigin(520, 270)
+					if rect.Left != want.X || rect.Top != want.Y {
+						t.Errorf("native rename dialog at %+v, want %+v", rect, want)
+					}
 					watchUser.NewProc("PostMessageW").Call(h, 0x111, id, 0)
 					return
 				}
