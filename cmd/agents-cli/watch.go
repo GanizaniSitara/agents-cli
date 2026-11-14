@@ -449,9 +449,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
 			sample.WindowPID = watchWindowPID(hwnd)
 			sample.WindowStarted = startTime(sample.WindowPID).Format(time.RFC3339Nano)
-			if namingEnabled || len(names) > 0 {
-				sample.NamingAgentStarted = startTime(s.AgentPID).Format(time.RFC3339Nano)
-			}
+			sample.NamingAgentStarted = startTime(s.AgentPID).Format(time.RFC3339Nano)
 			if namingEnabled && time.Since(rootStarted) >= 15*time.Second {
 				if previous.sample.RootStarted == sample.RootStarted && previous.sample.AgentPID == sample.AgentPID && previous.sample.NamingAgentStarted == sample.NamingAgentStarted {
 					sample.SuggestedName = previous.sample.SuggestedName

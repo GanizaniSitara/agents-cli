@@ -14,7 +14,7 @@ import (
 )
 
 func watchCanReviewName(s watchSample) bool {
-	return s.SuggestedName != "" || (s.NamingAgentStarted != "" && watchGenericTitle(s.Session))
+	return s.SuggestedName != "" || s.NamingAgentStarted != ""
 }
 
 func watchAgentNameReply(lines []string, token string) string {

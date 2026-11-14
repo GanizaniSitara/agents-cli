@@ -106,7 +106,25 @@ func TestWatchUnnamedAGYOffersNameWithoutLocalSuggestion(t *testing.T) {
 	}
 	s.NamingAgentStarted = ""
 	if watchCanReviewName(s) {
-		t.Fatal("disabled naming still offered")
+		t.Fatal("naming without identity still offered")
+	}
+}
+
+func TestWatchPermanentRenameNamedSession(t *testing.T) {
+	s := watchSample{Session: Session{PID: 1, AgentPID: 2, Tool: "agy", Title: "Music practice", Name: "Old launch label"}, NamingAgentStarted: "agent"}
+	if !watchCanReviewName(s) || watchRowDescription(s) != "Old launch label" {
+		t.Fatal("named session must retain label and offer rename")
+	}
+	f := newWatchPanelFrame([]watchEntry{{Sample: s, Parked: true}}, nil, 0, 1, false)
+	if p := f.hit(290, 74); p.Kind != "name" {
+		t.Fatalf("parked named session control %q", p.Kind)
+	}
+	if p := f.hit(100, 60); p.Kind != "row" {
+		t.Fatalf("named description must still activate: %q", p.Kind)
+	}
+	watchApplyNameRecord(&s, map[string]watchNameRecord{watchNameKey(s): {Name: "Music practice"}}, false)
+	if s.Name != "Music practice" {
+		t.Fatal("old launch label hid confirmed renamed title")
 	}
 }
 

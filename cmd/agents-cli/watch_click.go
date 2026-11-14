@@ -81,7 +81,7 @@ func (f watchPanelFrame) hit(x, y int) watchPanelPress {
 		if x >= 270 && x < 330 && (y-34)%watchRowHeight >= 34 && watchCanReviewName(p.Row.Sample) {
 			p.Kind = "name"
 		}
-		if x >= 12 && x < 330 && (y-34)%watchRowHeight >= 22 && (y-34)%watchRowHeight < 34 && watchCanReviewName(p.Row.Sample) {
+		if x >= 12 && x < 330 && (y-34)%watchRowHeight >= 22 && (y-34)%watchRowHeight < 34 && (p.Row.Sample.SuggestedName != "" || (watchCanReviewName(p.Row.Sample) && watchGenericTitle(p.Row.Sample.Session))) {
 			p.Kind = "name"
 		}
 	default:
@@ -99,7 +99,7 @@ func watchRowDescription(s watchSample) string {
 	if s.SuggestedName != "" {
 		return "Suggested: " + s.SuggestedName
 	}
-	if watchCanReviewName(s) {
+	if watchCanReviewName(s) && watchGenericTitle(s.Session) {
 		return "Unnamed session - choose name"
 	}
 	return watchRowLabel(s)

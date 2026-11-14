@@ -199,8 +199,6 @@ func helperMain(args []string) error {
 		} else {
 			if review.Action != "accept" {
 				result = errJSON(errors.New("Rename requires explicit confirmation."))
-			} else if !loadWatchSettings(review.Dir).SuggestSessionNames {
-				result = errJSON(errors.New("Suggest session names is disabled."))
 			} else {
 				result = errJSON(watchDoRename(review.Sample, review.Name))
 			}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,7 +29,7 @@ func watchApplyNameRecord(s *watchSample, names map[string]watchNameRecord, enab
 		if r.Suggestion != "" && enabled && watchGenericTitle(s.Session) {
 			s.SuggestedName = r.Suggestion
 		}
-		if r.Name != "" && s.Name == "" && (s.Title == r.Name || watchGenericTitle(s.Session)) {
+		if r.Name != "" && (s.Title == r.Name || (s.Name == "" && watchGenericTitle(s.Session))) {
 			s.Name = r.Name
 		}
 	} else if !watchGenericTitle(s.Session) {
@@ -184,12 +185,20 @@ func watchReviewName(ctx context.Context, dir string, s watchSample) {
 	if err != nil {
 		return
 	}
-	input, _ := json.Marshal(watchNameReview{Dir: dir, Sample: s, Name: s.SuggestedName})
+	input, _ := json.Marshal(watchNameReview{Dir: dir, Sample: s, Name: firstNonEmpty(s.SuggestedName, s.Name, s.Title)})
 	cmd := helperCommand(ctx, exe, string(input), "name-review", strconv.FormatUint(uint64(s.PID), 10))
 	cmd.WaitDelay = 250 * time.Millisecond
-	out, err := cmd.Output()
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	// The owner clicked Rename in this process. Pass that foreground right
+	// to the new dialog process so its edit can receive keyboard input.
+	watchUser.NewProc("AllowSetForegroundWindow").Call(uintptr(cmd.Process.Pid))
+	err = cmd.Wait()
 	var result watchNameReview
-	if err != nil || json.Unmarshal(out, &result) != nil {
+	if err != nil || json.Unmarshal(out.Bytes(), &result) != nil {
 		return
 	}
 	if result.Action == "accept" && result.Error == "" {

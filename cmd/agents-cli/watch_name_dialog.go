@@ -14,7 +14,7 @@ import (
 )
 
 // A separate, explicitly opened window keeps editing and native title work off
-// the watcher thread. Nothing is shown until the owner clicks "name?".
+// the watcher thread. Nothing is shown until the owner clicks "rename".
 func watchNameDialogPosition(anchor, area watchRect, width, height int32) watchPoint {
 	p := watchPoint{anchor.Right + 8, anchor.Top}
 	if p.X+width > area.Right {
@@ -160,6 +160,8 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 			} else {
 				setText(edit, result.Name)
 				setText(status, "Agent suggestion ready. Edit it or click Rename to apply.")
+				foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+				watchSelectNameEdit(edit, foreground == hwnd)
 			}
 			return 0
 		case 0x8001:
@@ -204,15 +206,22 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	create("STATIC", "Proposed name:", 0, 14, 68, 480, 20, 0)
 	edit = create("EDIT", review.Name, 0x00810080, 14, 90, 480, 26, 10)
 	watchUser.NewProc("SendMessageW").Call(edit, 0xc5, 160, 0) // EM_SETLIMITTEXT
+	watchSelectNameEdit(edit, false)
 	status = create("STATIC", "Ask agent sends a naming request to this idle session. Only Rename changes its title.", 0, 14, 124, 480, 40, 0)
 	create("BUTTON", "Ask agent", 0x10000, 14, 176, 100, 28, 4)
 	create("BUTTON", "Rename", 0x10000, 174, 176, 100, 28, 1)
 	create("BUTTON", "Dismiss", 0x10000, 284, 176, 100, 28, 3)
 	create("BUTTON", "Cancel", 0x10001, 394, 176, 100, 28, 2)
+	if !loadWatchSettings(review.Dir).SuggestSessionNames {
+		watchUser.NewProc("EnableWindow").Call(watchDialogItem(window, 4), 0)
+		setText(status, "Rename changes this window/tab title. Enable naming suggestions in Settings to use Ask agent.")
+	}
 	if show {
 		// Detached helpers start hidden. SetWindowPos avoids the first
 		// ShowWindow call being overridden by STARTUPINFO's SW_HIDE.
 		watchUser.NewProc("SetWindowPos").Call(window, 0, 0, 0, 0, 0, 0x1|0x2|0x4|0x40)
+		watchUser.NewProc("SetForegroundWindow").Call(window)
+		watchSelectNameEdit(edit, true)
 	}
 	var msg watchMessage
 	for {
@@ -230,6 +239,13 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 }
 
 var nameDialogResults = make(chan string, 1)
+
+func watchSelectNameEdit(edit uintptr, focus bool) {
+	watchUser.NewProc("SendMessageW").Call(edit, 0xb1, 0, ^uintptr(0)) // EM_SETSEL: select all
+	if focus {
+		watchUser.NewProc("SetFocus").Call(edit)
+	}
+}
 
 func watchDialogItem(window, id uintptr) uintptr {
 	h, _, _ := watchUser.NewProc("GetDlgItem").Call(window, id)

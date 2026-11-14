@@ -191,6 +191,11 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 					if rect.Left != want.X || rect.Top != want.Y {
 						t.Errorf("native rename dialog at %+v, want %+v", rect, want)
 					}
+					var start, end uint32
+					watchUser.NewProc("SendMessageW").Call(watchDialogItem(h, 10), 0xb0, uintptr(unsafe.Pointer(&start)), uintptr(unsafe.Pointer(&end))) // EM_GETSEL
+					if start != 0 || end != uint32(len("Fix refresh hangs")) {
+						t.Errorf("name must start selected for overwrite: %d..%d", start, end)
+					}
 					watchUser.NewProc("PostMessageW").Call(h, 0x111, id, 0)
 					return
 				}
@@ -316,8 +321,8 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Title = "Edited approved title"
-	if apply(s, "Feature is off") == nil {
-		t.Fatal("disabled feature renamed")
+	if err := apply(s, "Manual rename with suggestions off"); err != nil {
+		t.Fatalf("manual rename must remain available with suggestions off: %v", err)
 	}
-	t.Log("real hidden conhost title changed; stale root, agent and title and disabled feature refused; no activation")
+	t.Log("real hidden conhost title changed; stale root, agent and title refused; explicit manual rename works with suggestions off; no activation")
 }
