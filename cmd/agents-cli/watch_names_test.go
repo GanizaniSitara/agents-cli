@@ -173,11 +173,11 @@ func TestWatchNameHitIsNotActivation(t *testing.T) {
 	}
 }
 
-func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
+func TestWatchNameDialogCancelNative(t *testing.T) {
 	for _, tc := range []struct {
 		id   uintptr
 		want string
-	}{{3, "dismiss"}, {2, ""}} {
+	}{{2, ""}} {
 		done := make(chan struct{})
 		go func(id uintptr) {
 			defer close(done)
@@ -187,9 +187,12 @@ func TestWatchNameDialogDismissAndCancelNative(t *testing.T) {
 				if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) && watchDialogItem(h, 5) != 0 {
 					var rect watchRect
 					watchUser.NewProc("GetWindowRect").Call(h, uintptr(unsafe.Pointer(&rect)))
-					want := watchNameDialogOrigin(520, 214)
+					want := watchNameDialogOrigin(400, 214)
 					if rect.Left != want.X || rect.Top != want.Y {
 						t.Errorf("native rename dialog at %+v, want %+v", rect, want)
+					}
+					if watchDialogItem(h, 3) != 0 || watchDialogItem(h, 4) != 0 {
+						t.Error("rename dialog must only expose Rename and Cancel actions")
 					}
 					var start, end uint32
 					next, _, _ := watchUser.NewProc("GetNextDlgTabItem").Call(h, watchDialogItem(h, 10), 0)
@@ -305,7 +308,7 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 			h, _, _ := watchUser.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("AgentsCLINameReview"))), 0)
 			if h != 0 && watchWindowPID(h) == uint32(os.Getpid()) {
 				edit := watchDialogItem(h, 10)
-				if edit != 0 && watchDialogItem(h, 3) != 0 {
+				if edit != 0 && watchDialogItem(h, 2) != 0 {
 					if got := watchWindowTitle(edit); got != s.Title {
 						t.Errorf("editable current name %q, want %q", got, s.Title)
 					}
