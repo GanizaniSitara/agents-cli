@@ -230,7 +230,8 @@ footer/composer detector, including menus and permission waits.
 Local status, settings and event log live in
 `%LOCALAPPDATA%\agents-cli\watch`; `--state-dir DIR` overrides it. No screen text
 is saved. Session names can contain private information, so keep these files
-local. No launch-on-login entry is installed; run `watch start` after sign-in.
+local. Enable **Start with Windows** in Settings to start the background watcher
+at sign-in. Disable it there to remove the per-user startup registration.
 
 `agents-cli mute <ref>` persistently excludes that session from screen polling.
 `ls` keeps its metadata row with `polling_muted: true` and `state: "muted"`,

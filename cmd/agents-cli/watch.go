@@ -148,6 +148,18 @@ func runWatch(args []string) error {
 		return nil
 	}
 	switch p.pos[0] {
+	case "autostart":
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		enabled, err := watchAutostartRegistry(watchAutostartKey, watchAutostartCommand(exe, dir), p.str("action", "status"))
+		result := watchAutostartResult{Enabled: enabled}
+		if err != nil {
+			result.Error = err.Error()
+		}
+		emit(result)
+		return nil
 	case "list", "stop":
 		b, err := os.ReadFile(statePath)
 		if err != nil {

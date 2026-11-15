@@ -55,6 +55,10 @@ func watchPanel(a *watchApp) error {
 	theme := loadWatchTheme(a.dir)
 	menu := false
 	helpLabel := "Help"
+	autostart := watchAutostartResult{}
+	autostartBusy := true
+	autostartResults := make(chan watchAutostartResult, 1)
+	go func() { autostartResults <- watchAutostartQuery(a.dir, "status") }()
 	monitors := watchMonitors()
 	desktops := a.desktopList()
 	taskbar, releaseTaskbar := openWatchTaskbar()
@@ -131,7 +135,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 14
+			n = len(desktops) + 15
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -233,6 +237,12 @@ func watchPanel(a *watchApp) error {
 		case 0x21:
 			return 3 // WM_MOUSEACTIVATE: deliver click, never focus panel
 		case 0x113: // WM_TIMER
+			select {
+			case result := <-autostartResults:
+				autostart, autostartBusy = result, false
+				watchUser.NewProc("InvalidateRect").Call(window, 0, 1)
+			default:
+			}
 			if wp == 3 {
 				if !pendingShortcut.Active {
 					return 0
@@ -478,15 +488,25 @@ func watchPanel(a *watchApp) error {
 					a.persistSettings(settings)
 					return 0
 				} else if i == len(desktops)+10 {
+					if !autostartBusy {
+						autostartBusy = true
+						mode := "enable"
+						if autostart.Enabled {
+							mode = "disable"
+						}
+						go func() { autostartResults <- watchAutostartQuery(a.dir, mode) }()
+					}
+					return 0
+				} else if i == len(desktops)+11 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+11 {
+				} else if i == len(desktops)+12 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+12 {
+				} else if i == len(desktops)+13 {
 					settings.Position = nil
 					a.persistSettings(settings)
 				} else if i == len(desktops) {
@@ -678,6 +698,18 @@ func watchPanel(a *watchApp) error {
 					nameToggle = "[x] Suggest session names"
 				}
 				watchText(dc, nameToggle, 12, top+8, 350, top+35)
+				top += watchSettingsRowHeight
+				startupLabel := "[ ] Start with Windows"
+				if autostart.Enabled {
+					startupLabel = "[x] Start with Windows"
+				}
+				if autostartBusy {
+					startupLabel += " (checking...)"
+				}
+				if autostart.Error != "" {
+					startupLabel = "Startup error: " + autostart.Error
+				}
+				watchText(dc, startupLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				watchText(dc, helpLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
