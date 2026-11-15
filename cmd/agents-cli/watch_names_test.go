@@ -162,8 +162,11 @@ func TestWatchNameHitIsNotActivation(t *testing.T) {
 	if p := f.hit(100, 60); p.Kind != "name" {
 		t.Fatalf("clicking displayed suggestion must review, got %s", p.Kind)
 	}
-	if p := f.hit(290, 74); p.Kind != "name" {
+	if p := f.hit(240, 74); p.Kind != "name" {
 		t.Fatalf("got %s", p.Kind)
+	}
+	if p := f.hit(290, 74); p.Kind != "row" {
+		t.Fatalf("agent label must remain row activation, got %s", p.Kind)
 	}
 	if p := f.hit(100, 74); p.Kind != "row" {
 		t.Fatal("ordinary row click changed")

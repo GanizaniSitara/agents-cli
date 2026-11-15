@@ -78,7 +78,7 @@ func (f watchPanelFrame) hit(x, y int) watchPanelPress {
 	case (y-34)/watchRowHeight < len(f.Rows):
 		i := (y - 34) / watchRowHeight
 		p.Kind, p.Row, p.RowIndex = "row", f.Rows[i], f.Offset+i
-		if x >= 270 && x < 330 && (y-34)%watchRowHeight >= 34 && watchCanReviewName(p.Row.Sample) {
+		if x >= 218 && x < 270 && (y-34)%watchRowHeight >= 34 && watchCanReviewName(p.Row.Sample) {
 			p.Kind = "name"
 		}
 		if x >= 12 && x < 330 && (y-34)%watchRowHeight >= 22 && (y-34)%watchRowHeight < 34 && (p.Row.Sample.SuggestedName != "" || (watchCanReviewName(p.Row.Sample) && watchGenericTitle(p.Row.Sample.Session))) {

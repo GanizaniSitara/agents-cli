@@ -98,7 +98,7 @@ func TestWatchUnnamedAGYOffersNameWithoutLocalSuggestion(t *testing.T) {
 		t.Fatal("unnamed AGY missing naming affordance")
 	}
 	f := newWatchPanelFrame([]watchEntry{{Sample: s}}, nil, 0, 1, false)
-	if p := f.hit(290, 74); p.Kind != "name" {
+	if p := f.hit(240, 74); p.Kind != "name" {
 		t.Fatalf("name control %q", p.Kind)
 	}
 	if p := f.hit(100, 60); p.Kind != "name" {
@@ -116,7 +116,7 @@ func TestWatchPermanentRenameNamedSession(t *testing.T) {
 		t.Fatal("named session must retain label and offer rename")
 	}
 	f := newWatchPanelFrame([]watchEntry{{Sample: s, Parked: true}}, nil, 0, 1, false)
-	if p := f.hit(290, 74); p.Kind != "name" {
+	if p := f.hit(240, 74); p.Kind != "name" {
 		t.Fatalf("parked named session control %q", p.Kind)
 	}
 	if p := f.hit(100, 60); p.Kind != "row" {

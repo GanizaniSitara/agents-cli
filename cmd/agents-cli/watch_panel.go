@@ -741,9 +741,9 @@ func watchPanel(a *watchApp) error {
 						meta += " (view only)"
 					}
 					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, descriptionTop+18, 212, descriptionTop+35)
-					watchText(dc, row.Sample.Tool, 218, descriptionTop+18, 274, descriptionTop+35)
+					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 328, descriptionTop+35)
 					if watchCanReviewName(row.Sample) {
-						watchText(dc, "rename", 276, descriptionTop+18, 328, descriptionTop+35)
+						watchText(dc, "rename", 218, descriptionTop+18, 270, descriptionTop+35)
 					}
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
