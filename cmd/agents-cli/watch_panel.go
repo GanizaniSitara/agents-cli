@@ -442,6 +442,10 @@ func watchPanel(a *watchApp) error {
 				}
 				if x >= 245 {
 					menu = !menu
+					if menu && !autostartBusy {
+						autostartBusy = true
+						go func() { autostartResults <- watchAutostartQuery(a.dir, "status") }()
+					}
 					theme = loadWatchTheme(a.dir)
 					monitors = watchMonitors()
 					desktops = a.desktopList()
