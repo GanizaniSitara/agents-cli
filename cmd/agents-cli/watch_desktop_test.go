@@ -78,3 +78,23 @@ func TestWatchMonitorFallback(t *testing.T) {
 		t.Fatal("selected monitor ignored")
 	}
 }
+
+func TestWatchVerifiedCurrentDesktop(t *testing.T) {
+	desktops := []watchDesktop{{ID: "one"}, {ID: "two"}}
+	for _, tc := range []struct {
+		hwnd    uintptr
+		id      string
+		current bool
+		want    string
+	}{
+		{1, "two", true, "two"},
+		{1, "two", false, ""},
+		{1, "unlisted", true, ""},
+		{0, "two", true, ""},
+	} {
+		got := watchVerifiedCurrentDesktop(tc.hwnd, desktops, func(uintptr) (string, bool) { return tc.id, tc.current })
+		if got != tc.want {
+			t.Fatalf("%+v: got %q", tc, got)
+		}
+	}
+}

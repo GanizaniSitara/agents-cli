@@ -65,6 +65,38 @@ func watchCurrentDesktop() string {
 	if desktops := watchDesktops(); len(desktops) == 1 {
 		return desktops[0].ID
 	}
+	// Explorer may omit CurrentVirtualDesktop after sign-in even though its
+	// desktop list and the public window-desktop APIs are available.
+	manager, release := openWatchDesktopManager()
+	defer release()
+	if manager != nil {
+		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+		return watchVerifiedCurrentDesktop(foreground, watchDesktops(), func(hwnd uintptr) (string, bool) {
+			var current int32
+			hr, _, _ := syscall.SyscallN(manager.VTable[3], uintptr(unsafe.Pointer(manager)), hwnd, uintptr(unsafe.Pointer(&current)))
+			if int32(hr) < 0 || current == 0 {
+				return "", false
+			}
+			id, _ := windowWatchDesktop(manager, hwnd, nil)
+			return id, true
+		})
+	}
+	return ""
+}
+
+func watchVerifiedCurrentDesktop(hwnd uintptr, desktops []watchDesktop, query func(uintptr) (string, bool)) string {
+	if hwnd == 0 {
+		return ""
+	}
+	id, current := query(hwnd)
+	if !current {
+		return ""
+	}
+	for _, d := range desktops {
+		if id == d.ID {
+			return id
+		}
+	}
 	return ""
 }
 
