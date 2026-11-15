@@ -69,7 +69,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 				checked, _, _ := watchUser.NewProc("SendMessageW").Call(watchDialogItem(hwnd, 5), 0xf0, 0, 0) // BM_GETCHECK
 				review.RenameSession = checked == 1
 				if !watchValidName(review.Name) {
-					setText(status, "Use 1–80 characters, without control characters.")
+					setText(status, "Use a short name (1–80 characters), without paths or control characters.")
 					return 0
 				}
 				setText(status, "Applying rename…")

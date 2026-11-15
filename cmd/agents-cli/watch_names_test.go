@@ -176,6 +176,24 @@ func TestWatchNameHitIsNotActivation(t *testing.T) {
 	}
 }
 
+func TestWatchShortNameRemovesLaunchPaths(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{`LapCasa Release and QA  - C:\Users\admin\agy.exe --conversation abc`, "LapCasa Release and QA"},
+		{`MASTER - C:/tools/claude.cmd --resume abc`, "MASTER"},
+		{`C:\Windows\system32\cmd.exe`, ""},
+		{`/home/user/bin/copilot --resume abc`, ""},
+		{"Review API/UI naming", "Review API/UI naming"},
+		{"Fix refresh hangs", "Fix refresh hangs"},
+	} {
+		if got := watchShortName(tc.input); got != tc.want {
+			t.Fatalf("%q: got %q want %q", tc.input, got, tc.want)
+		}
+		if tc.want != tc.input && watchValidName(tc.input) {
+			t.Fatalf("path-bearing name accepted: %q", tc.input)
+		}
+	}
+}
+
 func TestWatchNameDialogCancelNative(t *testing.T) {
 	for _, tc := range []struct {
 		id   uintptr

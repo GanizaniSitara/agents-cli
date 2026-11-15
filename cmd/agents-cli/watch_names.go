@@ -169,7 +169,41 @@ func watchValidName(name string) bool {
 			return false
 		}
 	}
+	if watchNameHasPath(name) {
+		return false
+	}
 	return true
+}
+
+func watchNameHasPath(name string) bool {
+	if strings.Contains(name, `\`) {
+		return true
+	}
+	for i := 1; i+1 < len(name); i++ {
+		if name[i] == ':' && name[i+1] == '/' && ((name[i-1] >= 'A' && name[i-1] <= 'Z') || (name[i-1] >= 'a' && name[i-1] <= 'z')) {
+			return true
+		}
+	}
+	for _, word := range strings.Fields(name) {
+		if strings.HasPrefix(strings.Trim(word, `"'`), "/") && strings.Count(word, "/") > 1 {
+			return true
+		}
+	}
+	return false
+}
+
+// cmd can append the running executable and arguments to a useful title.
+// Remove only a recognizable launch suffix, before the owner reviews the name.
+func watchShortName(name string) string {
+	for _, separator := range []string{"  - ", " - ", " – "} {
+		if i := strings.Index(name, separator); i > 0 && watchNameHasPath(name[i+len(separator):]) {
+			name = name[:i]
+		}
+	}
+	if watchNameHasPath(name) {
+		return ""
+	}
+	return strings.TrimSpace(name)
 }
 
 type watchNameReview struct {
@@ -186,7 +220,7 @@ func watchReviewName(ctx context.Context, dir string, s watchSample) {
 	if err != nil {
 		return
 	}
-	input, _ := json.Marshal(watchNameReview{Dir: dir, Sample: s, Name: firstNonEmpty(s.SuggestedName, s.Name, s.Title), RenameSession: watchHarnessRenameSupported(s.Tool)})
+	input, _ := json.Marshal(watchNameReview{Dir: dir, Sample: s, Name: firstNonEmpty(watchShortName(s.SuggestedName), watchShortName(s.Name), watchShortName(s.Title), s.Tool), RenameSession: watchHarnessRenameSupported(s.Tool)})
 	cmd := helperCommand(ctx, exe, string(input), "name-review", strconv.FormatUint(uint64(s.PID), 10))
 	cmd.WaitDelay = 250 * time.Millisecond
 	var out bytes.Buffer
@@ -215,7 +249,7 @@ func watchReviewName(ctx context.Context, dir string, s watchSample) {
 
 func watchDoRename(s watchSample, name string) error {
 	if !watchValidName(name) {
-		return errors.New("Use 1–80 characters, without control characters.")
+		return errors.New("Use a short name (1–80 characters), without paths or control characters.")
 	}
 	if problem := watchTargetProblem(s, watchReadTarget(s)); problem != "" {
 		return errors.New(problem)
