@@ -18,6 +18,9 @@ const privateTestText = "privacy-test-only: £漢😀\n" + "not-a-real-credentia
 // Exercise the real detached-helper launch and stdin pipe without attaching
 // to a user's console. No actual credentials are used in these tests.
 func TestMain(m *testing.M) {
+	if shelfFixtureMain() {
+		return
+	}
 	if os.Getenv("AGENTS_CLI_TEST_HELP") == "1" {
 		main()
 		os.Exit(0)

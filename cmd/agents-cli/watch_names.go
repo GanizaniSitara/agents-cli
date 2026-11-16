@@ -195,6 +195,12 @@ func watchNameHasPath(name string) bool {
 // cmd can append the running executable and arguments to a useful title.
 // Remove only a recognizable launch suffix, before the owner reviews the name.
 func watchShortName(name string) string {
+	if user := os.Getenv("USERNAME"); user != "" {
+		suffix := " | " + user
+		if strings.HasSuffix(strings.ToLower(name), strings.ToLower(suffix)) {
+			name = strings.TrimSpace(name[:len(name)-len(suffix)])
+		}
+	}
 	for _, separator := range []string{"  - ", " - ", " – "} {
 		if i := strings.Index(name, separator); i > 0 && watchNameHasPath(name[i+len(separator):]) {
 			name = name[:i]

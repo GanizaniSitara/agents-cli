@@ -32,7 +32,14 @@ var (
 func main() {
 	// An owner-opened editor waits for its owner, not the console-operation
 	// deadline. Its parent cancels it when the watcher exits; apply is bounded.
-	if len(os.Args) > 2 && os.Args[1] == "_attach" && os.Args[2] == "name-review" {
+	if len(os.Args) > 2 && ((os.Args[1] == "_attach" && os.Args[2] == "name-review") || (os.Args[1] == "shelf" && (os.Args[2] == "ui" || os.Args[2] == "review"))) {
+		if os.Args[1] == "shelf" {
+			if err := cmdShelf(os.Args[2:]); err != nil {
+				emitError(err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := helperMain(os.Args[2:]); err != nil {
 			emitError(err)
 			os.Exit(1)
@@ -77,6 +84,8 @@ func run(args []string) error {
 		return nil
 	case "_attach":
 		return helperMain(args[1:])
+	case "shelf":
+		return cmdShelf(args[1:])
 	case "ls":
 		return cmdLs(args[1:])
 	case "mute":
@@ -126,6 +135,7 @@ WATCH
   agents-cli watch run                   run the panel in the foreground
   agents-cli watch list                  watcher status and sessions (JSON)
   agents-cli watch stop                  exit the watcher; leave agents running
+  agents-cli shelf ui                    saved sessions; resume or cancel pending shelving
   agents-cli help --open                 open the offline quick guide
 
 EXAMPLES
@@ -148,6 +158,8 @@ COMMANDS
   stop  <ref> --confirm <pid>               kill the session's process tree (logged)
   stops [--since 7d] [--scrub]              read log, or remove legacy private fields/old records
   sends [--since 1d] [--limit 50]          read send/key audit (metadata only)
+  shelf list|ui                           saved sessions (JSON) / Shelf window
+  shelf resume|cancel ID                  resume a saved session / cancel pending shelving
   watch start|run [--monitor N] [--stable 2s]
   watch monitors|desktops                  available screens and virtual desktops
   version

@@ -182,6 +182,12 @@ func helperMain(args []string) error {
 	pid := uint32(pid64)
 	var result interface{}
 	switch args[0] {
+	case "shelf-present":
+		var entry shelfEntry
+		if err := json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&entry); err != nil || entry.ResumedPID != pid {
+			return errors.New("Invalid resume identity")
+		}
+		result = errJSON(shelfPresent(entry))
 	case "name-review", "name-apply", "name-suggest":
 		var review watchNameReview
 		if err := json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&review); err != nil || review.Sample.PID != pid {

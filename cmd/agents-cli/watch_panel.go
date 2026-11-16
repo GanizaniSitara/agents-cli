@@ -76,6 +76,43 @@ func watchPanel(a *watchApp) error {
 	terminalContext, cancelTerminal := context.WithCancel(context.Background())
 	defer cancelTerminal()
 	nameRequests := make(chan watchSample)
+	shelfRequests := make(chan struct{ action, input string })
+	go func() {
+		for {
+			select {
+			case <-terminalContext.Done():
+				return
+			case request := <-shelfRequests:
+				_ = watchShelfHelper(terminalContext, a.dir, request.action, request.input)
+				a.refreshShelfPending()
+			}
+		}
+	}()
+	go func() {
+		a.refreshShelfPending()
+		timer := time.NewTicker(10 * time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case <-terminalContext.Done():
+				return
+			case <-timer.C:
+				a.refreshShelfPending()
+				entries, err := shelfRead(a.dir)
+				if err != nil {
+					continue
+				}
+				for _, entry := range entries {
+					if entry.State == "pending" || entry.State == "preparing" {
+						ctx, cancel := context.WithTimeout(terminalContext, 25*time.Second)
+						_ = watchShelfHelper(ctx, a.dir, "tick", "")
+						cancel()
+						break
+					}
+				}
+			}
+		}
+	}()
 	go func() {
 		for {
 			select {
@@ -366,9 +403,53 @@ func watchPanel(a *watchApp) error {
 			}
 			watchUser.NewProc("InvalidateRect").Call(window, 0, 1)
 			return 0
+		case 0x7b: // WM_CONTEXTMENU: choose the last painted session, never activate it.
+			if painted.Menu {
+				return 0
+			}
+			point := watchPoint{int32(int16(lp & 0xffff)), int32(int16((lp >> 16) & 0xffff))}
+			client := point
+			watchUser.NewProc("ScreenToClient").Call(window, uintptr(unsafe.Pointer(&client)))
+			p := painted.hit(int(client.X), int(client.Y))
+			if p.Kind != "row" && p.Kind != "name" {
+				return 0
+			}
+			row := p.Row
+			if watchTargetProblem(row.Sample, watchReadTarget(row.Sample)) != "" {
+				return 0
+			}
+			choice := watchShowRowMenu(window, row, point)
+			if watchTargetProblem(row.Sample, watchReadTarget(row.Sample)) != "" {
+				return 0
+			}
+			switch choice {
+			case watchRowPark:
+				a.mu.Lock()
+				a.tracker.togglePark(row.Sample)
+				a.save()
+				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
+				a.mu.Unlock()
+				resize()
+			case watchRowRename:
+				select {
+				case nameRequests <- row.Sample:
+				default:
+				}
+			case watchRowShelve:
+				select {
+				case shelfRequests <- struct{ action, input string }{"review", shelfReviewJSON(row.Sample)}:
+				default:
+				}
+			case watchRowCancelShelve:
+				select {
+				case shelfRequests <- struct{ action, input string }{"cancel-source", shelfReviewJSON(row.Sample)}:
+				default:
+				}
+			}
+			return 0
 		case 0x201: // WM_LBUTTONDOWN: select the last fully painted target
 			x, y := int32(int16(lp)), int32(int16(lp>>16))
-			if x >= 0 && x < 245 && y >= 0 && y < 34 {
+			if x >= 0 && x < 190 && y >= 0 && y < 34 {
 				dragging = true
 				dragOffset = watchPoint{x, y}
 				watchUser.NewProc("SetCapture").Call(window)
@@ -438,6 +519,13 @@ func watchPanel(a *watchApp) error {
 					settings.Hidden = true
 					a.persistSettings(settings)
 					watchUser.NewProc("ShowWindow").Call(window, 0)
+					return 0
+				}
+				if x >= 190 && x < 245 {
+					select {
+					case shelfRequests <- struct{ action, input string }{"ui", ""}:
+					default:
+					}
 					return 0
 				}
 				if x >= 245 {
@@ -574,11 +662,6 @@ func watchPanel(a *watchApp) error {
 			}
 			if x >= 330 {
 				if (y-34)%watchRowHeight >= 34 {
-					a.mu.Lock()
-					a.tracker.togglePark(row.Sample)
-					a.save()
-					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
-					a.mu.Unlock()
 					return 0
 				}
 				a.mu.Lock()
@@ -638,7 +721,8 @@ func watchPanel(a *watchApp) error {
 				header = watchReaderHeader(problemCode)
 				watchGDI.NewProc("SetTextColor").Call(dc, theme.rowColour("error"))
 			}
-			watchText(dc, header, 12, 8, 240, 30)
+			watchText(dc, header, 12, 8, 188, 30)
+			watchText(dc, "Shelf", 194, 8, 242, 30)
 			watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 			settingsLabel := "Settings"
 			if frame.Menu {
@@ -773,6 +857,9 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SelectObject").Call(dc, font)
 					watchGDI.NewProc("SetTextColor").Call(dc, metadata)
 					meta := firstNonEmpty(row.Sample.Desktop, "Desktop ?")
+					if pending := a.shelfPending.Load(); pending != nil && (*pending)[watchNameKey(row.Sample)] {
+						meta = "shelving pending"
+					}
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
@@ -785,13 +872,6 @@ func watchPanel(a *watchApp) error {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}
 					watchText(dc, "x", 336, top+18, 358, top+36)
-					if row.Parked || watchCanPark(row.Sample) {
-						label := "park"
-						if row.Parked {
-							label = "^"
-						}
-						watchText(dc, label, 330, descriptionTop+18, 360, descriptionTop+35)
-					}
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {

@@ -68,6 +68,7 @@ type watchApp struct {
 	output            *watchOutput
 	started           string
 	desktop           atomic.Pointer[watchDesktopState]
+	shelfPending      atomic.Pointer[map[string]bool]
 	ui                watchUIProbe
 	selectionID       uint64 // panel thread only
 	selectTerminal    func(watchTerminalRequest)

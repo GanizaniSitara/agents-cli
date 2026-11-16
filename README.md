@@ -147,11 +147,28 @@ chord on another PC, check its registration in Settings or the `shortcuts`
 section of `watch list`. With the shortcut Off or unavailable, the watcher does
 not intercept it, and it may reach the foreground application.
 
-All rows have a small **park** control beside the agent name.
+Right-click a session for **Park / Unpark**, **Shelve…**, or **Rename…**.
 Parking moves the row to the bottom and displays **PARKED** on dark grey;
-Ctrl+Win+Z skips it. **^** unparks it. Status changes do not clear parking;
+Ctrl+Win+Z skips it. Status changes do not clear parking;
 attention stays off until unparked. Parking lasts for the current watcher run; it does not
 stop or suspend the agent. Explicit numbered shortcuts and row clicks still work.
+
+**Shelve…** confirms before saving resume details and closing the session gracefully.
+A busy session offers **Shelve when idle**; the row says **shelving pending**.
+Cancel that request from the right-click menu or **Shelf** in the panel header.
+Shelf survives watcher and Windows restarts. Search by name, agent or project,
+then **Resume** to reopen the same conversation, account and working folder on
+Desktop 2 without switching desktops or taking focus. Repeated Resume refuses
+duplicates. No process is forcibly killed; failed verification or closing leaves
+the window open and reports the problem. Shelving currently supports Claude and
+Codex; other providers stay open. Continuing with a different agent is deferred.
+
+```text
+agents-cli shelf ui
+agents-cli shelf list
+agents-cli shelf resume ENTRY_ID
+agents-cli shelf cancel ENTRY_ID
+```
 
 Selecting a Windows Terminal session selects its tab before bringing the window
 forward. The console title must match exactly one tab in that window. Duplicate
