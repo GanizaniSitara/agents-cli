@@ -168,7 +168,20 @@ agents-cli shelf ui
 agents-cli shelf list
 agents-cli shelf resume ENTRY_ID
 agents-cli shelf cancel ENTRY_ID
+agents-cli park self
+agents-cli unpark self
+agents-cli shelve self
 ```
+
+`park` and `unpark` set the state explicitly; repeating them does not toggle it.
+`shelve` opens the same confirmation as the row menu. `self` uses the caller's
+console identity or exact Codex thread ID, and refuses ambiguous matches.
+An explicit PID or unique label can replace `self`. Add `--check` to resolve the
+target without changing it or opening a dialog.
+
+Shared **park** and **shelve** skills live in `skills/`. They are installed into
+each harness's skill directory; use its native skill invocation or picker.
+OpenCode slash-command adapters are in `skills/opencode-commands/`.
 
 Selecting a Windows Terminal session selects its tab before bringing the window
 forward. The console title must match exactly one tab in that window. Duplicate

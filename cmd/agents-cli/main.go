@@ -86,6 +86,8 @@ func run(args []string) error {
 		return helperMain(args[1:])
 	case "shelf":
 		return cmdShelf(args[1:])
+	case "park", "unpark", "shelve":
+		return cmdSessionAction(args[0], args[1:])
 	case "ls":
 		return cmdLs(args[1:])
 	case "mute":
@@ -160,6 +162,8 @@ COMMANDS
   sends [--since 1d] [--limit 50]          read send/key audit (metadata only)
   shelf list|ui                           saved sessions (JSON) / Shelf window
   shelf resume|cancel ID                  resume a saved session / cancel pending shelving
+  park|unpark self|<ref>                  set parking without closing the session
+  shelve self|<ref>                       open confirmation; save and close when idle
   watch start|run [--monitor N] [--stable 2s]
   watch monitors|desktops                  available screens and virtual desktops
   version

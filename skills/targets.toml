@@ -1,0 +1,32 @@
+source_path = "skills"
+manifest_filename = ".agents-cli-skills-manifest.json"
+skill_names = ["park", "shelve"]
+target_order = ["claude", "codex", "codex-second", "copilot", "opencode", "qwen", "vibe", "agy", "gemini"]
+
+[targets.claude]
+path = "~/.claude/skills"
+mode = "copy"
+[targets.codex]
+path = "~/.codex/skills"
+mode = "copy"
+[targets.codex-second]
+path = "~/.codex-second/skills"
+mode = "copy"
+[targets.copilot]
+path = "~/.copilot/skills"
+mode = "copy"
+[targets.opencode]
+path = "~/.config/opencode/skills"
+mode = "copy"
+[targets.qwen]
+path = "~/.qwen/skills"
+mode = "copy"
+[targets.vibe]
+path = "~/.vibe/skills"
+mode = "copy"
+[targets.agy]
+path = "~/.gemini/config/skills"
+mode = "copy"
+[targets.gemini]
+path = "~/.gemini/skills"
+mode = "copy"

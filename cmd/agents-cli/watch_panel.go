@@ -215,6 +215,8 @@ func watchPanel(a *watchApp) error {
 		leave := a.ui.enter(fmt.Sprintf("message.%x", msg))
 		defer leave()
 		switch msg {
+		case 0x4a: // WM_COPYDATA: identity-checked, idempotent park/unpark
+			return a.receiveSessionAction(lp)
 		case 0x8002: // terminal helper completed; never block the UI on UIA
 			select {
 			case result := <-terminalResults:
