@@ -52,17 +52,50 @@ func watchShelfReview(dir string, s watchSample) error {
 		if !watchShelfMessage(name+"\n\nShelve when idle?\nThe window will close after its resume details are saved. Cancel this request from Shelf or the row menu.", true) {
 			return nil
 		}
-		err = shelfQueue(dir, s)
+		err = watchShelfAction(dir, "queue", "", shelfReviewJSON(s))
 	} else {
 		if !watchShelfMessage(name+"\n\nSave to Shelf and close this session?\nYou can resume it later with the same agent and account.", true) {
 			return nil
 		}
-		err = shelfSaveClose(dir, s)
+		err = watchShelfAction(dir, "save", "", shelfReviewJSON(s))
 	}
 	if err != nil {
 		watchShelfMessage(err.Error(), false)
 	}
 	return err
+}
+
+// A confirmation may wait for its owner indefinitely; the subsequent disk,
+// console and launch work runs in a separate helper with a hard deadline.
+func watchShelfAction(dir, action, id, input string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	args := []string{"shelf", action}
+	if id != "" {
+		args = append(args, id)
+	}
+	args = append(args, "--state-dir", dir)
+	cmd := exec.CommandContext(ctx, exe, args...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW, HideWindow: true}
+	cmd.WaitDelay = 100 * time.Millisecond
+	b, err := cmd.Output()
+	if err == nil {
+		return nil
+	}
+	var failure struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(b, &failure) == nil && failure.Error.Message != "" {
+		return fmt.Errorf("%s", failure.Error.Message)
+	}
+	return fmt.Errorf("Shelf action failed or timed out. Inspect Shelf and the session before retrying")
 }
 
 func watchShelfHelper(ctx context.Context, dir, action, input string) error {
@@ -201,15 +234,9 @@ func watchShelfDialog(dir string, show bool) error {
 				go func() {
 					var err error
 					if id == 3 {
-						err = shelfChange(dir, entry.ID, func(e *shelfEntry) error {
-							if e.State != "pending" {
-								return fmt.Errorf("Only pending shelving can be cancelled")
-							}
-							e.State = "cancelled"
-							return nil
-						})
+						err = watchShelfAction(dir, "cancel", entry.ID, "")
 					} else {
-						err = shelfResumeAndPresent(dir, entry.ID)
+						err = watchShelfAction(dir, "resume", entry.ID, "")
 					}
 					result <- err
 					watchUser.NewProc("PostMessageW").Call(hwnd, 0x8001, 0, 0)

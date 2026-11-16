@@ -68,7 +68,7 @@ func shelfFixtureMain() bool {
 			}
 		}
 	}
-	if len(os.Args) > 1 && (os.Args[1] == "_attach" || os.Args[1] == "send" || os.Args[1] == "key") {
+	if len(os.Args) > 1 && (os.Args[1] == "_attach" || os.Args[1] == "send" || os.Args[1] == "key" || os.Args[1] == "shelf") {
 		main()
 		os.Exit(0)
 	}
@@ -156,7 +156,7 @@ func testShelfNativeRoundTrip(t *testing.T, host bool) {
 	}
 	dir := t.TempDir()
 	foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
-	if err := shelfSaveClose(dir, sample); err != nil {
+	if err := watchShelfAction(dir,"save","",shelfReviewJSON(sample)); err != nil {
 		t.Fatal(err)
 	}
 	if isAlive(pid) {
@@ -184,6 +184,16 @@ func testShelfNativeRoundTrip(t *testing.T, host bool) {
 	}
 	if err = shelfResume(dir, restored.ID); err == nil {
 		t.Fatal("repeated Resume created duplicate")
+	}
+	if err = shelfChange(dir, restored.ID, func(e *shelfEntry) error { e.ResumedPID = 0; e.ResumedStart = ""; e.State = "shelved"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err = shelfResume(dir, restored.ID); err != nil {
+		t.Fatal("could not recover spawned process marker:", err)
+	}
+	recovered, _ := shelfRead(dir)
+	if recovered[0].ResumedPID != restored.ResumedPID {
+		t.Fatal("missing PID record caused duplicate spawn")
 	}
 	deadline = time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {

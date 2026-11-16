@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -561,6 +562,10 @@ func shelfResume(dir, id string) error {
 					return errors.New("Too many matching processes to verify duplicate protection")
 				}
 				if envVar(p.PID, "AGENTS_CLI_SHELF_ID") == e.ID {
+					args, parseErr := windows.DecomposeCommandLine(commandLine(p.PID))
+					if parseErr != nil || len(args) == 0 || !slices.Equal(args[1:], e.Args) {
+						continue
+					} // inherited markers on daemons/subagents do not identify this TUI
 					e.ResumedPID = p.PID
 					e.ResumedStart = startTime(p.PID).Format(time.RFC3339Nano)
 					e.State = "resumed"
@@ -659,6 +664,15 @@ func cmdShelf(args []string) error {
 		}
 		emit(entry)
 		return nil
+	case "save", "queue":
+		var s watchSample
+		if err = json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&s); err != nil {
+			return err
+		}
+		if p.pos[0] == "queue" {
+			return shelfQueue(dir, s)
+		}
+		return shelfSaveClose(dir, s)
 	case "cancel-source":
 		var s watchSample
 		if err = json.NewDecoder(io.LimitReader(os.Stdin, 16384)).Decode(&s); err != nil {
