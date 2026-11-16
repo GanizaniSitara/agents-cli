@@ -93,7 +93,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 			// same install the window runs.
 			agent := procs[c.s.AgentPID]
 			for _, d := range procs.descendants(c.s.AgentPID) {
-				if dp := procs[d]; dp != nil && dp.Name == "codex.exe" {
+				if dp := procs[d]; dp != nil && dp.Name == "codex.exe" && classify(dp) == "codex" {
 					agent = dp
 					break
 				}

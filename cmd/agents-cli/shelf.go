@@ -594,17 +594,52 @@ func shelfResume(dir, id string) error {
 			}
 		}
 		cmd.Env = append(cmd.Env, "AGENTS_CLI_SHELF_ID="+e.ID)
-		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_CONSOLE, HideWindow: true}
-		if err := cmd.Start(); err != nil {
+		pid, err := shelfStartConsole(cmd.Path, cmd.Args, cmd.Dir, cmd.Env)
+		if err != nil {
 			return err
 		}
-		e.ResumedPID = uint32(cmd.Process.Pid)
+		e.ResumedPID = pid
 		e.ResumedStart = startTime(e.ResumedPID).Format(time.RFC3339Nano)
 		e.State = "resumed"
 		e.Problem = ""
-		cmd.Process.Release()
 		return nil
 	})
+}
+
+// Do not use os/exec.Start here: its redirected standard handles replace the
+// new console's input with NUL, causing real TUIs to exit or remain invisible.
+func shelfStartConsole(exe string, args []string, dir string, env []string) (uint32, error) {
+	application, err := windows.UTF16PtrFromString(exe)
+	if err != nil {
+		return 0, err
+	}
+	command, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(args))
+	if err != nil {
+		return 0, err
+	}
+	cwd, err := windows.UTF16PtrFromString(dir)
+	if err != nil {
+		return 0, err
+	}
+	slices.SortFunc(env, func(a, b string) int { return strings.Compare(strings.ToUpper(a), strings.ToUpper(b)) })
+	// Build the double-terminated block entry by entry, rejecting embedded NULs.
+	var environment []uint16
+	for _, value := range env {
+		encoded, err := windows.UTF16FromString(value)
+		if err != nil {
+			return 0, err
+		}
+		environment = append(environment, encoded...)
+	}
+	environment = append(environment, 0, 0)
+	startup := windows.StartupInfo{Cb: uint32(unsafe.Sizeof(windows.StartupInfo{})), Flags: windows.STARTF_USESHOWWINDOW, ShowWindow: windows.SW_HIDE}
+	var process windows.ProcessInformation
+	if err := windows.CreateProcess(application, command, nil, nil, false, windows.CREATE_NEW_CONSOLE|windows.CREATE_UNICODE_ENVIRONMENT, &environment[0], cwd, &startup, &process); err != nil {
+		return 0, err
+	}
+	windows.CloseHandle(process.Thread)
+	windows.CloseHandle(process.Process)
+	return process.ProcessId, nil
 }
 
 func cmdShelf(args []string) error {

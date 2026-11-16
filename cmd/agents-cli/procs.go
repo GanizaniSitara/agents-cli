@@ -259,6 +259,11 @@ func classify(p *proc) string {
 		}
 		return "claude"
 	case p.Name == "codex.exe", strings.HasPrefix(p.Name, "codex-"), strings.Contains(p.Cmd, `@openai\codex`):
+		// Managed app-server daemons have no interactive console. Do not poll
+		// them as sessions or let them replace a TUI during root selection.
+		if hasCommandFlag(p.Cmd, "--managed-daemon") {
+			return ""
+		}
 		return "codex"
 	case p.Name == "agy.exe":
 		return "agy"

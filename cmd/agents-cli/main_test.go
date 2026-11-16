@@ -38,6 +38,8 @@ func TestClassify(t *testing.T) {
 		{proc{Name: "node.exe", Cmd: `"node" "c:\x\node_modules\opencode-ai\bin\opencode"`}, "opencode"},
 		{proc{Name: "node.exe", Cmd: `"node" "c:\x\node_modules\@openai\codex\bin\codex.js"`}, "codex"},
 		{proc{Name: "codex.exe", Cmd: ``}, "codex"},
+		{proc{Name: "codex.exe", Cmd: `codex.exe app-server --listen unix:// --managed-daemon`}, ""},
+		{proc{Name: "codex.exe", Cmd: `codex.exe resume abc`}, "codex"},
 		{proc{Name: "agy.exe"}, "agy"},
 		{proc{Name: "vibe.exe"}, "vibe"},
 		{proc{Name: "python.exe"}, ""},

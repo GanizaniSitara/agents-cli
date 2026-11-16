@@ -36,6 +36,16 @@ func shelfFixtureMain() bool {
 		if os.Args[1] == "--resume" && (len(os.Args) < 3 || os.Args[2] != shelfFixtureID) {
 			os.Exit(42)
 		}
+		if os.Args[1] == "--resume" {
+			// Real TUIs use inherited standard handles, not a reopened CONIN$.
+			// A redirected/NUL launch must fail this regression fixture.
+			for _, f := range []*os.File{os.Stdin, os.Stdout, os.Stderr} {
+				var mode uint32
+				if windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) != nil {
+					os.Exit(43)
+				}
+			}
+		}
 		pid := uint32(os.Getpid())
 		started := startTime(pid)
 		dir := os.Getenv("CLAUDE_CONFIG_DIR")
@@ -156,7 +166,7 @@ func testShelfNativeRoundTrip(t *testing.T, host bool) {
 	}
 	dir := t.TempDir()
 	foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
-	if err := watchShelfAction(dir,"save","",shelfReviewJSON(sample)); err != nil {
+	if err := watchShelfAction(dir, "save", "", shelfReviewJSON(sample)); err != nil {
 		t.Fatal(err)
 	}
 	if isAlive(pid) {
