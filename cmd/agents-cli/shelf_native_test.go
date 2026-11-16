@@ -37,6 +37,9 @@ func shelfFixtureMain() bool {
 			os.Exit(42)
 		}
 		if os.Args[1] == "--resume" {
+			if os.Getenv("TERM") == "dumb" {
+				os.Exit(44)
+			}
 			// Real TUIs use inherited standard handles, not a reopened CONIN$.
 			// A redirected/NUL launch must fail this regression fixture.
 			for _, f := range []*os.File{os.Stdin, os.Stdout, os.Stderr} {
@@ -92,6 +95,7 @@ func TestShelfNativeSaveCloseResumeRoundTrip(t *testing.T) {
 }
 
 func testShelfNativeRoundTrip(t *testing.T, host bool) {
+	t.Setenv("TERM", "dumb")
 	t.Setenv("AGENTS_CLI_TEST_SHELF", "1")
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(t.TempDir(), "claude-profile"))
 	t.Setenv("APPDATA", t.TempDir())

@@ -576,6 +576,13 @@ func shelfResume(dir, id string) error {
 		cmd := exec.Command(e.Exe, e.Args...)
 		cmd.Dir = e.Directory
 		cmd.Env = os.Environ()
+		// Agent tool shells commonly export TERM=dumb for captured output.
+		// A fresh interactive console must not inherit that non-TUI setting.
+		for i := len(cmd.Env) - 1; i >= 0; i-- {
+			if key, value, ok := strings.Cut(cmd.Env[i], "="); ok && strings.EqualFold(key, "TERM") && (value == "" || strings.EqualFold(value, "dumb")) {
+				cmd.Env = append(cmd.Env[:i], cmd.Env[i+1:]...)
+			}
+		}
 		for _, v := range e.Env {
 			key, _, ok := strings.Cut(v, "=")
 			if !ok || (key != "CODEX_HOME" && key != "CLAUDE_CONFIG_DIR") {

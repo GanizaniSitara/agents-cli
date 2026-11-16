@@ -40,6 +40,7 @@ func TestClassify(t *testing.T) {
 		{proc{Name: "codex.exe", Cmd: ``}, "codex"},
 		{proc{Name: "codex.exe", Cmd: `codex.exe app-server --listen unix:// --managed-daemon`}, ""},
 		{proc{Name: "codex.exe", Cmd: `codex.exe resume abc`}, "codex"},
+		{proc{Name: "codex-code-mode-host.exe"}, ""},
 		{proc{Name: "agy.exe"}, "agy"},
 		{proc{Name: "vibe.exe"}, "vibe"},
 		{proc{Name: "python.exe"}, ""},
