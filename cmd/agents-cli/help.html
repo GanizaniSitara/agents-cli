@@ -16,7 +16,7 @@ body{max-width:960px;margin:28px auto;padding:0 24px 32px;color:#202020;backgrou
 agents-cli watch run      # foreground; keep this terminal open</pre>
 <p>Both show the same panel with session status and input requests.
 Click a row to bring the window forward.
-<code>Ctrl+Win+Z</code> selects the first unparked row on this desktop. Right-click a row to Park or Shelve.
+<code>Ctrl+Win+Z</code> selects the first unparked row on this desktop. If an agent is already active, it advances to the next idle or attention row. Right-click a row to Park or Shelve.
 <code>Hide</code> keeps watching in the tray. <code>Exit</code> or <code>watch stop</code> stops only the watcher.</p>
 </section>
 
@@ -69,7 +69,8 @@ Settings → Start with Windows enables background startup at sign-in.</p>
 <h2>PANEL</h2>
 <table aria-label="Panel controls"><tbody>
 <tr><td>Click / double-click row</td><td>Bring forward / white locator pulse.</td></tr>
-<tr><td>Ctrl+Win+Z</td><td>First eligible displayed row; skips parked sessions and other desktops.</td></tr>
+<tr><td>Ctrl+Win+Z</td><td>First eligible displayed row, or next idle/attention row when an agent is active. Skips the active session, parked sessions and other desktops.</td></tr>
+<tr><td>Park / Rename shortcuts</td><td>Configure separately in Settings. Off initially; Ctrl+Alt+Shift+P / R are available choices. Target the active agent only; registration collisions are reported.</td></tr>
 <tr><td>Ctrl+Alt+Shift+1–9,0</td><td>First ten displayed rows. Both shortcut sets are configurable.</td></tr>
 <tr><td>Right-click → Park / Unpark</td><td>Move session to bottom / restore it. Suppresses attention; work continues.</td></tr>
 <tr><td>Right-click → Shelve…</td><td>Confirm, save, then close gracefully. Busy sessions can wait until idle. Claude and Codex supported.</td></tr>

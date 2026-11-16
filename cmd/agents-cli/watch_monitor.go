@@ -31,6 +31,8 @@ type watchSettings struct {
 	DisableForeground     bool        `json:"disable_foreground,omitempty"`
 	Shortcuts             string      `json:"shortcuts,omitempty"`
 	FirstRowShortcut      string      `json:"first_row_shortcut,omitempty"`
+	ParkShortcut          string      `json:"park_shortcut,omitempty"`
+	RenameShortcut        string      `json:"rename_shortcut,omitempty"`
 	Position              *watchPoint `json:"position,omitempty"`
 	Monitor               string      `json:"monitor"`
 	Hidden                bool        `json:"hidden"`

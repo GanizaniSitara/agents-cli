@@ -140,6 +140,15 @@ func watchPanel(a *watchApp) error {
 		firstRowProblem = watchRegisterFirstRowShortcut(settings.FirstRowShortcut, registerShortcut, unregisterShortcut)
 		a.recordShortcut("first_row", watchFirstRowChoice(settings.FirstRowShortcut), firstRowProblem)
 	}
+	parkProblem, renameProblem := "", ""
+	applyParkShortcut := func() {
+		parkProblem = watchRegisterActionShortcut(watchParkHotkey, settings.ParkShortcut, "P", registerShortcut, unregisterShortcut)
+		a.recordShortcut("park", watchActionShortcutChoice(settings.ParkShortcut, "P"), parkProblem)
+	}
+	applyRenameShortcut := func() {
+		renameProblem = watchRegisterActionShortcut(watchRenameHotkey, settings.RenameShortcut, "R", registerShortcut, unregisterShortcut)
+		a.recordShortcut("rename", watchActionShortcutChoice(settings.RenameShortcut, "R"), renameProblem)
+	}
 	var rows []watchEntry
 	var summaries []watchPanelSummary
 	var painted watchPanelFrame
@@ -151,6 +160,16 @@ func watchPanel(a *watchApp) error {
 	var dragOffset watchPoint
 	capacity := 1
 	currentDesktop := a.currentDesktop()
+	foregroundTarget := func() (watchEntry, bool) {
+		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+		title := watchWindowTitle(foreground)
+		terminal := watchWindowClass(foreground) == "CASCADIA_HOSTING_WINDOW_CLASS"
+		a.mu.Lock()
+		all := a.tracker.panelRows()
+		a.mu.Unlock()
+		row, ok := watchForegroundSession(all, foreground, title, terminal)
+		return row, ok && watchDesktopSelectable(row.Sample.DesktopID, currentDesktop)
+	}
 	var previousStates map[uint32]string
 	wakeReady := false
 	var tray watchTrayData
@@ -172,7 +191,7 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 15
+			n = len(desktops) + 17
 		}
 		height := int32(34 + n*watchRowHeight + len(summaries)*28)
 		if menu {
@@ -233,8 +252,25 @@ func watchPanel(a *watchApp) error {
 			}
 			return 0
 		case 0x312: // WM_HOTKEY: same targets and identity checks as explicit clicks
+			if wp == watchParkHotkey || wp == watchRenameHotkey {
+				choice, key, problem, trigger := settings.ParkShortcut, "P", parkProblem, "park-shortcut"
+				if wp == watchRenameHotkey {
+					choice, key, problem, trigger = settings.RenameShortcut, "R", renameProblem, "rename-shortcut"
+				}
+				if row, ok := foregroundTarget(); ok && !menu && !pressed.Active && !dragging && problem == "" && watchActionShortcutChoice(choice, key) != "Off" {
+					pendingShortcut = watchPanelPress{Active: true, Kind: "row", Row: row, Time: time.Now(), Trigger: trigger, RowIndex: -1}
+					pendingFirstRow = false
+					watchUser.NewProc("SetTimer").Call(window, 3, 25, 0)
+				}
+				return 0
+			}
 			if wp == watchFirstRowHotkey {
-				if p, ok := watchFirstRowTarget(painted, currentDesktop); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
+				foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+				var activePID uint32
+				if row, ok := foregroundTarget(); ok {
+					activePID = row.Sample.PID
+				}
+				if p, ok := watchNextAttentionTarget(painted, currentDesktop, activePID, foreground); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
 					p.Time = time.Now()
 					p.Trigger = "first-row-shortcut"
 					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-received", false, false)
@@ -304,6 +340,24 @@ func watchPanel(a *watchApp) error {
 				eligible := entry != nil && (!pendingFirstRow || !entry.Parked)
 				a.mu.Unlock()
 				if eligible && !menu && !pressed.Active && !dragging {
+					if p.Trigger == "park-shortcut" || p.Trigger == "rename-shortcut" {
+						active, ok := foregroundTarget()
+						if !ok || !watchSameClickSession(active.Sample, p.Row.Sample) || watchTargetProblem(p.Row.Sample, watchReadTarget(p.Row.Sample)) != "" {
+							return 0
+						}
+						if p.Trigger == "park-shortcut" {
+							a.mu.Lock()
+							a.tracker.togglePark(p.Row.Sample)
+							a.save()
+							a.mu.Unlock()
+						} else if watchCanReviewName(p.Row.Sample) {
+							select {
+							case nameRequests <- p.Row.Sample:
+							default:
+							}
+						}
+						return 0
+					}
 					a.activateWatchRow(p, p.Y)
 					watchSetLift(window, true)
 				} else {
@@ -553,35 +607,46 @@ func watchPanel(a *watchApp) error {
 					a.persistSettings(settings)
 					resize()
 					return 0
-				} else if i >= len(desktops)+4 && i <= len(desktops)+7 {
+				} else if i == len(desktops)+4 || i == len(desktops)+5 {
+					if i == len(desktops)+4 {
+						settings.ParkShortcut = watchNextActionShortcut(settings.ParkShortcut, "P")
+						applyParkShortcut()
+					} else {
+						settings.RenameShortcut = watchNextActionShortcut(settings.RenameShortcut, "R")
+						applyRenameShortcut()
+					}
+					a.persistSettings(settings)
+					resize()
+					return 0
+				} else if i >= len(desktops)+6 && i <= len(desktops)+9 {
 					switch i - len(desktops) {
-					case 4:
+					case 6:
 						settings.DisableSelectionBlink = !settings.DisableSelectionBlink
 						watchCancelPulse()
-					case 5:
+					case 7:
 						settings.DisableForeground = !settings.DisableForeground
 						if settings.DisableForeground {
 							a.foregroundLift.release(watchLiftIdentity, watchSetLift)
 						}
-					case 6:
+					case 8:
 						settings.MovePointerOnShortcut = !settings.MovePointerOnShortcut
-					case 7:
+					case 9:
 						settings.InterruptPolicyBlock = !settings.InterruptPolicyBlock
 					}
 					a.persistSettings(settings)
 					resize()
 					return 0
-				} else if i == len(desktops)+8 {
+				} else if i == len(desktops)+10 {
 					settings.SelectionBlinkStyle = watchNextPulseStyle(settings.SelectionBlinkStyle)
 					watchCancelPulse()
 					a.persistSettings(settings)
 					resize()
 					return 0
-				} else if i == len(desktops)+9 {
+				} else if i == len(desktops)+11 {
 					settings.SuggestSessionNames = !settings.SuggestSessionNames
 					a.persistSettings(settings)
 					return 0
-				} else if i == len(desktops)+10 {
+				} else if i == len(desktops)+12 {
 					if !autostartBusy {
 						autostartBusy = true
 						mode := "enable"
@@ -591,16 +656,16 @@ func watchPanel(a *watchApp) error {
 						go func() { autostartResults <- watchAutostartQuery(a.dir, mode) }()
 					}
 					return 0
-				} else if i == len(desktops)+11 {
+				} else if i == len(desktops)+13 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+12 {
+				} else if i == len(desktops)+14 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+13 {
+				} else if i == len(desktops)+15 {
 					settings.Position = nil
 					a.persistSettings(settings)
 				} else if i == len(desktops) {
@@ -754,7 +819,7 @@ func watchPanel(a *watchApp) error {
 				}
 				watchText(dc, hint, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
-				watchText(dc, "First row: "+watchFirstRowChoice(settings.FirstRowShortcut)+"  [change]", 12, top+8, 350, top+35)
+				watchText(dc, "Next session: "+watchFirstRowChoice(settings.FirstRowShortcut)+"  [change]", 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				firstRowStatus := "Off | independent of numbered shortcuts"
 				if watchFirstRowChoice(settings.FirstRowShortcut) != "Off" {
@@ -764,6 +829,17 @@ func watchPanel(a *watchApp) error {
 					firstRowStatus = firstRowProblem
 				}
 				watchText(dc, firstRowStatus, 12, top+8, 350, top+35)
+				for _, action := range []struct{ label, choice, key, problem string }{
+					{"Park active", settings.ParkShortcut, "P", parkProblem},
+					{"Rename active", settings.RenameShortcut, "R", renameProblem},
+				} {
+					top += watchSettingsRowHeight
+					label := action.label + ": " + watchActionShortcutChoice(action.choice, action.key) + " [change]"
+					if action.problem != "" {
+						label = action.label + ": " + action.problem
+					}
+					watchText(dc, label, 12, top+8, 350, top+35)
+				}
 				for _, option := range []struct {
 					label    string
 					disabled bool
@@ -939,7 +1015,11 @@ func watchPanel(a *watchApp) error {
 	}()
 	applyShortcuts()
 	applyFirstRowShortcut()
+	applyParkShortcut()
+	applyRenameShortcut()
 	defer func() {
+		unregisterShortcut(watchParkHotkey)
+		unregisterShortcut(watchRenameHotkey)
 		unregisterShortcut(watchFirstRowHotkey)
 		for i := 0; i < 10; i++ {
 			unregisterShortcut(watchHotkeyBase + uintptr(i))

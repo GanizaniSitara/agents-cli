@@ -49,6 +49,8 @@ func watchShortcutDigit(index int) string {
 const watchHotkeyBase = 0x4100
 
 const watchFirstRowHotkey = 0x4200
+const watchParkHotkey = 0x4201
+const watchRenameHotkey = 0x4202
 const watchDefaultFirstRowShortcut = "Ctrl+Win+Z"
 
 type watchShortcutHealth struct {
@@ -69,7 +71,7 @@ func (a *watchApp) recordShortcut(kind, binding, problem string) {
 // Do not hand focus to a console while the chord is still down: subsequent
 // repeat/key-up events belong to the invoking app, not the selected shell.
 func watchShortcutReleased(down func(uintptr) bool) bool {
-	for _, key := range []uintptr{0x10, 0x11, 0x12, 0x5B, 0x5C, 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'} {
+	for _, key := range []uintptr{0x10, 0x11, 0x12, 0x5B, 0x5C, 'Z', 'P', 'R', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'} {
 		if down(key) {
 			return false
 		}
@@ -131,6 +133,97 @@ func watchFirstRowTarget(frame watchPanelFrame, current string) (watchPanelPress
 		}
 	}
 	return watchPanelPress{}, false
+}
+
+// Shared Terminal HWNDs are not session identities. Require an exact unique
+// caption match there; never park or rename an arbitrary tab in that window.
+func watchForegroundSession(rows []watchEntry, foreground uintptr, title string, terminal bool) (watchEntry, bool) {
+	var candidates []watchEntry
+	for _, row := range rows {
+		if foreground != 0 && row.Sample.HWND == foreground {
+			candidates = append(candidates, row)
+		}
+	}
+	if len(candidates) == 1 && !terminal {
+		return candidates[0], true
+	}
+	var matches []watchEntry
+	for _, row := range candidates {
+		if row.Sample.Title == title {
+			matches = append(matches, row)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+	return watchEntry{}, false
+}
+
+func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID uint32, foreground uintptr) (watchPanelPress, bool) {
+	if frame.Menu {
+		return watchPanelPress{}, false
+	}
+	start := -1
+	for i, row := range frame.Rows {
+		if row.Sample.PID == activePID && activePID != 0 {
+			start = i
+			break
+		}
+	}
+	for n := 1; n <= len(frame.Rows); n++ {
+		i := (start + n) % len(frame.Rows)
+		row := frame.Rows[i]
+		s := row.Sample
+		if row.Parked || !watchDesktopSelectable(s.DesktopID, current) || s.PID == activePID || (activePID == 0 && foreground != 0 && s.HWND == foreground) {
+			continue
+		}
+		if activePID != 0 && !(s.State == "idle" || s.State == "prompt" || s.State == "error" || s.PendingQuestions > 0 || s.Phase == "finished" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review" || s.Phase == "blocked") {
+			continue
+		}
+		p := frame.hit(20, 34+i*watchRowHeight+20)
+		return p, p.Kind == "row"
+	}
+	return watchPanelPress{}, false
+}
+
+func watchActionShortcutChoices(key string) []string {
+	return []string{"Off", "Ctrl+Alt+Shift+" + key, "Ctrl+Alt+" + key}
+}
+
+func watchActionShortcutChoice(choice, key string) string {
+	// New bindings stay opt-in until explicitly selected in Settings.
+	for _, candidate := range watchActionShortcutChoices(key) {
+		if candidate == choice {
+			return choice
+		}
+	}
+	return "Off"
+}
+
+func watchNextActionShortcut(choice, key string) string {
+	choices := watchActionShortcutChoices(key)
+	for i, candidate := range choices {
+		if candidate == watchActionShortcutChoice(choice, key) {
+			return choices[(i+1)%len(choices)]
+		}
+	}
+	return "Off"
+}
+
+func watchRegisterActionShortcut(id uintptr, choice, key string, register func(uintptr, uintptr, uintptr) bool, unregister func(uintptr)) string {
+	unregister(id)
+	choice = watchActionShortcutChoice(choice, key)
+	if choice == "Off" {
+		return ""
+	}
+	modifiers := uintptr(1 | 2)
+	if choice == "Ctrl+Alt+Shift+"+key {
+		modifiers |= 4
+	}
+	if !register(id, modifiers|0x4000, uintptr(key[0])) {
+		return "Unavailable: " + choice
+	}
+	return ""
 }
 
 // SW_RESTORE changes a visible maximized/snapped window's placement. Only a
