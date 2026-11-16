@@ -5,6 +5,30 @@ import (
 	"time"
 )
 
+func TestWatchRowRemainsVisibleWhileIdleSettles(t *testing.T) {
+	w := newWatchTracker(2 * time.Second)
+	s := watchSample{Session: Session{PID: 42, Tool: "copilot", State: "busy", Started: "same"}, DesktopID: "one", HWND: 42, RootStarted: "same", Phase: "working"}
+	now := time.Now()
+	for i, state := range []string{"busy", "idle", "idle", "unknown", "idle", "idle", "idle", "busy"} {
+		s.State, s.Phase = state, state
+		if state == "busy" {
+			s.Phase = "working"
+		}
+		// Content changes restart the idle debounce; they must not hide a row.
+		if i < 5 {
+			s.Signature = string(rune('a' + i))
+		}
+		w.observe(s, now.Add(time.Duration(i)*time.Second))
+		rows, _ := watchPanelLayout(w.panelRows(), "one", nil, nil)
+		if len(rows) != 1 || rows[0].Sample.PID != s.PID {
+			t.Fatalf("frame %d (%s) hid a live session: %+v", i, state, rows)
+		}
+		if state == "idle" && i < 5 && (rows[0].Stopped || rows[0].Attention) {
+			t.Fatal("keeping a row visible bypassed idle attention debounce")
+		}
+	}
+}
+
 func TestWatchAnimatedInputRequestStaysVisible(t *testing.T) {
 	w := newWatchTracker(2 * time.Second)
 	s := watchSample{Session: Session{PID: 4764, Tool: "vibe", State: "busy"}, DesktopID: "one", Phase: "working"}

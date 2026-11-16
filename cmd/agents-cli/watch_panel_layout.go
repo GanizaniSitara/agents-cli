@@ -20,9 +20,9 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 	for _, entry := range entries {
 		s := entry.Sample
 		if current != "" && s.DesktopID == current {
-			if entry.Parked || entry.Stopped || s.State == "unknown" || s.State == "error" || s.State == "busy" || s.Phase == "working" {
-				rows = append(rows, entry)
-			}
+			// Status stability controls attention, not session membership. An
+			// idle sample still settling must remain visible between busy reads.
+			rows = append(rows, entry)
 			continue
 		}
 		if s.DesktopID != current && included[s.DesktopID] {
