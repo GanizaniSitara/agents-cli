@@ -931,7 +931,7 @@ func watchPanel(a *watchApp) error {
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
-					metadataTop := top + watchRowHeight - 21
+					metadataTop := top + watchRowHeight - 16
 					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, metadataTop, 270, metadataTop+17)
 					watchText(dc, row.Sample.Tool, 276, metadataTop, 328, metadataTop+17)
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
