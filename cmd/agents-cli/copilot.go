@@ -16,11 +16,14 @@ func copilotState(lines []string) string {
 	if len(tail) == 0 {
 		return "unknown"
 	}
-	footer := strings.ToLower(strings.TrimSpace(tail[len(tail)-1]))
+	footer := strings.ToLower(strings.Join(copilotLiveFooter(tail), "\n"))
 	if copilotMenu(tail) {
 		return "prompt"
 	}
 	if strings.Contains(footer, "esc interrupt") || strings.Contains(footer, "esc to interrupt") {
+		return "busy"
+	}
+	if agents := watchAgentDetails("copilot", tail); agents.Running != nil && *agents.Running > 0 {
 		return "busy"
 	}
 	if draft, ok := copilotComposer(tail); ok {
@@ -37,6 +40,22 @@ func copilotState(lines []string) string {
 // agy frames other rows (e.g. background tasks) below the composer, so try
 // each adjacent pair of rules from the bottom up.
 func copilotComposer(lines []string) (string, bool) {
+	draft, _, ok := copilotComposerEnd(lines)
+	return draft, ok
+}
+
+func copilotLiveFooter(lines []string) []string {
+	tail := trimBlankTail(lines)
+	if _, bottom, ok := copilotComposerEnd(tail); ok {
+		return tail[bottom+1:]
+	}
+	if len(tail) > 0 {
+		return tail[len(tail)-1:]
+	}
+	return nil
+}
+
+func copilotComposerEnd(lines []string) (string, int, bool) {
 	bottom := -1
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
@@ -56,9 +75,9 @@ func copilotComposer(lines []string) (string, bool) {
 		for _, row := range lines[i+2 : bottom] {
 			draft = append(draft, strings.TrimSpace(row))
 		}
-		return strings.TrimSpace(strings.Join(draft, "\n")), true
+		return strings.TrimSpace(strings.Join(draft, "\n")), bottom, true
 	}
-	return "", false
+	return "", -1, false
 }
 
 func waitCanIdle(tool string, lines []string) bool {

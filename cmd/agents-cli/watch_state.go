@@ -67,7 +67,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) (notify bool) {
 	if s.Agents.Running != nil && *s.Agents.Running > 0 {
 		s.Working = true
 	}
-	if s.Agents.Running != nil && *s.Agents.Running > 0 && s.PendingQuestions == 0 && s.State != "error" {
+	if s.Agents.Running != nil && *s.Agents.Running > 0 && s.PendingQuestions == 0 && s.State != "error" && s.State != "prompt" {
 		s.State = "busy"
 		if s.Phase != "error" {
 			s.Phase = "working"

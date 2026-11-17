@@ -171,7 +171,7 @@ func watchApplyReviewedName(review watchNameReview) error {
 	if err := requirePolling(live); err != nil {
 		return err
 	}
-	if agyRuntimeWork(*live, procs, commandLine, startTime) > 0 {
+	if agentRuntimeWork(*live, procs, commandLine, startTime) > 0 {
 		return errors.New("Agent has background work. Uncheck session rename for window title only.")
 	}
 	read := func() (*peekResult, error) { return peek(s.PID, 0) }

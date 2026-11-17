@@ -60,7 +60,11 @@ func watchAgentDetails(tool string, lines []string) watchAgents {
 	if start < 0 {
 		start = 0
 	}
-	for _, line := range tail[start:] {
+	footer := tail[start:]
+	if tool == "copilot" {
+		footer = copilotLiveFooter(tail)
+	}
+	for _, line := range footer {
 		text := strings.TrimSpace(line)
 		if strings.HasPrefix(text, `"`) || strings.HasPrefix(text, "• ") || strings.HasPrefix(text, "● ") || strings.HasPrefix(text, "❯") || strings.HasPrefix(text, "›") {
 			continue
@@ -83,6 +87,11 @@ func watchAgentDetails(tool string, lines []string) watchAgents {
 	if result.Total != nil || result.Running != nil {
 		return result
 	}
+	if tool == "copilot" {
+		if _, ok := copilotComposer(tail); ok || !copilotMenu(tail) {
+			tail = footer
+		}
+	} // task panels in transcript history are not live evidence
 	panel := -1
 	for i, line := range tail {
 		text := strings.ToLower(strings.Trim(strings.TrimSpace(line), "╭╮╰╯│─ "))

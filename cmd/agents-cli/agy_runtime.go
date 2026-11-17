@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-// A live child command is independent evidence when AGY leaves an idle
+// A live child command is independent evidence when AGY or Copilot leaves an idle
 // composer or its console redraw is empty. Persistent MCP servers are excluded.
 // Never use AGY's own CPU usage, file mtimes or old transcript text as liveness.
 func agyWorkCommand(p *proc) bool {
 	cmd := strings.ToLower(strings.ReplaceAll(p.Cmd, `\`, "/"))
-	if cmd == "" || strings.Contains(cmd, "mcp") || strings.Contains(cmd, "--stdio") || strings.Contains(cmd, "stdio-bridge") {
+	if cmd == "" || agentInfrastructureCommand(cmd) {
 		return false
 	}
 	switch p.Name {
@@ -24,12 +24,30 @@ func agyWorkCommand(p *proc) bool {
 		return strings.Contains(cmd, ".py") || hasCommandFlag(cmd, "-c")
 	case "codex.exe":
 		return hasCommandFlag(cmd, "exec")
+	case "go.exe", "cargo.exe":
+		return hasCommandFlag(cmd, "build") || hasCommandFlag(cmd, "test") || hasCommandFlag(cmd, "run") || hasCommandFlag(cmd, "check")
+	case "dotnet.exe":
+		return hasCommandFlag(cmd, "build") || hasCommandFlag(cmd, "test") || hasCommandFlag(cmd, "publish") || hasCommandFlag(cmd, "restore")
+	case "msbuild.exe", "ninja.exe":
+		return true
+	case "cmake.exe":
+		return hasCommandFlag(cmd, "--build")
 	}
 	return false
 }
 
-func agyRuntimeWork(s Session, processes procMap, command func(uint32) string, started func(uint32) time.Time) int {
-	if s.Tool != "agy" || s.AgentPID == 0 || processes[s.AgentPID] == nil || processes[s.AgentPID].Name != "agy.exe" {
+func agentInfrastructureCommand(cmd string) bool {
+	cmd = strings.ToLower(cmd)
+	return strings.Contains(cmd, "mcp") || strings.Contains(cmd, "--stdio") || strings.Contains(cmd, "stdio-bridge")
+}
+
+func agentRuntimeWork(s Session, processes procMap, command func(uint32) string, started func(uint32) time.Time) int {
+	if (s.Tool != "agy" && s.Tool != "copilot") || s.AgentPID == 0 || processes[s.AgentPID] == nil {
+		return 0
+	}
+	agent := *processes[s.AgentPID]
+	agent.Cmd = strings.ToLower(command(s.AgentPID))
+	if classify(&agent) != s.Tool {
 		return 0
 	}
 	rootTime := started(s.PID)
@@ -41,6 +59,15 @@ func agyRuntimeWork(s Session, processes procMap, command func(uint32) string, s
 		return 0
 	}
 	work := 0
+	commands := map[uint32]string{}
+	readCommand := func(pid uint32) string {
+		if value, ok := commands[pid]; ok {
+			return value
+		}
+		value := command(pid)
+		commands[pid] = value
+		return value
+	}
 	children := processes.descendants(s.AgentPID)
 	if len(children) > 32 {
 		children = children[:32]
@@ -56,7 +83,17 @@ func agyRuntimeWork(s Session, processes procMap, command func(uint32) string, s
 			continue // stale/reused parent IDs do not prove ownership
 		}
 		copy := *p
-		copy.Cmd = command(pid)
+		copy.Cmd = readCommand(pid)
+		infrastructure := false
+		for parent, hops := processes[p.PPID], 0; parent != nil && parent.PID != s.AgentPID && hops < 32; parent, hops = processes[parent.PPID], hops+1 {
+			if agentInfrastructureCommand(readCommand(parent.PID)) {
+				infrastructure = true
+				break
+			}
+		}
+		if infrastructure {
+			continue
+		}
 		if agyWorkCommand(&copy) {
 			work++
 		}

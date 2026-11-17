@@ -120,7 +120,7 @@ func watchAskAgentName(review watchNameReview) (string, error) {
 	if err := requirePolling(live); err != nil {
 		return "", err
 	}
-	if live.AgentPID != s.AgentPID || agyRuntimeWork(*live, procs, commandLine, startTime) > 0 {
+	if live.AgentPID != s.AgentPID || agentRuntimeWork(*live, procs, commandLine, startTime) > 0 {
 		return "", errors.New("Agent changed or has running background work. Try again when idle.")
 	}
 	var nonce [8]byte

@@ -77,7 +77,7 @@ func cmdTail(args []string) error {
 	if err != nil {
 		return err
 	}
-	work := agyRuntimeWork(*s, processes, commandLine, startTime)
+	work := agentRuntimeWork(*s, processes, commandLine, startTime)
 	emit(map[string]interface{}{
 		"pid": s.PID, "tool": s.Tool, "name": s.Name, "title": r.Title,
 		"state": agyRuntimeState(guessState(s.Tool, r.Lines), work), "lines": screenTail(r.Lines, lines), "work_processes": work,

@@ -356,10 +356,10 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 		if err := watchPublishProgress(batch, &published, encoder.Encode, deadline.Reset); err != nil {
 			return err
 		}
-		// One inexpensive process enumeration for all AGY rows, never parallel.
+		// One inexpensive process enumeration for AGY/Copilot rows, never parallel.
 		var runtimeProcesses procMap
 		for _, s := range sessions {
-			if s.Tool == "agy" && !s.PollingMuted {
+			if (s.Tool == "agy" || s.Tool == "copilot") && !s.PollingMuted {
 				runtimeProcesses, _ = snapshot()
 				break
 			}
@@ -395,7 +395,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 				continue
 			}
 			previous := cache[s.PID]
-			if s.Tool != "agy" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && previous.sample.State != "unknown" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < watchScreenCacheLifetime(previous.sample.HWND, foreground) {
+			if s.Tool != "agy" && s.Tool != "copilot" && hooked && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND != 0 && previous.sample.State != "busy" && previous.sample.State != "error" && previous.sample.State != "unknown" && !dirty[previous.sample.HWND] && time.Since(previous.readAt) < watchScreenCacheLifetime(previous.sample.HWND, foreground) {
 				s.State, s.Title = previous.sample.State, previous.sample.Title
 				sample := previous.sample
 				sample.Session = s
@@ -410,7 +410,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 			if err := step("read.runtime"); err != nil {
 				return err
 			}
-			work := agyRuntimeWork(s, runtimeProcesses, commandLine, startTime)
+			work := agentRuntimeWork(s, runtimeProcesses, commandLine, startTime)
 			r := peekWithBlankRetry(func() *peekResult { return doPeekProgress(s.PID, 0, step) }, time.Sleep)
 			if r.Error != "" {
 				batch.Failures = append(batch.Failures, watchReaderError{Code: "WR108", Stage: "read", PID: s.PID, Detail: r.Error})
@@ -442,7 +442,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 			s.Title = r.Title
 			digest := sha256.Sum256([]byte(strings.Join(r.Lines, "\n")))
 			signature := hex.EncodeToString(digest[:8])
-			if s.Tool != "agy" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND == hwnd && previous.sample.Signature == signature {
+			if s.Tool != "agy" && s.Tool != "copilot" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Started == s.Started && previous.sample.HWND == hwnd && previous.sample.Signature == signature {
 				s.State = previous.sample.State
 			} else {
 				s.State = guessState(s.Tool, r.Lines)
@@ -472,7 +472,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 				}
 			}
 			watchApplyNameRecord(&sample, names, namingEnabled)
-			if s.Tool != "agy" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
+			if s.Tool != "agy" && s.Tool != "copilot" && previous.sample.RootStarted == rootStarted.Format(time.RFC3339Nano) && previous.sample.Signature == signature && previous.sample.Started == s.Started && previous.sample.HWND == hwnd {
 				sample.Phase, sample.Reason, sample.Agents = previous.sample.Phase, previous.sample.Reason, previous.sample.Agents
 			} else {
 				sample.Phase, sample.Reason = watchPhase(s.Tool, r.Lines, s.State)
@@ -491,7 +491,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 			if sample.Agents.Running != nil && *sample.Agents.Running > 0 {
 				sample.Working = true
 			}
-			if sample.Agents.Running != nil && *sample.Agents.Running > 0 && sample.PendingQuestions == 0 && sample.State != "error" {
+			if sample.Agents.Running != nil && *sample.Agents.Running > 0 && sample.PendingQuestions == 0 && sample.State != "error" && sample.State != "prompt" {
 				sample.State = "busy"
 				if sample.Phase != "error" {
 					sample.Phase = "working"

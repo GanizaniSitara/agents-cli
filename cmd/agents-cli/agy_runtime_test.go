@@ -19,13 +19,13 @@ func TestAGYRuntimeWorkAndOwnership(t *testing.T) {
 	}
 	started := func(pid uint32) time.Time { return start.Add(time.Duration(pid-10) * time.Second) }
 	command := func(pid uint32) string { return m[pid].Cmd }
-	if got := agyRuntimeWork(s, m, command, started); got != 3 {
+	if got := agentRuntimeWork(s, m, command, started); got != 3 {
 		t.Fatalf("work processes=%d, want shell, command and noninteractive agent", got)
 	}
 	delete(m, 13)
 	delete(m, 14)
 	delete(m, 15)
-	if got := agyRuntimeWork(s, m, command, started); got != 0 {
+	if got := agentRuntimeWork(s, m, command, started); got != 0 {
 		t.Fatalf("MCP bridge/unrelated process counted as work: %d", got)
 	}
 	m[13] = &proc{PID: 13, PPID: 11, Name: "pwsh.exe", Cmd: "pwsh.exe -File example.ps1"}
@@ -35,11 +35,11 @@ func TestAGYRuntimeWorkAndOwnership(t *testing.T) {
 		}
 		return started(pid)
 	}
-	if got := agyRuntimeWork(s, m, command, stale); got != 0 {
+	if got := agentRuntimeWork(s, m, command, stale); got != 0 {
 		t.Fatalf("stale child ancestry counted: %d", got)
 	}
 	s.Started = start.Add(-time.Hour).Format(time.RFC3339)
-	if got := agyRuntimeWork(s, m, command, started); got != 0 {
+	if got := agentRuntimeWork(s, m, command, started); got != 0 {
 		t.Fatalf("reused session root counted: %d", got)
 	}
 }
