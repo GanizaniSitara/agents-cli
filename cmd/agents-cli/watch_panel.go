@@ -931,8 +931,9 @@ func watchPanel(a *watchApp) error {
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
-					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, descriptionTop+18, 270, descriptionTop+35)
-					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 328, descriptionTop+35)
+					metadataTop := top + watchRowHeight - 21
+					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, metadataTop, 270, metadataTop+17)
+					watchText(dc, row.Sample.Tool, 276, metadataTop, 328, metadataTop+17)
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}
@@ -941,7 +942,7 @@ func watchPanel(a *watchApp) error {
 					if row.Parked {
 						parkLabel = "back"
 					}
-					watchText(dc, parkLabel, 330, descriptionTop+18, 360, descriptionTop+35)
+					watchText(dc, parkLabel, 330, metadataTop, 360, metadataTop+17)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {
