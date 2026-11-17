@@ -720,6 +720,12 @@ func watchPanel(a *watchApp) error {
 			}
 			if x >= 330 {
 				if (y-34)%watchRowHeight >= 34 {
+					a.mu.Lock()
+					a.tracker.togglePark(row.Sample)
+					a.save()
+					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
+					a.mu.Unlock()
+					a.logClick(p, releaseY, state, "park-toggled", false, false)
 					return 0
 				}
 				a.mu.Lock()
@@ -938,6 +944,11 @@ func watchPanel(a *watchApp) error {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}
 					watchText(dc, "x", 336, top+18, 358, top+36)
+					parkLabel := "park"
+					if row.Parked {
+						parkLabel = "back"
+					}
+					watchText(dc, parkLabel, 330, top+36, 360, top+54)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {
