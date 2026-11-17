@@ -479,13 +479,6 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			switch choice {
-			case watchRowPark:
-				a.mu.Lock()
-				a.tracker.togglePark(row.Sample)
-				a.save()
-				rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
-				a.mu.Unlock()
-				resize()
 			case watchRowRename:
 				select {
 				case nameRequests <- row.Sample:
@@ -948,7 +941,7 @@ func watchPanel(a *watchApp) error {
 					if row.Parked {
 						parkLabel = "back"
 					}
-					watchText(dc, parkLabel, 330, top+36, 360, top+54)
+					watchText(dc, parkLabel, 330, descriptionTop+18, 360, descriptionTop+35)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {

@@ -175,16 +175,16 @@ func TestWatchRowMenuParkUnparkNative(t *testing.T) {
 		}
 		var text [64]uint16
 		watchUser.NewProc("GetMenuStringW").Call(menu, 0, uintptr(unsafe.Pointer(&text[0])), 64, 0x400)
-		want := "Park"
-		if parked {
-			want = "Unpark"
-		}
-		if windows.UTF16ToString(text[:]) != want {
-			t.Fatal("wrong park action")
+		if windows.UTF16ToString(text[:]) != "Rename…" {
+			t.Fatal("Rename must be first")
 		}
 		id, _, _ := watchUser.NewProc("GetMenuItemID").Call(menu, 1)
 		if id != watchRowShelve {
 			t.Fatal("wrong Shelve action")
+		}
+		count, _, _ := watchUser.NewProc("GetMenuItemCount").Call(menu)
+		if count != 3 {
+			t.Fatal("menu must contain Rename, Shelve and cancel shelving only")
 		}
 		watchUser.NewProc("DestroyMenu").Call(menu)
 	}

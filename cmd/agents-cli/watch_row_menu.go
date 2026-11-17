@@ -7,22 +7,17 @@ import (
 )
 
 const (
-	watchRowPark = 101 + iota
-	watchRowShelve
+	watchRowShelve = 102 + iota
 	watchRowRename
 	watchRowCancelShelve
 )
 
-func watchRowMenu(parked bool) uintptr {
+func watchRowMenu(_ bool) uintptr {
 	menu, _, _ := watchUser.NewProc("CreatePopupMenu").Call()
-	park := "Park"
-	if parked {
-		park = "Unpark"
-	}
 	for _, item := range []struct {
 		id   uintptr
 		text string
-	}{{watchRowPark, park}, {watchRowShelve, "Shelve…"}, {watchRowCancelShelve, "Cancel pending shelving"}, {watchRowRename, "Rename…"}} {
+	}{{watchRowRename, "Rename…"}, {watchRowShelve, "Shelve…"}, {watchRowCancelShelve, "Cancel pending shelving"}} {
 		watchUser.NewProc("AppendMenuW").Call(menu, 0, item.id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(item.text))))
 	}
 	return menu
