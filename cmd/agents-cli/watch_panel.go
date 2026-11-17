@@ -157,6 +157,7 @@ func watchPanel(a *watchApp) error {
 	var pendingShortcut watchPanelPress
 	pendingFirstRow := false
 	dragging := false
+	popupOpen := false
 	var dragOffset watchPoint
 	capacity := 1
 	currentDesktop := a.currentDesktop()
@@ -174,7 +175,7 @@ func watchPanel(a *watchApp) error {
 	wakeReady := false
 	var tray watchTrayData
 	resize := func() {
-		if pressed.Active || dragging {
+		if pressed.Active || dragging || popupOpen {
 			return
 		} // keep the panel still through mouse-up
 		area := watchPositionMonitor(monitors, settings).Work
@@ -312,6 +313,11 @@ func watchPanel(a *watchApp) error {
 		case 0x21:
 			return 3 // WM_MOUSEACTIVATE: deliver click, never focus panel
 		case 0x113: // WM_TIMER
+			// TrackPopupMenu pumps this same window's messages. Keep refreshes
+			// from moving its owner or changing the row beneath an open menu.
+			if popupOpen {
+				return 0
+			}
 			select {
 			case result := <-autostartResults:
 				autostart, autostartBusy = result, false
@@ -474,7 +480,9 @@ func watchPanel(a *watchApp) error {
 			if watchTargetProblem(row.Sample, watchReadTarget(row.Sample)) != "" {
 				return 0
 			}
+			popupOpen = true
 			choice := watchShowRowMenu(window, row, point)
+			popupOpen = false
 			if watchTargetProblem(row.Sample, watchReadTarget(row.Sample)) != "" {
 				return 0
 			}
@@ -750,7 +758,7 @@ func watchPanel(a *watchApp) error {
 			var ps watchPaint
 			dc, _, _ := watchUser.NewProc("BeginPaint").Call(window, uintptr(unsafe.Pointer(&ps)))
 			frame := painted
-			if !pressed.Active {
+			if !pressed.Active && !popupOpen {
 				frame = newWatchPanelFrame(rows, summaries, offset, capacity, menu)
 				for i := range frame.Rows {
 					if !settings.SuggestSessionNames || frame.Rows[i].Parked {
