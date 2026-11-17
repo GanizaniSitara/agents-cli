@@ -152,7 +152,7 @@ not intercept it, and it may reach the foreground application.
 
 Settings also offers separate **Park active** and **Rename active** shortcuts.
 They start Off; Ctrl+Alt+Shift+P / R are the first choices, with Ctrl+Alt+P / R
-alternatives. Each registers independently and reports collisions. They target
+alternatives, plus Ctrl+Win+P / R. Each registers independently and reports collisions. They target
 the foreground agent, including an exact unique Terminal tab caption, and refuse
 ambiguous tabs or unrelated apps. Park toggles parking; Rename opens the existing
 editor. Global registration does not detect every application-local shortcut.

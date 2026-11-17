@@ -94,14 +94,14 @@ func TestWatchRequestAgentNameRefusesBusyDraftAndTimeout(t *testing.T) {
 
 func TestWatchUnnamedAGYOffersNameWithoutLocalSuggestion(t *testing.T) {
 	s := watchSample{Session: Session{Tool: "agy", Title: "Command Prompt - agy --dangerously-skip-permissions"}, NamingAgentStarted: "agent"}
-	if !watchCanReviewName(s) || watchRowDescription(s) != "Unnamed session - choose name" {
+	if !watchCanReviewName(s) || watchRowDescription(s) != "Unnamed session - right-click to rename" {
 		t.Fatal("unnamed AGY missing naming affordance")
 	}
 	f := newWatchPanelFrame([]watchEntry{{Sample: s}}, nil, 0, 1, false)
-	if p := f.hit(240, 74); p.Kind != "name" {
+	if p := f.hit(240, 74); p.Kind != "row" {
 		t.Fatalf("name control %q", p.Kind)
 	}
-	if p := f.hit(100, 60); p.Kind != "name" {
+	if p := f.hit(100, 60); p.Kind != "row" {
 		t.Fatalf("description %q", p.Kind)
 	}
 	s.NamingAgentStarted = ""
@@ -116,7 +116,7 @@ func TestWatchPermanentRenameNamedSession(t *testing.T) {
 		t.Fatal("named session must retain label and offer rename")
 	}
 	f := newWatchPanelFrame([]watchEntry{{Sample: s, Parked: true}}, nil, 0, 1, false)
-	if p := f.hit(240, 74); p.Kind != "name" {
+	if p := f.hit(240, 74); p.Kind != "row" {
 		t.Fatalf("parked named session control %q", p.Kind)
 	}
 	if p := f.hit(100, 60); p.Kind != "row" {

@@ -187,7 +187,7 @@ func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID u
 }
 
 func watchActionShortcutChoices(key string) []string {
-	return []string{"Off", "Ctrl+Alt+Shift+" + key, "Ctrl+Alt+" + key}
+	return []string{"Off", "Ctrl+Alt+Shift+" + key, "Ctrl+Alt+" + key, "Ctrl+Win+" + key}
 }
 
 func watchActionShortcutChoice(choice, key string) string {
@@ -219,6 +219,9 @@ func watchRegisterActionShortcut(id uintptr, choice, key string, register func(u
 	modifiers := uintptr(1 | 2)
 	if choice == "Ctrl+Alt+Shift+"+key {
 		modifiers |= 4
+	}
+	if choice == "Ctrl+Win+"+key {
+		modifiers = 2 | 8
 	}
 	if !register(id, modifiers|0x4000, uintptr(key[0])) {
 		return "Unavailable: " + choice

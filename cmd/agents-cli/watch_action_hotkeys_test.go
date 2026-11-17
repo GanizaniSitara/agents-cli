@@ -69,6 +69,9 @@ func TestActionHotkeyCollisionAndSettings(t *testing.T) {
 	if watchNextActionShortcut("Off", "P") != "Ctrl+Alt+Shift+P" {
 		t.Fatal("wrong first selectable binding")
 	}
+	if p := watchRegisterActionShortcut(watchParkHotkey, "Ctrl+Win+P", "P", func(id, mods, key uintptr) bool { return id == watchParkHotkey && mods == 0x400a && key == 'P' }, func(uintptr) {}); p != "" {
+		t.Fatal("configurable Win chord rejected", p)
+	}
 	dir := t.TempDir()
 	want := watchSettings{FirstRowShortcut: "Ctrl+Win+Z", Shortcuts: "Ctrl+Alt+Shift", ParkShortcut: "Ctrl+Alt+Shift+P", RenameShortcut: "Off"}
 	if err := saveWatchSettings(dir, want); err != nil {

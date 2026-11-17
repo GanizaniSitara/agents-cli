@@ -467,7 +467,7 @@ func watchPanel(a *watchApp) error {
 			client := point
 			watchUser.NewProc("ScreenToClient").Call(window, uintptr(unsafe.Pointer(&client)))
 			p := painted.hit(int(client.X), int(client.Y))
-			if p.Kind != "row" && p.Kind != "name" {
+			if p.Kind != "row" {
 				return 0
 			}
 			row := p.Row
@@ -685,15 +685,6 @@ func watchPanel(a *watchApp) error {
 				}
 				menu = false
 				resize()
-				return 0
-			}
-			if p.Kind == "name" {
-				if watchCanReviewName(p.Row.Sample) {
-					select {
-					case nameRequests <- p.Row.Sample:
-					default:
-					}
-				}
 				return 0
 			}
 			// Desktop summaries only change the panel view. Never fall through
@@ -941,11 +932,8 @@ func watchPanel(a *watchApp) error {
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
-					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, descriptionTop+18, 212, descriptionTop+35)
+					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, descriptionTop+18, 270, descriptionTop+35)
 					watchText(dc, row.Sample.Tool, 276, descriptionTop+18, 328, descriptionTop+35)
-					if watchCanReviewName(row.Sample) {
-						watchText(dc, "rename", 218, descriptionTop+18, 270, descriptionTop+35)
-					}
 					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}

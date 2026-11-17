@@ -153,16 +153,16 @@ func TestWatchNameSettingsAndDecisionsPersist(t *testing.T) {
 	}
 }
 
-func TestWatchNameHitIsNotActivation(t *testing.T) {
+func TestWatchRenameHasNoInlineHitTarget(t *testing.T) {
 	row := watchEntry{Sample: watchSample{Session: Session{Title: "Command Prompt - agy --dangerously-skip-permissions", Tool: "agy"}, SuggestedName: "Fix refresh hangs"}}
 	if got := watchRowDescription(row.Sample); got != "Suggested: Fix refresh hangs" {
 		t.Fatalf("suggestion not displayed: %q", got)
 	}
 	f := newWatchPanelFrame([]watchEntry{row}, nil, 0, 1, false)
-	if p := f.hit(100, 60); p.Kind != "name" {
-		t.Fatalf("clicking displayed suggestion must review, got %s", p.Kind)
+	if p := f.hit(100, 60); p.Kind != "row" {
+		t.Fatalf("suggestion retained inline rename action: %s", p.Kind)
 	}
-	if p := f.hit(240, 74); p.Kind != "name" {
+	if p := f.hit(240, 74); p.Kind != "row" {
 		t.Fatalf("got %s", p.Kind)
 	}
 	if p := f.hit(290, 74); p.Kind != "row" {
