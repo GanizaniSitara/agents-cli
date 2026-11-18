@@ -947,10 +947,12 @@ func watchPanel(a *watchApp) error {
 					}
 					watchText(dc, "x", 336, top+18, 358, top+36)
 					parkLabel := "park"
+					parkLeft := int32(330)
 					if row.Parked {
-						parkLabel = "↑"
+						parkLabel = "^"
+						parkLeft = 336
 					}
-					watchText(dc, parkLabel, 330, metadataTop, 360, metadataTop+17)
+					watchText(dc, parkLabel, parkLeft, metadataTop, 360, metadataTop+17)
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {
