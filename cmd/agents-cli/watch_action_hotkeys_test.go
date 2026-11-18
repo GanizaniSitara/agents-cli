@@ -9,12 +9,17 @@ func TestNextAttentionShortcutSkipsActiveBusyParkedAndBackground(t *testing.T) {
 	rows := []watchEntry{row(1, "prompt", "here"), row(2, "idle", "here"), row(3, "busy", "here"), row(4, "idle", "here"), row(5, "prompt", "other"), row(6, "error", "here")}
 	rows[3].Parked = true
 	frame := newWatchPanelFrame(rows, nil, 0, len(rows), false)
-	for _, tc := range []struct{ active, want uint32 }{{1, 2}, {2, 6}, {6, 1}, {3, 6}} {
+	for _, tc := range []struct{ active, want uint32 }{{1, 2}, {2, 1}, {6, 1}, {3, 1}} {
 		p, ok := watchNextAttentionTarget(frame, "here", tc.active, uintptr(tc.active))
 		if !ok || p.Row.Sample.PID != tc.want {
 			t.Fatalf("active %d: got %+v %v, want %d", tc.active, p, ok, tc.want)
 		}
 	}
+	frame.Rows[0].Parked = true
+	if p, ok := watchNextAttentionTarget(frame, "here", 6, 6); !ok || p.Row.Sample.PID != 2 {
+		t.Fatal("return to top failed to skip parked first row")
+	}
+	frame.Rows[0].Parked = false
 	frame = newWatchPanelFrame(rows[:1], nil, 0, 1, false)
 	if _, ok := watchNextAttentionTarget(frame, "here", 1, 1); ok {
 		t.Fatal("only active session selected itself")

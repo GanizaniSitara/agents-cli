@@ -164,11 +164,10 @@ func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID u
 		return watchPanelPress{}, false
 	}
 	start := -1
-	for i, row := range frame.Rows {
-		if row.Sample.PID == activePID && activePID != 0 {
-			start = i
-			break
-		}
+	// Return to the top from any lower row. Only advance past row one
+	// when it is already active, so repeated use always navigates away.
+	if len(frame.Rows) > 0 && activePID != 0 && frame.Rows[0].Sample.PID == activePID {
+		start = 0
 	}
 	for n := 1; n <= len(frame.Rows); n++ {
 		i := (start + n) % len(frame.Rows)
