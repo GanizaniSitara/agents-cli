@@ -172,8 +172,6 @@ func watchPanel(a *watchApp) error {
 		row, ok := watchForegroundSession(all, foreground, title, terminal)
 		return row, ok && watchDesktopSelectable(row.Sample.DesktopID, currentDesktop)
 	}
-	var previousStates map[uint32]string
-	wakeReady := false
 	var tray watchTrayData
 	resize := func() {
 		if pressed.Active || dragging || popupOpen {
@@ -414,7 +412,6 @@ func watchPanel(a *watchApp) error {
 			rows, summaries = watchPanelLayout(allRows, newDesktop, desktops, settings.includedDesktops())
 			foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 			rows = watchActiveRows(rows, foreground)
-			wakeRows, _ := watchPanelLayout(allRows, newDesktop, desktops, nil)
 			stoppedCount = 0
 			unknownCount = 0
 			for _, row := range rows {
@@ -425,18 +422,8 @@ func watchPanel(a *watchApp) error {
 					unknownCount++
 				}
 			}
-			// Only relevant status changes reopen the panel. Age ticks, working
-			// screen redraws and background desktop changes cannot wake it.
-			if wakeReady && newDesktop == currentDesktop && watchPanelNeedsWake(previousStates, wakeRows) && settings.Hidden {
-				settings.Hidden = false
-				a.persistSettings(settings)
-				watchUser.NewProc("ShowWindow").Call(window, 4)
-			}
-			previousStates = watchPanelStates(wakeRows)
+			// Hide persists across refreshes. The tray Show action restores the panel.
 			currentDesktop = newDesktop
-			if len(allRows) > 0 {
-				wakeReady = true
-			}
 			if stoppedCount != lastCount {
 				tray.update(stoppedCount, 1)
 				lastCount = stoppedCount
