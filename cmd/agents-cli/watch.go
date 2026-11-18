@@ -338,6 +338,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 		adopted := readAdopted()
 		namingEnabled := loadWatchSettings(dir).SuggestSessionNames
 		names := watchReadNames(dir)
+		parked := watchParkedRoots(dir, os.Getppid())
 		dirty := drain()
 		foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
 		eventCount += uint64(len(dirty))
@@ -359,7 +360,7 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 		// One inexpensive process enumeration for AGY/Copilot rows, never parallel.
 		var runtimeProcesses procMap
 		for _, s := range sessions {
-			if (s.Tool == "agy" || s.Tool == "copilot") && !s.PollingMuted {
+			if (s.Tool == "agy" || s.Tool == "copilot") && !s.PollingMuted && parked[s.PID] == "" {
 				runtimeProcesses, _ = snapshot()
 				break
 			}
@@ -390,6 +391,10 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 				continue
 			}
 			batch.Alive[s.PID] = rootStarted.Format(time.RFC3339Nano)
+			if parked[s.PID] == batch.Alive[s.PID] {
+				delete(cache, s.PID) // Force a fresh console sample on the first unparked pass.
+				continue
+			}
 			if watchReadCoolingDown(s.PID, cooldownPID, time.Now(), cooldownUntil) {
 				batch.Unavailable = append(batch.Unavailable, s.PID)
 				continue
@@ -729,6 +734,30 @@ func (a *watchApp) readWorker() (result error) {
 			a.mu.Unlock()
 		}
 	}
+}
+
+func watchParkedRoots(dir string, owner int) map[uint32]string {
+	var receipt struct {
+		PID      int `json:"pid"`
+		Sessions []struct {
+			Parked bool `json:"parked"`
+			Window struct {
+				PID         uint32 `json:"pid"`
+				RootStarted string `json:"root_started"`
+			} `json:"window"`
+		} `json:"sessions"`
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "status.json"))
+	if err != nil || json.Unmarshal(b, &receipt) != nil || receipt.PID != owner {
+		return nil
+	}
+	parked := make(map[uint32]string)
+	for _, row := range receipt.Sessions {
+		if row.Parked {
+			parked[row.Window.PID] = row.Window.RootStarted
+		}
+	}
+	return parked
 }
 
 func watchReason(state string) string {
