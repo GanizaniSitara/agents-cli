@@ -156,6 +156,7 @@ func watchPanel(a *watchApp) error {
 	var previousSelection watchPanelPress
 	var pendingShortcut watchPanelPress
 	pendingFirstRow := false
+	var attentionCycle watchAttentionCycle
 	dragging := false
 	popupOpen := false
 	var dragOffset watchPoint
@@ -271,7 +272,7 @@ func watchPanel(a *watchApp) error {
 				if row, ok := foregroundTarget(); ok {
 					activePID = row.Sample.PID
 				}
-				if p, ok := watchNextAttentionTarget(painted, currentDesktop, activePID, foreground); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
+				if p, ok := attentionCycle.next(painted, currentDesktop, activePID, foreground); ok && firstRowProblem == "" && watchFirstRowChoice(settings.FirstRowShortcut) != "Off" && !pressed.Active && !dragging {
 					p.Time = time.Now()
 					p.Trigger = "first-row-shortcut"
 					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-received", false, false)

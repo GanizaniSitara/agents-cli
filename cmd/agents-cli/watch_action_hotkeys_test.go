@@ -2,6 +2,32 @@ package main
 
 import "testing"
 
+func TestAttentionCycleVisitsAllRowsBeforeWrapping(t *testing.T) {
+	rows := []watchEntry{}
+	for _, pid := range []uint32{1, 2, 3, 4, 5} {
+		rows = append(rows, watchEntry{Sample: watchSample{Session: Session{PID: pid, State: "idle"}, HWND: uintptr(pid), DesktopID: "here"}})
+	}
+	rows[3].Parked = true
+	rows[4].Sample.DesktopID = "other"
+	frame := newWatchPanelFrame(rows, nil, 0, len(rows), false)
+	var cycle watchAttentionCycle
+	active := uint32(3)
+	for _, want := range []uint32{1, 2, 3, 2} {
+		p, ok := cycle.next(frame, "here", active, uintptr(active))
+		if !ok || p.Row.Sample.PID != want {
+			t.Fatalf("active %d: got %d, %v; want %d", active, p.Row.Sample.PID, ok, want)
+		}
+		active = want
+		// Status updates can reorder the active row while cycling.
+		frame.Rows[0], frame.Rows[1] = frame.Rows[1], frame.Rows[0]
+	}
+	// Selecting a different window manually restarts from the top.
+	p, ok := cycle.next(frame, "here", 3, 3)
+	if !ok || p.Row.Sample.PID != frame.Rows[0].Sample.PID {
+		t.Fatal("manual focus change did not restart at top")
+	}
+}
+
 func TestNextAttentionShortcutSkipsActiveBusyParkedAndBackground(t *testing.T) {
 	row := func(pid uint32, state, desktop string) watchEntry {
 		return watchEntry{Sample: watchSample{Session: Session{PID: pid, State: state}, DesktopID: desktop, HWND: uintptr(pid)}}

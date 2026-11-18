@@ -159,6 +159,46 @@ func watchForegroundSession(rows []watchEntry, foreground uintptr, title string,
 	return watchEntry{}, false
 }
 
+type watchAttentionCycle struct {
+	last watchSample
+	seen map[uint32]watchSample
+}
+
+func (c *watchAttentionCycle) next(frame watchPanelFrame, current string, activePID uint32, foreground uintptr) (watchPanelPress, bool) {
+	var active watchSample
+	for _, row := range frame.Rows {
+		if row.Sample.PID == activePID {
+			active = row.Sample
+		}
+	}
+	if activePID == 0 || !watchSameClickSession(active, c.last) {
+		c.seen = make(map[uint32]watchSample)
+	}
+	if c.seen == nil {
+		c.seen = make(map[uint32]watchSample)
+	}
+	remaining := frame
+	remaining.Rows = append([]watchEntry(nil), frame.Rows...)
+	for i, row := range remaining.Rows {
+		if seen, ok := c.seen[row.Sample.PID]; ok && watchSameClickSession(seen, row.Sample) {
+			remaining.Rows[i].Parked = true
+		}
+	}
+	p, ok := watchNextAttentionTarget(remaining, current, activePID, foreground)
+	if !ok && !frame.Menu {
+		c.seen = make(map[uint32]watchSample)
+		if activePID != 0 {
+			c.seen[activePID] = active
+		}
+		p, ok = watchNextAttentionTarget(frame, current, activePID, foreground)
+	}
+	if ok {
+		c.last = p.Row.Sample
+		c.seen[p.Row.Sample.PID] = p.Row.Sample
+	}
+	return p, ok
+}
+
 func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID uint32, foreground uintptr) (watchPanelPress, bool) {
 	if frame.Menu {
 		return watchPanelPress{}, false
