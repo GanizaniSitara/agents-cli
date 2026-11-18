@@ -2,6 +2,24 @@ package main
 
 import "testing"
 
+func TestAttentionShortcutCanLeaveBusyMailForUnknownSessions(t *testing.T) {
+	rows := []watchEntry{}
+	for i, state := range []string{"busy", "busy", "unknown", "unknown"} {
+		pid := uint32(i + 1)
+		rows = append(rows, watchEntry{Sample: watchSample{Session: Session{PID: pid, State: state}, HWND: uintptr(pid), DesktopID: "here"}})
+	}
+	frame := newWatchPanelFrame(rows, nil, 0, len(rows), false)
+	var cycle watchAttentionCycle
+	active := uint32(1)
+	for _, want := range []uint32{3, 4, 3} {
+		p, ok := cycle.next(frame, "here", active, uintptr(active))
+		if !ok || p.Row.Sample.PID != want {
+			t.Fatalf("from %d got %d, %v; want %d", active, p.Row.Sample.PID, ok, want)
+		}
+		active = want
+	}
+}
+
 func TestAttentionCycleVisitsAllRowsBeforeWrapping(t *testing.T) {
 	rows := []watchEntry{}
 	for _, pid := range []uint32{1, 2, 3, 4, 5} {

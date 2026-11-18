@@ -278,6 +278,8 @@ func watchPanel(a *watchApp) error {
 					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-received", false, false)
 					pendingShortcut, pendingFirstRow = p, true
 					watchUser.NewProc("SetTimer").Call(window, 3, 25, 0)
+				} else if !ok {
+					_ = watchAppendClick(a.dir, watchClickRecord{Time: time.Now(), Trigger: "first-row-shortcut", Outcome: "shortcut-no-eligible-target", ForegroundAfter: foreground, ForegroundPID: watchWindowPID(foreground)})
 				}
 				return 0
 			}

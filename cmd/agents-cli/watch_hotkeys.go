@@ -216,7 +216,7 @@ func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID u
 		if row.Parked || !watchDesktopSelectable(s.DesktopID, current) || s.PID == activePID || (activePID == 0 && foreground != 0 && s.HWND == foreground) {
 			continue
 		}
-		if activePID != 0 && !(s.State == "idle" || s.State == "prompt" || s.State == "error" || s.PendingQuestions > 0 || s.Phase == "finished" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review" || s.Phase == "blocked") {
+		if activePID != 0 && !(s.State == "idle" || s.State == "unknown" || s.State == "prompt" || s.State == "error" || s.PendingQuestions > 0 || s.Phase == "finished" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review" || s.Phase == "blocked") {
 			continue
 		}
 		p := frame.hit(20, 34+i*watchRowHeight+20)
