@@ -551,7 +551,11 @@ func cmdName(args []string) error {
 	m := readAdopted()
 	key := strconv.FormatUint(uint64(s.PID), 10)
 	a := m[key]
-	a.Name = strings.Join(p.pos[1:], " ")
+	requested := strings.Join(p.pos[1:], " ")
+	a.Name = shortSessionName(requested) // TECH-273: ticket ID or <=24 chars
+	if a.Name == "" {
+		return errors.New("name is empty")
+	}
 	if a.Tool == "" {
 		a.Tool = s.Tool
 	}
@@ -565,7 +569,11 @@ func cmdName(args []string) error {
 	if err := writeAdopted(m); err != nil {
 		return err
 	}
-	emit(map[string]interface{}{"pid": s.PID, "name": a.Name, "tool": a.Tool})
+	out := map[string]interface{}{"pid": s.PID, "name": a.Name, "tool": a.Tool}
+	if a.Name != requested {
+		out["shortened_from"] = requested
+	}
+	emit(out)
 	return nil
 }
 

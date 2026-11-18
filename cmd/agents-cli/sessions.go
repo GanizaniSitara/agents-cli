@@ -22,6 +22,7 @@ type Session struct {
 	Exe               string `json:"exe,omitempty"`     // the agent's own binary
 	Kind              string `json:"kind"`              // window | bg
 	Name              string `json:"name,omitempty"`
+	Task              string `json:"task,omitempty"` // full launch-info task slug; Name is its short form (TECH-273)
 	Title             string `json:"title,omitempty"`
 	Zone              *int   `json:"zone,omitempty"`
 	Started           string `json:"started,omitempty"`
@@ -130,7 +131,8 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		} else {
 			s.Source = "launch-info+scan"
 		}
-		s.Name = li.TaskSlug
+		s.Name = shortSessionName(li.TaskSlug)
+		s.Task = li.TaskSlug
 		s.Zone = li.Zone
 		s.SessionID = li.SessionId
 		s.ThreadID = li.ThreadId
@@ -169,7 +171,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 			}
 		}
 		if a.Name != "" {
-			s.Name = a.Name
+			s.Name = shortSessionName(a.Name)
 		}
 		s.PollingMuted = a.PollingMuted
 	}
@@ -267,7 +269,7 @@ func resolve(ref string, sessions []Session) (*Session, error) {
 	lower := strings.ToLower(ref)
 	var exact []Session
 	for i := range sessions {
-		if strings.EqualFold(sessions[i].Name, ref) {
+		if strings.EqualFold(sessions[i].Name, ref) || strings.EqualFold(sessions[i].Task, ref) {
 			exact = append(exact, sessions[i])
 		}
 	}
@@ -277,8 +279,19 @@ func resolve(ref string, sessions []Session) (*Session, error) {
 	if len(exact) > 1 {
 		sessions = exact
 	}
+	// A ticket ID ref (CSF-16) must never claim another ticket (CSF-166).
+	ticket := sessionTicketID(strings.ToUpper(ref))
+	if ticket != strings.ToUpper(ref) {
+		ticket = ""
+	}
 	var hits []int
 	for i := range sessions {
+		if ticket != "" {
+			if sessionTicketID(sessions[i].Name) == ticket || sessionTicketID(sessions[i].Task) == ticket || sessionTicketID(sessions[i].Title) == ticket {
+				hits = append(hits, i)
+			}
+			continue
+		}
 		if strings.Contains(strings.ToLower(sessions[i].Name), lower) || strings.Contains(strings.ToLower(sessions[i].Title), lower) {
 			hits = append(hits, i)
 		}
