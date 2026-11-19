@@ -319,6 +319,21 @@ func watchPanel(a *watchApp) error {
 			if popupOpen {
 				return 0
 			}
+			// Keep the drag timer independent of foreground checks and panel refresh.
+			if wp == 2 {
+				if dragging {
+					buttons, _, _ := watchUser.NewProc("GetAsyncKeyState").Call(1)
+					if buttons&0x8000 == 0 {
+						finishDrag()
+					} else {
+						moveDrag()
+					}
+				}
+				return 0
+			}
+			if dragging && wp == 1 {
+				return 0
+			}
 			select {
 			case result := <-autostartResults:
 				autostart, autostartBusy = result, false
@@ -376,17 +391,6 @@ func watchPanel(a *watchApp) error {
 			a.foregroundLift.update(liftForeground, watchLiftIdentity, watchSetLift)
 			if a.foregroundLift.sample.HWND != 0 {
 				watchSetLift(window, true) // target stacking may complete asynchronously
-			}
-			if wp == 2 {
-				if dragging {
-					buttons, _, _ := watchUser.NewProc("GetAsyncKeyState").Call(1)
-					if buttons&0x8000 == 0 {
-						finishDrag()
-					} else {
-						moveDrag()
-					}
-				}
-				return 0
 			}
 			if a.exitRequested.Load() {
 				watchUser.NewProc("DestroyWindow").Call(window)
@@ -513,9 +517,7 @@ func watchPanel(a *watchApp) error {
 			return 0
 		case 0x200: // WM_MOUSEMOVE: header drag, without activating the window
 			if dragging && wp&1 != 0 {
-				point := watchPoint{int32(int16(lp)), int32(int16(lp >> 16))}
-				watchUser.NewProc("ClientToScreen").Call(window, uintptr(unsafe.Pointer(&point)))
-				watchUser.NewProc("SetWindowPos").Call(window, 0, uintptr(point.X-dragOffset.X), uintptr(point.Y-dragOffset.Y), 0, 0, 0x1|0x4|0x10)
+				moveDrag()
 			}
 			return 0
 		case 0x215, 0x1f: // capture lost / cancel mode: never activate
