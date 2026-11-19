@@ -62,7 +62,11 @@ func shelfFixtureMain() bool {
 		}
 		k32.NewProc("SetConsoleTitleW").Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr("Shelf test fixture"))))
 		k32.NewProc("SetConsoleOutputCP").Call(65001)
-		_, _ = out.WriteString("Claude Code\r\n────────────────────────\r\n❯ \r\n────────────────────────\r\n? for shortcuts\r\n")
+		if os.Getenv("MASTER_FIXTURE_RECEIPT") != "" {
+			_, _ = out.WriteString("Do you want to proceed?\r\n❯ 1. Yes\r\n  2. No\r\nEnter to select\r\n")
+		} else {
+			_, _ = out.WriteString("Claude Code\r\n────────────────────────\r\n❯ \r\n────────────────────────\r\n? for shortcuts\r\n")
+		}
 		in, err := os.OpenFile("CONIN$", os.O_RDWR, 0)
 		if err != nil {
 			os.Exit(2)
@@ -78,6 +82,10 @@ func shelfFixtureMain() bool {
 			}
 			if strings.TrimSpace(line) == "/exit" {
 				os.Exit(0)
+			}
+			if path := os.Getenv("MASTER_FIXTURE_RECEIPT"); path != "" {
+				_ = os.WriteFile(path, []byte(line), 0600)
+				_, _ = out.WriteString("Working (esc to interrupt)\r\n")
 			}
 		}
 	}

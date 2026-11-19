@@ -112,12 +112,25 @@ func masterClient(args []string) error {
 		if !filepath.IsAbs(args[1]) || !strings.EqualFold(filepath.Base(args[1]), "codex.exe") {
 			return errors.New("expected absolute Codex executable path")
 		}
-		cmd := exec.CommandContext(ctx, args[1], "queue", "--thread", args[2], "--message", note, "--resume")
+		help, err := exec.CommandContext(ctx, args[1], "queue", "--help").Output()
+		if err != nil {
+			return fmt.Errorf("inspect Codex queue options: %w", err)
+		}
+		queueArgs := []string{"queue", "--thread", args[2], "--message", note}
+		resume := false
+		for _, line := range strings.Split(string(help), "\n") {
+			if strings.TrimSpace(line) == "--resume" {
+				resume = true
+				queueArgs = append(queueArgs, "--resume")
+				break
+			}
+		}
+		cmd := exec.CommandContext(ctx, args[1], queueArgs...)
 		cmd.Stderr = os.Stderr
 		if err = cmd.Run(); err != nil {
 			return err
 		}
-		return json.NewEncoder(os.Stdout).Encode(map[string]any{"queued": true, "cursor": r.Event.ID})
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"queued": true, "resume_requested": resume, "cursor": r.Event.ID})
 	}
 	usage := errors.New("usage: master wait AFTER | master context PID ID | master reply PID ID (text from stdin)")
 	if len(args) < 2 {
