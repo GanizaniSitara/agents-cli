@@ -12,6 +12,82 @@ import (
 	"time"
 )
 
+func TestMasterSelectionAndSubscriptionIdentity(t *testing.T) {
+	lines := masterLines([]string{"❯ 1. Yes", "  2. No", "› input text", "❯ ", "› 12) Continue"})
+	if strings.Join(lines, "|") != "❯ 1. Yes|2. No|› 12) Continue" {
+		t.Fatal(lines)
+	}
+	for _, test := range []struct {
+		s       Session
+		allowed bool
+	}{
+		{Session{Tool: "codex", ThreadID: "MASTER"}, false}, {Session{Tool: "codex", SessionID: "master"}, false},
+		{Session{Tool: "codex"}, false}, {Session{Tool: "codex", ThreadID: "worker"}, true}, {Session{Tool: "claude"}, true},
+	} {
+		if subscriptionAllows(watchSample{Session: test.s}, "master") != test.allowed {
+			t.Fatal(test)
+		}
+	}
+}
+
+func TestMasterSubscriptionReconnect(t *testing.T) {
+	dir := t.TempDir()
+	cfg := subscriptionConfig{"master", "codex.exe", 1}
+	if err := subscriptionWrite(filepath.Join(dir, "master-subscription.json"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	var sent []uint64
+	wake := func(_, _ string, e masterEvent) (bool, error) { sent = append(sent, e.ID); return true, nil }
+	feed := newMasterFeed()
+	add := func(pid uint32, thread string) {
+		feed.observe(watchEntry{Attention: true, Stopped: true, Sample: watchSample{Session: Session{Tool: "codex", ThreadID: thread, PID: pid}}}, []string{"❯ 1. Yes"}, false)
+	}
+	add(1, "old")
+	start := func(stamp string) func() {
+		a := watchApp{dir: dir, master: feed, started: stamp, stop: make(chan struct{})}
+		done := make(chan struct{})
+		go func() { defer close(done); a.runMasterSubscription(5*time.Millisecond, wake) }()
+		return func() { close(a.stop); <-done }
+	}
+	stateAt := func(stamp string, cursor uint64, delivered int) {
+		t.Helper()
+		var s subscriptionState
+		for until := time.Now().Add(3 * time.Second); time.Now().Before(until); {
+			if subscriptionRead(filepath.Join(dir, "master-subscription-state.json"), &s) == nil && s.Started == stamp && s.Cursor == cursor && s.Delivered == delivered {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("cursor %d deliveries %d, got %+v", cursor, delivered, s)
+	}
+	feed.ready = true
+	feed.baseline = 1
+	stop := start("first")
+	stateAt("first", 1, 0)
+	add(2, "master")
+	add(3, "worker")
+	stateAt("first", 3, 1)
+	stop()
+	add(4, "while-disconnected")
+	stop = start("first")
+	stateAt("first", 4, 2)
+	stop()
+	feed = newMasterFeed()
+	feed.next = 100
+	add(3, "worker")
+	add(4, "while-disconnected")
+	feed.ready = true
+	feed.baseline = 102
+	stop = start("second")
+	stateAt("second", 102, 2)
+	add(5, "new-worker")
+	stateAt("second", 103, 3)
+	stop()
+	if len(sent) != 3 || sent[0] != 3 || sent[1] != 4 || sent[2] != 103 {
+		t.Fatal(sent)
+	}
+}
+
 func TestMasterTransportCLI(t *testing.T) {
 	bin := os.Getenv("MASTER_SMOKE_EXE")
 	if bin == "" {

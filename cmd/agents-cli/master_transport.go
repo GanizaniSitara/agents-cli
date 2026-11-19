@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -86,7 +87,41 @@ func masterHandle(c net.Conn, f *masterFeed, reply func(masterRequest) error) {
 	}
 	json.NewEncoder(c).Encode(r)
 }
+func queueMasterWake(bin, thread string, event masterEvent) (bool, error) {
+	// A small pointer keeps cached conversation text out of process arguments.
+	note := fmt.Sprintf("Watcher event %d for session PID %d. Read with agents-cli master context %d %d.", event.ID, event.Session.PID, event.Session.PID, event.ID)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if !filepath.IsAbs(bin) || !strings.EqualFold(filepath.Base(bin), "codex.exe") {
+		return false, errors.New("expected absolute Codex executable path")
+	}
+	probe := exec.CommandContext(ctx, bin, "queue", "--help")
+	probe.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	help, err := probe.Output()
+	if err != nil {
+		return false, fmt.Errorf("inspect Codex queue options: %w", err)
+	}
+	queueArgs := []string{"queue", "--thread", thread, "--message", note}
+	resume := false
+	for _, line := range strings.Split(string(help), "\n") {
+		if strings.TrimSpace(line) == "--resume" {
+			resume = true
+			queueArgs = append(queueArgs, "--resume")
+			break
+		}
+	}
+	cmd := exec.CommandContext(ctx, bin, queueArgs...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.Stderr = os.Stderr
+	if err = cmd.Run(); err != nil {
+		return false, err
+	}
+	return resume, nil
+}
 func masterClient(args []string) error {
+	if len(args) > 0 && (args[0] == "subscribe" || args[0] == "unsubscribe" || args[0] == "subscription-status") {
+		return masterSubscriptionCommand(args)
+	}
 	if len(args) == 4 && args[0] == "wake" {
 		// Wake exactly once per invocation; the caller checkpoints the emitted cursor.
 		after, err := strconv.ParseUint(args[3], 10, 64)
@@ -105,29 +140,8 @@ func masterClient(args []string) error {
 		if json.Unmarshal(out, &r) != nil || r.Event == nil {
 			return errors.New("missing watcher event")
 		}
-		// A small pointer keeps cached conversation text out of process arguments.
-		note := fmt.Sprintf("Watcher event %d for session PID %d. Read with agents-cli master context %d %d.", r.Event.ID, r.Event.Session.PID, r.Event.Session.PID, r.Event.ID)
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		if !filepath.IsAbs(args[1]) || !strings.EqualFold(filepath.Base(args[1]), "codex.exe") {
-			return errors.New("expected absolute Codex executable path")
-		}
-		help, err := exec.CommandContext(ctx, args[1], "queue", "--help").Output()
+		resume, err := queueMasterWake(args[1], args[2], *r.Event)
 		if err != nil {
-			return fmt.Errorf("inspect Codex queue options: %w", err)
-		}
-		queueArgs := []string{"queue", "--thread", args[2], "--message", note}
-		resume := false
-		for _, line := range strings.Split(string(help), "\n") {
-			if strings.TrimSpace(line) == "--resume" {
-				resume = true
-				queueArgs = append(queueArgs, "--resume")
-				break
-			}
-		}
-		cmd := exec.CommandContext(ctx, args[1], queueArgs...)
-		cmd.Stderr = os.Stderr
-		if err = cmd.Run(); err != nil {
 			return err
 		}
 		return json.NewEncoder(os.Stdout).Encode(map[string]any{"queued": true, "resume_requested": resume, "cursor": r.Event.ID})

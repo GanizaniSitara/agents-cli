@@ -240,7 +240,16 @@ func runWatch(args []string) error {
 	defer windows.CloseHandle(mutex)
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
 	app := &watchApp{tracker: newWatchTracker(stable), dir: dir, stop: make(chan struct{}), policyQueue: make(chan watchSample, 16), policyAttempts: watchPolicyAttempts{}}
-	if socket := os.Getenv("AGENTS_MASTER_SOCKET"); socket != "" {
+	socket := os.Getenv("AGENTS_MASTER_SOCKET")
+	if socket == "" {
+		if _, err := os.Stat(filepath.Join(dir, "master-subscription.json")); err == nil {
+			socket = filepath.Join(absolute, "master.sock")
+			if err = os.Setenv("AGENTS_MASTER_SOCKET", socket); err != nil {
+				return err
+			}
+		}
+	}
+	if socket != "" {
 		app.master = newMasterFeed()
 		app.master.next = uint64(time.Now().UnixMicro())
 		listener, err := masterListen(socket, app.master, app.masterReply)
@@ -273,6 +282,9 @@ func runWatch(args []string) error {
 	}
 	collected := make(chan struct{})
 	app.started = startTime(uint32(os.Getpid())).Format(time.RFC3339Nano)
+	if app.master != nil {
+		go app.runMasterSubscription(time.Second, queueMasterWake)
+	}
 	app.rememberSettings(loadWatchSettings(dir))
 	app.output = &watchOutput{}
 	outputDone := make(chan struct{})
@@ -744,6 +756,14 @@ func (a *watchApp) readWorker() (result error) {
 			}
 			if !batch.Partial {
 				a.tracker.prune(alive)
+				if a.master != nil && batch.Error == "" {
+					a.master.mu.Lock()
+					if !a.master.ready {
+						a.master.baseline = a.master.next
+						a.master.ready = true
+					}
+					a.master.mu.Unlock()
+				}
 			}
 			for _, pid := range batch.Unavailable {
 				if entry := a.tracker.entries[pid]; entry != nil && entry.Sample.RootStarted == batch.Alive[pid] {

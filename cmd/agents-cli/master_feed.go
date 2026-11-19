@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -22,11 +23,15 @@ type masterStop struct {
 }
 
 type masterFeed struct {
-	mu      sync.Mutex
-	next    uint64
-	current map[uint32]*masterStop
-	changed chan struct{}
+	mu       sync.Mutex
+	next     uint64
+	current  map[uint32]*masterStop
+	changed  chan struct{}
+	ready    bool
+	baseline uint64
 }
+
+var selectedMasterChoice = regexp.MustCompile(`^[›❯]\s*[0-9]+[.)]\s+\S`)
 
 func newMasterFeed() *masterFeed {
 	return &masterFeed{current: make(map[uint32]*masterStop), changed: make(chan struct{})}
@@ -37,7 +42,7 @@ func masterLines(lines []string) []string {
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.Trim(line, "─━") == "" ||
-			strings.HasPrefix(line, "›") || strings.HasPrefix(line, "❯") ||
+			(strings.HasPrefix(line, "›") || strings.HasPrefix(line, "❯")) && !selectedMasterChoice.MatchString(line) ||
 			strings.Contains(line, "Context ") && strings.Contains(line, "% left") ||
 			strings.Contains(line, "for shortcuts") || strings.Contains(line, "f2 to view") ||
 			strings.HasPrefix(line, "Worked for ") {
