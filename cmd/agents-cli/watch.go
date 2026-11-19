@@ -63,6 +63,7 @@ type watchReceipt struct {
 }
 
 type watchApp struct {
+	master            *masterFeed
 	exitRequested     atomic.Bool
 	settings          atomic.Pointer[watchSettings]
 	output            *watchOutput
@@ -239,6 +240,15 @@ func runWatch(args []string) error {
 	defer windows.CloseHandle(mutex)
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
 	app := &watchApp{tracker: newWatchTracker(stable), dir: dir, stop: make(chan struct{}), policyQueue: make(chan watchSample, 16), policyAttempts: watchPolicyAttempts{}}
+	if socket := os.Getenv("AGENTS_MASTER_SOCKET"); socket != "" {
+		app.master = newMasterFeed()
+		app.master.next = uint64(time.Now().UnixMicro())
+		listener, err := masterListen(socket, app.master, app.masterReply)
+		if err != nil {
+			return err
+		}
+		defer listener.Close()
+	}
 	if p.has("monitor") {
 		number, err := p.intFlag("monitor", 0)
 		if err != nil {
@@ -464,6 +474,9 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 				return err
 			}
 			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop, Context: watchContext(r.Lines)}
+			if os.Getenv("AGENTS_MASTER_SOCKET") != "" {
+				sample.MasterLines = masterLines(r.Lines)
+			}
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
 			sample.WindowPID = watchWindowPID(hwnd)
 			sample.WindowStarted = startTime(sample.WindowPID).Format(time.RFC3339Nano)
@@ -530,6 +543,16 @@ func normalizeWatchStart(v string) string {
 }
 
 func (a *watchApp) save() []byte {
+	if a.master != nil {
+		a.master.mu.Lock()
+		for pid := range a.master.current {
+			e := a.tracker.entries[pid]
+			if e == nil || e.Parked || e.Dismissed || !e.Attention || !e.Stopped || e.Sample.PollingMuted {
+				delete(a.master.current, pid)
+			}
+		}
+		a.master.mu.Unlock()
+	}
 	r := watchReceipt{PID: uint32(os.Getpid()), Started: a.started, Updated: time.Now(), Rows: a.tracker.rows(), Sessions: a.tracker.panelRows(), Error: a.problem, ConsoleEvents: a.consoleEvents, Coverage: a.coverage}
 	r.BuildCommit = buildCommit
 	r.ErrorCode, r.ReaderStage, r.LastReaderError, r.ReaderErrorCounts = a.problemCode, a.readerStage, a.lastReaderError, a.readerErrorCounts
@@ -702,9 +725,14 @@ func (a *watchApp) readWorker() (result error) {
 				}
 			}
 			for _, s := range batch.Samples {
+				lines := s.MasterLines
+				s.MasterLines = nil
 				alive[s.PID] = true
 				if a.tracker.observe(s, time.Now()) {
 					a.queueEvent(s)
+				}
+				if a.master != nil {
+					a.master.observe(*a.tracker.entries[s.PID], lines, s.Source == "adopted" || s.Tool == "other")
 				}
 				if a.policyAttempts != nil && a.policyAttempts.ready(s, settings.InterruptPolicyBlock) {
 					select {

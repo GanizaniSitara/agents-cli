@@ -30,6 +30,13 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "master" {
+		if err := masterClient(os.Args[2:]); err != nil {
+			emitError(err)
+			os.Exit(1)
+		}
+		return
+	}
 	// An owner-opened editor waits for its owner, not the console-operation
 	// deadline. Its parent cancels it when the watcher exits; apply is bounded.
 	if len(os.Args) > 2 && ((os.Args[1] == "_attach" && os.Args[2] == "name-review") || (os.Args[1] == "shelf" && (os.Args[2] == "ui" || os.Args[2] == "review"))) {

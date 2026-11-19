@@ -6,6 +6,7 @@ import (
 )
 
 type watchSample struct {
+	MasterLines []string `json:"master_lines,omitempty"`
 	Session
 	SuggestedName      string      `json:"suggested_name,omitempty"`
 	NamingAgentStarted string      `json:"naming_agent_started,omitempty"`
