@@ -64,7 +64,7 @@ func TestWatchPanelCurrentDesktopAndSummary(t *testing.T) {
 	if len(rows) != 2 || rows[0].Sample.PID != 1 || rows[1].Sample.PID != 2 {
 		t.Fatalf("current desktop rows: %+v", rows)
 	}
-	if len(summaries) != 2 || summaries[0].Text != "[ ] Include Desktop 2 | 1 stopped | 1 working" {
+	if len(summaries) != 2 || summaries[0].Text != "[ ] Go to Desktop 2 | 1 stopped | 1 working" {
 		t.Fatalf("summaries: %v", summaries)
 	}
 }

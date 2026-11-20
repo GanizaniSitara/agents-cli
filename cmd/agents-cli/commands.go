@@ -105,6 +105,9 @@ func cmdSend(args []string) (result error) {
 	if !s.Alive {
 		return fmt.Errorf("session %d is not running", s.PID)
 	}
+	if s.Variant == "wsl" {
+		return errors.New("WSL session supports discovery and reading only")
+	}
 	if s.Tool == "claude" && procs.ancestorNamed(uint32(windows.GetCurrentProcessId()), "claude.exe") && !p.boolean("force") {
 		return errors.New("target is a Claude session and so is the caller: use the native SendMessage tool, or pass --force")
 	}
@@ -406,6 +409,9 @@ func cmdKey(args []string) (result error) {
 		return err
 	}
 	audit.resolve(s, procs)
+	if s.Variant == "wsl" {
+		return errors.New("WSL session supports discovery and reading only")
+	}
 	if err := audit.dispatch("inject"); err != nil {
 		return err
 	}

@@ -133,6 +133,9 @@ func cmdStop(args []string) error {
 		return err
 	}
 	confirm := p.str("confirm", "")
+	if s.Variant == "wsl" {
+		return errors.New("WSL session supports discovery and reading only")
+	}
 	if confirm == "" {
 		emit(map[string]interface{}{
 			"would_stop": s, "descendants": procs.descendants(s.PID),

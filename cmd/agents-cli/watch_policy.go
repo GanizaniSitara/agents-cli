@@ -14,6 +14,9 @@ import (
 type watchPolicyAttempts map[uint32]string
 
 func (attempted watchPolicyAttempts) ready(s watchSample, enabled bool) bool {
+	if s.Variant == "wsl" {
+		return false
+	}
 	if s.Phase != "blocked" {
 		if s.State != "unknown" {
 			delete(attempted, s.PID)

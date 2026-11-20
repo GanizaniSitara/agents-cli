@@ -78,8 +78,9 @@ Settings → Start with Windows enables background startup at sign-in.</p>
 <tr><td>x / Hide / Exit</td><td>Dismiss row / hide panel / stop watcher. Agent keeps running.</td></tr>
 <tr><td>Drag header</td><td>Move panel. Settings → Reset location restores its position.</td></tr>
 </tbody></table>
-<p>Include Desktop 2 shows its agents here, marked view only. The checkbox in Settings is the same choice.
-The watcher never switches desktops. Selection activates windows on the current desktop only.</p>
+<p>Click the checkbox beside a desktop to include its agents. Click Go to Desktop 2 to switch there.
+Click an included session to switch to its desktop and bring it forward when foreground selection is enabled.</p>
+<p>Copilot running inside WSL in Windows Terminal appears automatically. Use <code>ls --fast</code> to see its Windows PID and <code>tail PID</code> to read its tab.</p>
 <p>Windows Terminal: selection also selects the session's tab. Its console title must match one unique tab;
 duplicate or overridden tab titles are refused (see <code>clicks.jsonl</code>).</p>
 <p>Settings controls selection blinking and foreground activation.

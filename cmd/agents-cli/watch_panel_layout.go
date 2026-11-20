@@ -65,9 +65,9 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 				if c.unknown > 0 {
 					text += fmt.Sprintf(" | %d unknown", c.unknown)
 				}
-				prefix := "[ ] Include "
+				prefix := "[ ] Go to "
 				if included[desktop.ID] {
-					prefix = "[x] Include "
+					prefix = "[x] Go to "
 				}
 				summaries = append(summaries, watchPanelSummary{DesktopID: desktop.ID, Text: prefix + text, Included: included[desktop.ID], Toggle: desktop.ID != ""})
 			}

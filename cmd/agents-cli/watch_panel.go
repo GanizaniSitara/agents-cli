@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"runtime"
 	"syscall"
 	"time"
@@ -79,6 +81,39 @@ func watchPanel(a *watchApp) error {
 	var lastClock int64
 	offset := 0
 	var hwnd uintptr
+	type desktopResult struct {
+		target     string
+		press      watchPanelPress
+		y          int
+		generation uint64
+		err        error
+	}
+	desktopDone := make(chan desktopResult, 1)
+	switching := false
+	desktopProblem := ""
+	goDesktop := func(target string, p watchPanelPress, y int) {
+		if switching || target == "" {
+			return
+		}
+		switching = true
+		desktopProblem = ""
+		a.selectionID++
+		r := desktopResult{target: target, press: p, y: y, generation: a.selectionID}
+		window := hwnd
+		go func() {
+			exe, err := os.Executable()
+			if err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, exe, "_switch-clicked-desktop", target)
+				cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+				err = cmd.Run()
+			}
+			r.err = err
+			desktopDone <- r
+			watchUser.NewProc("PostMessageW").Call(window, 0x8003, 0, 0)
+		}()
+	}
 	terminalRequests := make(chan watchTerminalRequest, 1)
 	terminalResults := make(chan watchTerminalResult, 1)
 	terminalContext, cancelTerminal := context.WithCancel(context.Background())
@@ -242,6 +277,24 @@ func watchPanel(a *watchApp) error {
 		leave := a.ui.enter(fmt.Sprintf("message.%x", msg))
 		defer leave()
 		switch msg {
+		case 0x8003:
+			var r desktopResult
+			select {
+			case r = <-desktopDone:
+			default:
+				return 0
+			}
+			switching = false
+			if r.err != nil {
+				desktopProblem = "Desktop switch failed"
+			} else if r.generation == a.selectionID {
+				a.acceptDesktopState(watchBatch{CurrentDesktop: r.target, Desktops: desktops})
+				if r.press.Kind == "row" {
+					a.activateWatchRow(r.press, r.y)
+				}
+			}
+			watchUser.NewProc("InvalidateRect").Call(window, 0, 0)
+			return 0
 		case 0x4a: // WM_COPYDATA: identity-checked, idempotent park/unpark
 			return a.receiveSessionAction(lp)
 		case 0x8002: // terminal helper completed; never block the UI on UIA
@@ -725,6 +778,10 @@ func watchPanel(a *watchApp) error {
 			// to the session activation path, including for non-toggle summaries.
 			if p.Kind == "summary" {
 				if summary := p.Summary; summary.Toggle {
+					if x >= 36 {
+						goDesktop(summary.DesktopID, p, releaseY)
+						return 0
+					}
 					a.mu.Lock()
 					settings.toggleDesktop(summary.DesktopID)
 					a.persistSettings(settings)
@@ -785,6 +842,10 @@ func watchPanel(a *watchApp) error {
 			} else {
 				previousSelection = p
 			}
+			if row.Sample.DesktopID != "" && row.Sample.DesktopID != currentDesktop && !settings.DisableForeground {
+				goDesktop(row.Sample.DesktopID, p, releaseY)
+				return 0
+			}
 			a.activateWatchRow(p, releaseY)
 			watchSetLift(window, true)
 			return 0
@@ -830,6 +891,9 @@ func watchPanel(a *watchApp) error {
 			if problem != "" {
 				header = watchReaderHeader(problemCode)
 				watchGDI.NewProc("SetTextColor").Call(dc, theme.rowColour("error"))
+			}
+			if desktopProblem != "" {
+				header = desktopProblem
 			}
 			watchText(dc, header, 12, 8, 188, 30)
 			watchText(dc, "Shelf", 194, 8, 242, 30)
@@ -994,7 +1058,11 @@ func watchPanel(a *watchApp) error {
 						meta = "shelving pending"
 					}
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
-						meta += " (view only)"
+						if settings.DisableForeground {
+							meta += " (view only)"
+						} else {
+							meta += " (go to)"
+						}
 					}
 					metadataTop := top + int32(panelRowHeight(settings.CompactMode)) - 16
 					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, metadataTop, 270, metadataTop+17)

@@ -30,6 +30,13 @@ var (
 )
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "_switch-clicked-desktop" {
+		if err := switchClickedDesktop(os.Args[2]); err != nil {
+			emitError(err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "master" {
 		if err := masterClient(os.Args[2:]); err != nil {
 			emitError(err)

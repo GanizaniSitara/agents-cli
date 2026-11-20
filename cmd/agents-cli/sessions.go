@@ -113,6 +113,7 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		byRoot[pid] = c.s
 	}
 
+	wslCopilotSessions(procs, byRoot)
 	// 2. launch-info: authoritative names/zones/ids for launcher-started tasks.
 	for pid, li := range readLaunchInfos() {
 		if !launchMatches(li, startTime(pid)) {
