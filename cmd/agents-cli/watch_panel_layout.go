@@ -76,19 +76,19 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 	return rows, summaries
 }
 
-func watchPanelSummaryIndex(y, rowCount, capacity, summaryCount int) int {
+func watchPanelSummaryIndex(y, rowCount, capacity, summaryCount, rowHeight int) int {
 	if rowCount > capacity {
 		rowCount = capacity
 	}
-	top := 34 + rowCount*watchRowHeight
+	top := 34 + rowCount*rowHeight
 	if y < top || y >= top+summaryCount*28 {
 		return -1
 	}
 	return (y - top) / 28
 }
 
-func watchPanelCapacity(workHeight int32, summaryCount int) int {
-	n := (int(workHeight) - 24 - 34 - summaryCount*28) / watchRowHeight
+func watchPanelCapacity(workHeight int32, summaryCount, rowHeight int) int {
+	n := (int(workHeight) - 24 - 34 - summaryCount*28) / rowHeight
 	if n < 1 {
 		return 1
 	}

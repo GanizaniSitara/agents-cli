@@ -34,7 +34,15 @@ func watchPanelRenderKey(rows []watchEntry, summaries []watchPanelSummary, offse
 	return string(b)
 }
 
+func panelRowHeight(compact bool) int {
+	if compact {
+		return 36
+	}
+	return watchRowHeight
+}
+
 type watchPanelFrame struct {
+	Compact    bool
 	Rows       []watchEntry
 	Summaries  []watchPanelSummary
 	Offset     int
@@ -78,11 +86,11 @@ func (f watchPanelFrame) hit(x, y int) watchPanelPress {
 		p.Kind = "header"
 	case f.Menu:
 		p.Kind = "menu"
-	case (y-34)/watchRowHeight < len(f.Rows):
-		i := (y - 34) / watchRowHeight
+	case (y-34)/panelRowHeight(f.Compact) < len(f.Rows):
+		i := (y - 34) / panelRowHeight(f.Compact)
 		p.Kind, p.Row, p.RowIndex = "row", f.Rows[i], f.Offset+i
 	default:
-		if i := watchPanelSummaryIndex(y, len(f.Rows), len(f.Rows), len(f.Summaries)); i >= 0 {
+		if i := watchPanelSummaryIndex(y, len(f.Rows), len(f.Rows), len(f.Summaries), panelRowHeight(f.Compact)); i >= 0 {
 			p.Kind, p.Summary = "summary", f.Summaries[i]
 		}
 	}

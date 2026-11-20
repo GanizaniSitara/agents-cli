@@ -36,6 +36,24 @@ func TestWatchRenderKeyTracksTargetAndLabel(t *testing.T) {
 	}
 }
 
+func TestCompactPanelUsesVisibleRowBoundaries(t *testing.T) {
+	frame := newWatchPanelFrame(make([]watchEntry, 4), []watchPanelSummary{{}}, 1, 3, false)
+	frame.Compact = true
+	for i := 0; i < 3; i++ {
+		for _, y := range []int{34 + 36*i, 34 + 36*i + 35} {
+			if p := frame.hit(340, y); p.Kind != "row" || p.RowIndex != 1+i {
+				t.Fatal(y, p)
+			}
+		}
+	}
+	if p := frame.hit(20, 34+3*36); p.Kind != "summary" {
+		t.Fatal(p)
+	}
+	if watchPanelCapacity(600, 1, 36) <= watchPanelCapacity(600, 1, 56) {
+		t.Fatal("compact capacity")
+	}
+}
+
 func TestWatchRenderKeyIgnoresScreenAnimation(t *testing.T) {
 	row := watchEntry{Sample: watchSample{Session: Session{PID: 1, State: "busy"}, Signature: "spinner-one"}}
 	before := watchPanelRenderKey([]watchEntry{row}, nil, 0, 6, "one", 0, 0, 10)

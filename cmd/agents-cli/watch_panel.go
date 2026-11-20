@@ -187,7 +187,7 @@ func watchPanel(a *watchApp) error {
 		} // keep the panel still through mouse-up
 		area := watchPositionMonitor(monitors, settings).Work
 		n := len(rows)
-		capacity = watchPanelCapacity(area.Bottom-area.Top, len(summaries))
+		capacity = watchPanelCapacity(area.Bottom-area.Top, len(summaries), panelRowHeight(settings.CompactMode))
 		if n > capacity {
 			n = capacity
 		}
@@ -199,9 +199,9 @@ func watchPanel(a *watchApp) error {
 			offset = maxOffset
 		}
 		if menu {
-			n = len(desktops) + 17
+			n = len(desktops) + 18
 		}
-		height := int32(34 + n*watchRowHeight + len(summaries)*28)
+		height := int32(34 + n*panelRowHeight(settings.CompactMode) + len(summaries)*28)
 		if menu {
 			height = int32(34 + n*watchSettingsRowHeight)
 		}
@@ -470,11 +470,11 @@ func watchPanel(a *watchApp) error {
 					}
 					for i, row := range frame.Rows {
 						k := watchPanelRenderKey([]watchEntry{row}, nil, 0, 1, currentDesktop, 0, 0, 0)
-						top := int32(34 + i*watchRowHeight)
+						top := int32(34 + i*panelRowHeight(settings.CompactMode))
 						if lastRowKeys[i] != k {
-							dirty(watchRect{0, top, 360, top + watchRowHeight})
+							dirty(watchRect{0, top, 360, top + int32(panelRowHeight(settings.CompactMode))})
 							lastRowKeys[i] = k
-						} else if tick != lastClock {
+						} else if !settings.CompactMode && tick != lastClock {
 							dirty(watchRect{150, top + 2, 224, top + 23})
 						}
 					}
@@ -686,15 +686,20 @@ func watchPanel(a *watchApp) error {
 					}
 					return 0
 				} else if i == len(desktops)+13 {
+					settings.CompactMode = !settings.CompactMode
+					a.persistSettings(settings)
+					resize()
+					return 0
+				} else if i == len(desktops)+14 {
 					helpLabel = "Help"
 					if err := openWatchHelp(); err != nil {
 						helpLabel = "Help (could not open)"
 					}
 					return 0
-				} else if i == len(desktops)+14 {
+				} else if i == len(desktops)+15 {
 					watchRequestExit(window)
 					return 0
-				} else if i == len(desktops)+15 {
+				} else if i == len(desktops)+16 {
 					settings.Position = nil
 					a.persistSettings(settings)
 				} else if i == len(desktops) {
@@ -748,7 +753,11 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			if x >= 330 {
-				if (y-34)%watchRowHeight >= 34 {
+				parkTop := 34
+				if painted.Compact {
+					parkTop = 19
+				}
+				if (y-34)%panelRowHeight(painted.Compact) >= parkTop {
 					a.mu.Lock()
 					a.tracker.togglePark(row.Sample)
 					a.save()
@@ -795,6 +804,7 @@ func watchPanel(a *watchApp) error {
 			frame := painted
 			if !pressed.Active && !popupOpen {
 				frame = newWatchPanelFrame(rows, summaries, offset, capacity, menu)
+				frame.Compact = settings.CompactMode
 				for i := range frame.Rows {
 					if !settings.SuggestSessionNames || frame.Rows[i].Parked {
 						frame.Rows[i].Sample.SuggestedName = ""
@@ -910,6 +920,12 @@ func watchPanel(a *watchApp) error {
 				}
 				watchText(dc, startupLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
+				compactLabel := "[ ] Compact mode"
+				if settings.CompactMode {
+					compactLabel = "[x] Compact mode"
+				}
+				watchText(dc, compactLabel, 12, top+8, 350, top+35)
+				top += watchSettingsRowHeight
 				watchText(dc, helpLabel, 12, top+8, 350, top+35)
 				top += watchSettingsRowHeight
 				watchText(dc, "Exit", 12, top+8, 350, top+35)
@@ -919,7 +935,7 @@ func watchPanel(a *watchApp) error {
 				watchText(dc, "Done", 12, top+8, 350, top+35)
 			} else {
 				for i, row := range frame.Rows {
-					top := int32(34 + i*watchRowHeight)
+					top := int32(34 + i*panelRowHeight(settings.CompactMode))
 					age := time.Since(row.Changed)
 					phase := row.Sample.Phase
 					if phase == "" {
@@ -941,7 +957,7 @@ func watchPanel(a *watchApp) error {
 					colour := theme.rowColour(phase)
 					metadata := theme.colour(theme.Metadata)
 					if prominent := watchProminentStatus(phase); prominent != "" {
-						watchFill(dc, watchRect{0, top, 360, top + watchRowHeight - 1}, theme.rowColour(phase))
+						watchFill(dc, watchRect{0, top, 360, top + int32(panelRowHeight(settings.CompactMode)) - 1}, theme.rowColour(phase))
 						colour, metadata = theme.colour("#191919"), theme.colour("#493713")
 						if row.Parked {
 							colour, metadata = theme.colour("#D4D9DE"), theme.colour("#B2B8BF")
@@ -952,14 +968,20 @@ func watchPanel(a *watchApp) error {
 						}
 					}
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
-					watchText(dc, status, 12, top+2, 145, top+22)
+					if !frame.Compact {
+						watchText(dc, status, 12, top+2, 145, top+22)
+						watchGDI.NewProc("SelectObject").Call(dc, font)
+						watchText(dc, age.Round(time.Second).String(), 150, top+3, 224, top+22)
+						watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
+					}
 					watchGDI.NewProc("SelectObject").Call(dc, font)
-					watchText(dc, age.Round(time.Second).String(), 150, top+3, 224, top+22)
-					watchText(dc, row.Sample.Context, 230, top+3, 328, top+22)
 					watchGDI.NewProc("SetTextColor").Call(dc, colour)
 					descriptionTop := top + 22
 					if phase == "parked" || phase == "idle" || phase == "question" || phase == "review" || phase == "working" {
 						descriptionTop = top + 16
+					}
+					if frame.Compact {
+						descriptionTop = top + 1
 					}
 					if inputFont != 0 && phase != "working" {
 						watchGDI.NewProc("SelectObject").Call(dc, inputFont)
@@ -974,13 +996,17 @@ func watchPanel(a *watchApp) error {
 					if !watchDesktopSelectable(row.Sample.DesktopID, currentDesktop) {
 						meta += " (view only)"
 					}
-					metadataTop := top + watchRowHeight - 16
+					metadataTop := top + int32(panelRowHeight(settings.CompactMode)) - 16
 					watchText(dc, meta+" | "+watchRowActivity(row.Sample), 12, metadataTop, 270, metadataTop+17)
 					watchText(dc, row.Sample.Tool, 276, metadataTop, 328, metadataTop+17)
-					if shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
+					if !frame.Compact && shortcutProblem == "" && watchShortcutModifiers(settings.Shortcuts) != 0 {
 						watchText(dc, watchShortcutDigit(i), 337, top+2, 358, top+20)
 					}
-					watchText(dc, "x", 336, top+18, 358, top+36)
+					closeTop := top + 18
+					if frame.Compact {
+						closeTop = top
+					}
+					watchText(dc, "x", 336, closeTop, 358, closeTop+18)
 					parkLabel := "park"
 					parkLeft := int32(330)
 					if row.Parked {
@@ -991,7 +1017,7 @@ func watchPanel(a *watchApp) error {
 					watchGDI.NewProc("SetTextColor").Call(dc, 0xf2f0ed)
 				}
 				for i, summary := range frame.Summaries {
-					top := int32(34 + len(frame.Rows)*watchRowHeight + i*28)
+					top := int32(34 + len(frame.Rows)*panelRowHeight(frame.Compact) + i*28)
 					watchGDI.NewProc("SetTextColor").Call(dc, theme.colour(theme.Metadata))
 					watchText(dc, summary.Text, 12, top+4, 350, top+26)
 				}

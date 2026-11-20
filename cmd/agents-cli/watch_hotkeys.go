@@ -128,7 +128,7 @@ func watchFirstRowTarget(frame watchPanelFrame, current string) (watchPanelPress
 	}
 	for i, row := range frame.Rows {
 		if !row.Parked && watchDesktopSelectable(row.Sample.DesktopID, current) {
-			p := frame.hit(20, 34+i*watchRowHeight+20)
+			p := frame.hit(20, 34+i*panelRowHeight(frame.Compact)+20)
 			return p, p.Kind == "row"
 		}
 	}
@@ -219,7 +219,7 @@ func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID u
 		if activePID != 0 && !(s.State == "idle" || s.State == "unknown" || s.State == "prompt" || s.State == "error" || s.PendingQuestions > 0 || s.Phase == "finished" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review" || s.Phase == "blocked") {
 			continue
 		}
-		p := frame.hit(20, 34+i*watchRowHeight+20)
+		p := frame.hit(20, 34+i*panelRowHeight(frame.Compact)+20)
 		return p, p.Kind == "row"
 	}
 	return watchPanelPress{}, false
@@ -305,7 +305,7 @@ func watchShortcutRow(frame watchPanelFrame, id uintptr) (watchPanelPress, bool)
 	if i >= len(frame.Rows) {
 		return watchPanelPress{}, false
 	}
-	p := frame.hit(20, 34+i*watchRowHeight+20)
+	p := frame.hit(20, 34+i*panelRowHeight(frame.Compact)+20)
 	return p, p.Kind == "row"
 }
 
