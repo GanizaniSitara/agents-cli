@@ -40,6 +40,9 @@ func TestWatchRenderKeyIgnoresScreenAnimation(t *testing.T) {
 	row := watchEntry{Sample: watchSample{Session: Session{PID: 1, State: "busy"}, Signature: "spinner-one"}}
 	before := watchPanelRenderKey([]watchEntry{row}, nil, 0, 6, "one", 0, 0, 10)
 	row.Sample.Signature = "spinner-two"
+	row.Sample.MasterPrompt = "changed permission fingerprint"
+	row.Sample.MasterCompletion = "changed stop marker"
+	row.Sample.MasterLines = []string{"new transcript text"}
 	if watchPanelRenderKey([]watchEntry{row}, nil, 0, 6, "one", 0, 0, 10) != before {
 		t.Fatal("unpainted screen animation triggers panel repaint")
 	}

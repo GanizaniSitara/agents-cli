@@ -13,6 +13,7 @@ import (
 
 var watchUser = windows.NewLazySystemDLL("user32.dll")
 var watchGDI = windows.NewLazySystemDLL("gdi32.dll")
+var panelThemeDLL = windows.NewLazySystemDLL("uxtheme.dll")
 
 const watchRowHeight = 56
 const watchSettingsRowHeight = 36
@@ -46,6 +47,10 @@ type watchPaint struct {
 func watchPanel(a *watchApp) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	bufferInit, _, _ := panelThemeDLL.NewProc("BufferedPaintInit").Call()
+	if bufferInit == 0 {
+		defer panelThemeDLL.NewProc("BufferedPaintUnInit").Call()
+	}
 	defer watchCancelPulse()
 	defer a.flashes.update(nil, "", watchFlash)
 	defer a.foregroundLift.release(watchLiftIdentity, watchSetLift)
@@ -69,6 +74,9 @@ func watchPanel(a *watchApp) error {
 	unknownCount := 0
 	lastCount := -1
 	lastRender := ""
+	var lastRowKeys []string
+	var lastHeader string
+	var lastClock int64
 	offset := 0
 	var hwnd uintptr
 	terminalRequests := make(chan watchTerminalRequest, 1)
@@ -204,7 +212,7 @@ func watchPanel(a *watchApp) error {
 		}
 		position := watchPanelPosition(area, width, height, settings.Position)
 		watchUser.NewProc("SetWindowPos").Call(hwnd, ^uintptr(0), uintptr(position.X), uintptr(position.Y), uintptr(width), uintptr(height), flags)
-		watchUser.NewProc("InvalidateRect").Call(hwnd, 0, 1)
+		watchUser.NewProc("InvalidateRect").Call(hwnd, 0, 0)
 	}
 	finishDrag := func() {
 		if !dragging {
@@ -436,14 +444,42 @@ func watchPanel(a *watchApp) error {
 				offset = 0
 			}
 			if !settings.Hidden && !pressed.Active && !dragging {
-				key := watchPanelRenderKey(rows, summaries, offset, capacity, currentDesktop, stoppedCount, unknownCount, time.Now().Unix()/10)
+				frame := newWatchPanelFrame(rows, summaries, offset, capacity, menu)
+				key := fmt.Sprintf("%t|%d|%d|%s|%v", menu, len(frame.Rows), len(desktops), currentDesktop, summaries)
+				if menu {
+					key = fmt.Sprint("settings|", desktops, "|", currentDesktop)
+				}
 				a.mu.Lock()
-				key += "|" + a.problemCode
+				header := fmt.Sprintf("%d|%d|%s", stoppedCount, unknownCount, a.problemCode)
 				a.mu.Unlock()
+				tick := time.Now().Unix() / 10
 				if key != lastRender {
 					lastRender = key
 					resize()
+					frame = newWatchPanelFrame(rows, summaries, offset, capacity, menu)
+					lastRowKeys = nil
 				}
+				dirty := func(r watchRect) { watchUser.NewProc("InvalidateRect").Call(window, uintptr(unsafe.Pointer(&r)), 0) }
+				if header != lastHeader {
+					dirty(watchRect{0, 0, 194, 34})
+					lastHeader = header
+				}
+				if !menu {
+					if len(lastRowKeys) != len(frame.Rows) {
+						lastRowKeys = make([]string, len(frame.Rows))
+					}
+					for i, row := range frame.Rows {
+						k := watchPanelRenderKey([]watchEntry{row}, nil, 0, 1, currentDesktop, 0, 0, 0)
+						top := int32(34 + i*watchRowHeight)
+						if lastRowKeys[i] != k {
+							dirty(watchRect{0, top, 360, top + watchRowHeight})
+							lastRowKeys[i] = k
+						} else if tick != lastClock {
+							dirty(watchRect{150, top + 2, 224, top + 23})
+						}
+					}
+				}
+				lastClock = tick
 			}
 			return 0
 		case 0x20a: // WM_MOUSEWHEEL, scroll a bounded viewport
@@ -743,12 +779,19 @@ func watchPanel(a *watchApp) error {
 			a.activateWatchRow(p, releaseY)
 			watchSetLift(window, true)
 			return 0
+		case 0x14: // WM_ERASEBKGND: the paint buffer supplies the background.
+			return 1
 		case 0x0f: // WM_PAINT
-			// A frame snapshot is valid for hit-testing only after every pixel
-			// has been painted, including when Windows exposes a partial region.
-			watchUser.NewProc("InvalidateRect").Call(window, 0, 1)
 			var ps watchPaint
 			dc, _, _ := watchUser.NewProc("BeginPaint").Call(window, uintptr(unsafe.Pointer(&ps)))
+			var buffer, bufferDC uintptr
+			if bufferInit == 0 && ps.Rect.Right > ps.Rect.Left && ps.Rect.Bottom > ps.Rect.Top {
+				buffer, _, _ = panelThemeDLL.NewProc("BeginBufferedPaint").Call(dc, uintptr(unsafe.Pointer(&ps.Rect)), 0, 0, uintptr(unsafe.Pointer(&bufferDC)))
+				if buffer != 0 {
+					dc = bufferDC
+				}
+			}
+			watchUser.NewProc("FillRect").Call(dc, uintptr(unsafe.Pointer(&ps.Rect)), brush)
 			frame := painted
 			if !pressed.Active && !popupOpen {
 				frame = newWatchPanelFrame(rows, summaries, offset, capacity, menu)
@@ -954,6 +997,9 @@ func watchPanel(a *watchApp) error {
 				}
 			}
 			watchGDI.NewProc("SelectObject").Call(dc, old)
+			if buffer != 0 {
+				panelThemeDLL.NewProc("EndBufferedPaint").Call(buffer, 1)
+			}
 			watchUser.NewProc("EndPaint").Call(window, uintptr(unsafe.Pointer(&ps)))
 			if dc != 0 {
 				painted = frame

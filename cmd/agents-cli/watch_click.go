@@ -19,6 +19,9 @@ func watchPanelRenderKey(rows []watchEntry, summaries []watchPanelSummary, offse
 	paintRows := append([]watchEntry(nil), rows...)
 	for i := range paintRows {
 		paintRows[i].Sample.Signature = ""
+		paintRows[i].Sample.MasterCompletion = ""
+		paintRows[i].Sample.MasterPrompt = ""
+		paintRows[i].Sample.MasterLines = nil
 	}
 	b, _ := json.Marshal(struct {
 		Rows             []watchEntry
