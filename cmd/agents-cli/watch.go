@@ -488,6 +488,9 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop, Context: watchContext(r.Lines)}
 			if os.Getenv("AGENTS_MASTER_SOCKET") != "" {
 				sample.MasterLines = masterLines(r.Lines)
+				if s.Tool == "vibe" {
+					sample.MasterPrompt = vibePermissionKey(r.Lines)
+				}
 				if s.Source == "adopted" && s.Tool == "other" && strings.Contains(strings.ToLower(s.Name), "codex") {
 					sample.MasterCompletion = mirrorCompletion(r.Lines)
 				}
@@ -560,6 +563,12 @@ func normalizeWatchStart(v string) string {
 func (a *watchApp) save() []byte {
 	if a.master != nil {
 		a.master.mu.Lock()
+		for pid := range a.master.vibePending {
+			e := a.tracker.entries[pid]
+			if e == nil || e.Parked || e.Dismissed || !e.Attention || !e.Stopped || e.Sample.PollingMuted {
+				delete(a.master.vibePending, pid)
+			}
+		}
 		for pid := range a.master.current {
 			e := a.tracker.entries[pid]
 			if e == nil || e.Parked || e.Dismissed || !e.Attention || !e.Stopped || e.Sample.PollingMuted {

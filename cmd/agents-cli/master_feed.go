@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 // A feed lives for one watcher lifetime. Its cursor is scoped to that instance.
@@ -23,18 +24,24 @@ type masterStop struct {
 }
 
 type masterFeed struct {
-	mu       sync.Mutex
-	next     uint64
-	current  map[uint32]*masterStop
-	changed  chan struct{}
-	ready    bool
-	baseline uint64
+	vibePending map[uint32]vibePendingStop
+	mu          sync.Mutex
+	next        uint64
+	current     map[uint32]*masterStop
+	changed     chan struct{}
+	ready       bool
+	baseline    uint64
+}
+
+type vibePendingStop struct {
+	sample watchSample
+	since  time.Time
 }
 
 var selectedMasterChoice = regexp.MustCompile(`^[›❯]\s*[0-9]+[.)]\s+\S`)
 
 func newMasterFeed() *masterFeed {
-	return &masterFeed{current: make(map[uint32]*masterStop), changed: make(chan struct{})}
+	return &masterFeed{current: make(map[uint32]*masterStop), changed: make(chan struct{}), vibePending: map[uint32]vibePendingStop{}}
 }
 
 func masterLines(lines []string) []string {
@@ -63,13 +70,30 @@ func masterLines(lines []string) []string {
 // observe consumes the tracker's decision and lines from the same cached read.
 // Call forget on removal. No console access takes place in this adapter.
 func (f *masterFeed) observe(e watchEntry, lines []string, mirror bool) {
+	f.observeAt(e, lines, mirror, time.Now())
+}
+func (f *masterFeed) observeAt(e watchEntry, lines []string, mirror bool, now time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	s := e.Sample
 	old := f.current[s.PID]
 	if !e.Stopped || e.Parked || e.Dismissed || s.PollingMuted || !e.Attention {
 		delete(f.current, s.PID)
+		delete(f.vibePending, s.PID)
 		return
+	}
+	if s.Tool == "vibe" {
+		p, ok := f.vibePending[s.PID]
+		if !ok || !watchSameClickSession(p.sample, s) || p.sample.Phase != s.Phase || p.sample.State != s.State || p.sample.MasterPrompt != s.MasterPrompt {
+			delete(f.current, s.PID)
+			f.vibePending[s.PID] = vibePendingStop{sample: s, since: now}
+			if f.ready {
+				return
+			}
+		}
+		if f.ready && now.Sub(p.since) < 3*time.Second {
+			return
+		}
 	}
 	ctx := masterLines(lines)
 	if old != nil && watchSameClickSession(old.event.Session, s) && old.event.Session.RootStarted == s.RootStarted &&
@@ -91,6 +115,7 @@ func (f *masterFeed) forget(pid uint32) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.current, pid)
+	delete(f.vibePending, pid)
 }
 
 func (f *masterFeed) wait(ctx context.Context, after uint64) (masterEvent, error) {

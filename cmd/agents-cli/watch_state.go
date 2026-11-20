@@ -6,6 +6,7 @@ import (
 )
 
 type watchSample struct {
+	MasterPrompt     string   `json:"master_prompt,omitempty"`
 	MasterLines      []string `json:"master_lines,omitempty"`
 	MasterCompletion string   `json:"master_completion,omitempty"`
 	Session

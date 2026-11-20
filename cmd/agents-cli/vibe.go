@@ -1,6 +1,38 @@
 package main
 
-import "strings"
+import (
+	"crypto/sha256"
+	"fmt"
+	"strings"
+)
+
+// Hash the permission, command and choices inside the live approval box.
+// Spinner frames, the token counter and movement of the selection are cosmetic.
+func vibePermissionKey(lines []string) string {
+	var body []string
+	for _, raw := range lines {
+		text := strings.TrimSpace(raw)
+		if !strings.HasPrefix(text, "│") {
+			if len(body) > 0 {
+				return ""
+			}
+			continue
+		}
+		text = strings.TrimSpace(strings.Trim(text, "│"))
+		if strings.HasPrefix(text, "Permission for ") {
+			body = []string{text}
+			continue
+		}
+		if len(body) == 0 || text == "" {
+			continue
+		}
+		if strings.Contains(text, "Enter select") && strings.Contains(text, "Esc reject") {
+			return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(body, "\n"))))
+		}
+		body = append(body, strings.Join(strings.Fields(strings.TrimLeft(text, "›❯ ")), " "))
+	}
+	return ""
+}
 
 // Current Vibe frames its composer with a named mode rule. Reuse the framed
 // composer reader so a typed draft is a wait, rather than an unknown screen.

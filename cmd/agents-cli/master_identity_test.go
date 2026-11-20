@@ -8,6 +8,56 @@ import (
 	"time"
 )
 
+func TestMasterVibePermissionLifetime(t *testing.T) {
+	lines := []string{"⠇ Running command (1s)", "│ Permission for the file_system.bash tool (uv *) │", "│ uv tool list │", "│ › 1. Allow once │", "│ 4. Deny │", "│ Enter select  Esc reject │"}
+	key := vibePermissionKey(lines)
+	if key == "" {
+		t.Fatal("missing dialog")
+	}
+	lines[0] = "Different spinner"
+	lines[3] = "│ 1. Allow once │"
+	lines[4] = "│ › 4. Deny │"
+	if vibePermissionKey(lines) != key {
+		t.Fatal("cosmetic changes split permission")
+	}
+	f := newMasterFeed()
+	f.ready = true
+	e := watchEntry{Attention: true, Stopped: true, Sample: watchSample{Session: Session{PID: 12, Tool: "vibe", State: "prompt"}, Phase: "waiting", MasterPrompt: key}}
+	now := time.Now()
+	observe := func(seconds int) { f.observeAt(e, lines, false, now.Add(time.Duration(seconds)*time.Second)) }
+	observe(0)
+	observe(1)
+	if f.next != 0 {
+		t.Fatal("transient wake")
+	}
+	observe(3)
+	observe(4)
+	if f.next != 1 {
+		t.Fatal("stable prompt should wake once")
+	}
+	lines[2] = "│ uv tool update │"
+	e.Sample.MasterPrompt = vibePermissionKey(lines)
+	observe(5)
+	if _, err := f.claim(12, 1); err == nil {
+		t.Fatal("old command reply accepted")
+	}
+	observe(8)
+	if f.next != 2 {
+		t.Fatal("new command missed")
+	}
+	e.Stopped = false
+	observe(9)
+	if _, err := f.more(12, 2); err == nil {
+		t.Fatal("expired prompt readable")
+	}
+	e.Stopped = true
+	observe(10)
+	observe(13)
+	if f.next != 3 {
+		t.Fatal("real repeated command missed")
+	}
+}
+
 func TestMasterScannedIdentity(t *testing.T) {
 	id := "11111111-1111-4111-8111-111111111111"
 	if resumeThread("codex.exe resume "+id) != id || resumeThread("codex.exe exec resume "+id) != "" {
