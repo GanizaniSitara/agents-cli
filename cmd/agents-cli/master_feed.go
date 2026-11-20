@@ -73,7 +73,7 @@ func (f *masterFeed) observe(e watchEntry, lines []string, mirror bool) {
 	}
 	ctx := masterLines(lines)
 	if old != nil && watchSameClickSession(old.event.Session, s) && old.event.Session.RootStarted == s.RootStarted &&
-		old.event.Session.Phase == s.Phase && old.event.Session.PendingQuestions == s.PendingQuestions && old.event.ReadOnly == mirror {
+		old.event.Session.Phase == s.Phase && old.event.Session.PendingQuestions == s.PendingQuestions && old.event.ReadOnly == mirror && old.event.Session.MasterCompletion == s.MasterCompletion {
 		old.context = ctx
 		return
 	}

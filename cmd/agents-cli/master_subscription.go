@@ -128,6 +128,8 @@ func (a *watchApp) runMasterSubscription(interval time.Duration, wake func(strin
 	_ = subscriptionRead(statePath, &state)
 	var attached int64
 	var unsaved bool
+	type completedMirror struct{ root, marker string }
+	mirrors := map[uint32]completedMirror{}
 	for {
 		select {
 		case <-a.stop:
@@ -162,6 +164,11 @@ func (a *watchApp) runMasterSubscription(interval time.Duration, wake func(strin
 				state.Delivered = 0
 			}
 			state = subscriptionState{cfg.Generation, uint32(os.Getpid()), a.started, cursor, state.Delivered, "listening"}
+			for pid, stop := range f.current {
+				if stop.event.ReadOnly && stop.event.ID <= cursor && stop.event.Session.MasterCompletion != "" {
+					mirrors[pid] = completedMirror{stop.event.Session.RootStarted, stop.event.Session.MasterCompletion}
+				}
+			}
 			f.mu.Unlock()
 			if subscriptionWrite(statePath, state) == nil {
 				attached = cfg.Generation
@@ -183,7 +190,29 @@ func (a *watchApp) runMasterSubscription(interval time.Duration, wake func(strin
 		next := state
 		next.Cursor = ev.ID
 		next.Status = "listening"
-		allowed := subscriptionAllows(ev.Session, cfg.Thread)
+		s := ev.Session
+		lines, moreErr := f.more(s.PID, ev.ID)
+		if s.Tool == "codex" && s.ThreadID == "" && s.SessionID == "" && s.AgentPID != 0 && s.NamingAgentStarted != "" && startTime(s.AgentPID).Format(time.RFC3339Nano) == s.NamingAgentStarted {
+			s.ThreadID = resumeThread(commandLine(s.AgentPID))
+			if s.ThreadID == "" {
+				s.ThreadID = completedThread(s, lines, cfg.Thread, time.Now())
+			}
+		}
+		allowed := subscriptionAllows(s, cfg.Thread)
+		reason := "identity-unverified"
+		if strings.EqualFold(s.ThreadID, cfg.Thread) || strings.EqualFold(s.SessionID, cfg.Thread) {
+			reason = "self"
+		}
+		mirrorIdle := ev.ReadOnly && s.State == "idle" && s.PendingQuestions == 0 && strings.Contains(strings.ToLower(s.Name), "codex")
+		marker := completedMirror{s.RootStarted, s.MasterCompletion}
+		if mirrorIdle && (marker.marker == "" || mirrors[s.PID] == marker) {
+			allowed = false
+			reason = "mirror-no-new-completion"
+		}
+		if moreErr != nil {
+			allowed = false
+			reason = "expired"
+		}
 		if allowed {
 			next.Status = "dispatch pending confirmation"
 		}
@@ -192,19 +221,27 @@ func (a *watchApp) runMasterSubscription(interval time.Duration, wake func(strin
 		}
 		state = next
 		if !allowed {
+			subscriptionAudit(a.dir, ev, reason)
 			continue
 		}
 		var current subscriptionConfig
 		if subscriptionRead(cfgPath, &current) != nil || current != cfg {
+			subscriptionAudit(a.dir, ev, "subscription-changed")
 			continue
 		}
 		if _, err := f.more(ev.Session.PID, ev.ID); err != nil {
+			subscriptionAudit(a.dir, ev, "expired")
 			continue
+		}
+		if mirrorIdle {
+			mirrors[s.PID] = marker
 		}
 		resume, err := wake(cfg.Binary, cfg.Thread, ev)
 		if err != nil {
+			subscriptionAudit(a.dir, ev, "delivery-unconfirmed")
 			state.Status = fmt.Sprintf("delivery unconfirmed: %v", err)
 		} else {
+			subscriptionAudit(a.dir, ev, "queued")
 			state.Delivered++
 			state.Status = "listening"
 			if !resume {

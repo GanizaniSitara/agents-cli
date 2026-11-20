@@ -488,6 +488,9 @@ func watchWorker(afterPID, cooldownPID uint32, dir string) error {
 			sample := watchSample{Session: s, HWND: hwnd, Signature: signature, DesktopID: desktopID, Desktop: desktop, Context: watchContext(r.Lines)}
 			if os.Getenv("AGENTS_MASTER_SOCKET") != "" {
 				sample.MasterLines = masterLines(r.Lines)
+				if s.Source == "adopted" && s.Tool == "other" && strings.Contains(strings.ToLower(s.Name), "codex") {
+					sample.MasterCompletion = mirrorCompletion(r.Lines)
+				}
 			}
 			sample.RootStarted = rootStarted.Format(time.RFC3339Nano)
 			sample.WindowPID = watchWindowPID(hwnd)

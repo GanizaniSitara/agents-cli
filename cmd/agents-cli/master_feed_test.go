@@ -82,8 +82,20 @@ func TestMasterSubscriptionReconnect(t *testing.T) {
 	stateAt("second", 102, 2)
 	add(5, "new-worker")
 	stateAt("second", 103, 3)
+	m := watchEntry{Stopped: true, Attention: true, Sample: watchSample{Session: Session{PID: 17, Tool: "other", State: "idle", Name: "Mac Codex (view)"}, RootStarted: "fixture"}}
+	feed.observe(m, nil, true)
+	stateAt("second", 104, 3)
+	m.Sample.MasterCompletion = "Worked for 1m • 08:32"
+	feed.observe(m, nil, true)
+	stateAt("second", 105, 4)
+	feed.forget(17)
+	feed.observe(m, nil, true)
+	stateAt("second", 106, 4)
+	m.Sample.MasterCompletion = "Worked for 2m • 08:36"
+	feed.observe(m, nil, true)
+	stateAt("second", 107, 5)
 	stop()
-	if len(sent) != 3 || sent[0] != 3 || sent[1] != 4 || sent[2] != 103 {
+	if len(sent) != 5 || sent[0] != 3 || sent[1] != 4 || sent[2] != 103 || sent[3] != 105 || sent[4] != 107 {
 		t.Fatal(sent)
 	}
 }
