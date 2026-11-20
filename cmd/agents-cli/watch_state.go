@@ -50,10 +50,22 @@ type watchTracker struct {
 // Focus is presentation, not proof that an agent is running. Preserve the
 // underlying state so leaving the window reveals any outstanding request.
 func watchActiveRows(rows []watchEntry, foreground uintptr) []watchEntry {
+	terminal := watchWindowClass(foreground) == "CASCADIA_HOSTING_WINDOW_CLASS"
+	title := ""
+	if terminal {
+		title = watchWindowTitle(foreground)
+	}
+	return watchActiveTabRows(rows, foreground, title, terminal)
+}
+func watchActiveTabRows(rows []watchEntry, foreground uintptr, title string, terminal bool) []watchEntry {
+	active, ok := watchForegroundSession(rows, foreground, title, terminal)
+	if !ok {
+		return rows
+	}
 	result := append([]watchEntry(nil), rows...)
 	for i := range result {
 		s := &result[i].Sample
-		if !result[i].Parked && foreground != 0 && s.HWND == foreground && s.State != "error" && s.Phase != "error" && s.Phase != "blocked" {
+		if !result[i].Parked && watchSameClickSession(*s, active.Sample) && s.State != "error" && s.Phase != "error" && s.Phase != "blocked" {
 			s.Working = s.Working || s.State == "busy"
 			s.Phase, s.Reason = "active", "active window"
 			result[i].Stopped = false

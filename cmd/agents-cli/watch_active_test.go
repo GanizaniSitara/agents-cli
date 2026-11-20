@@ -2,6 +2,30 @@ package main
 
 import "testing"
 
+func TestThreeTerminalTabsKeepInactiveCopilotStatus(t *testing.T) {
+	rows := []watchEntry{}
+	for i, title := range []string{"first", "second", "third"} {
+		rows = append(rows, watchEntry{Stopped: true, Sample: watchSample{HWND: 42, Phase: "waiting", Session: Session{PID: uint32(101 + i), Tool: "copilot", Title: title, State: "prompt"}}})
+	}
+	for i, title := range []string{"first", "second", "third", "unmatched"} {
+		result := watchActiveTabRows(rows, 42, title, true)
+		if len(result) != 3 {
+			t.Fatal("missing tab")
+		}
+		for j, r := range result {
+			if (r.Sample.Phase == "active") != (i == j) || r.Stopped != (i != j) {
+				t.Fatalf("selected %s: row %d: %+v", title, j, r)
+			}
+		}
+	}
+	rows[2].Sample.Title = "first"
+	for _, r := range watchActiveTabRows(rows, 42, "first", true) {
+		if !r.Stopped {
+			t.Fatal("ambiguous tab hid an input request")
+		}
+	}
+}
+
 func TestActiveWindowDoesNotShowWaitingAlert(t *testing.T) {
 	rows := []watchEntry{{Sample: watchSample{HWND: 42, Phase: "waiting", Session: Session{State: "prompt"}}, Stopped: true}}
 	active := watchActiveRows(rows, 42)
