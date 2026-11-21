@@ -37,7 +37,17 @@ func masterListen(path string, f *masterFeed, reply func(masterRequest) error) (
 	}
 	l, err := net.Listen("unix", path)
 	if err != nil {
-		return nil, err
+		// A crash or power loss leaves the socket file behind; replace it only when nothing answers.
+		if c, dialErr := net.DialTimeout("unix", path, time.Second); dialErr == nil {
+			c.Close()
+			return nil, err
+		}
+		if os.Remove(path) != nil {
+			return nil, err
+		}
+		if l, err = net.Listen("unix", path); err != nil {
+			return nil, err
+		}
 	}
 	go func() {
 		for {

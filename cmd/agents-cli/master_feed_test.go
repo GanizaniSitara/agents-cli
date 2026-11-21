@@ -100,6 +100,21 @@ func TestMasterSubscriptionReconnect(t *testing.T) {
 	}
 }
 
+func TestMasterListenReplacesStaleSocket(t *testing.T) {
+	socket := filepath.Join(t.TempDir(), "m.sock")
+	if err := os.WriteFile(socket, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l, err := masterListen(socket, newMasterFeed(), func(masterRequest) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if _, err := masterListen(socket, newMasterFeed(), func(masterRequest) error { return nil }); err == nil {
+		t.Fatal("second listener replaced a live socket")
+	}
+}
+
 func TestMasterTransportCLI(t *testing.T) {
 	bin := os.Getenv("MASTER_SMOKE_EXE")
 	if bin == "" {
