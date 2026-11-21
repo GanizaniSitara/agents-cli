@@ -31,7 +31,7 @@ func cmdLs(args []string) error {
 	if sessions == nil {
 		sessions = []Session{}
 	}
-	emit(map[string]interface{}{"count": len(sessions), "sessions": sessions})
+	emit(map[string]interface{}{"count": len(sessions), "sessions": sessions, "supports_expected_start": true})
 	return nil
 }
 
