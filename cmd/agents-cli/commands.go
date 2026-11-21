@@ -47,6 +47,19 @@ func lookup(ref string) (*Session, procMap, error) {
 	return s, procs, nil
 }
 
+// A gateway readback identifies a process generation. Refuse a different
+// generation even if Windows has since reused the selected PID.
+func lookupExpected(p parsed) (*Session, procMap, error) {
+	s, procs, err := lookup(p.pos[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	if expected := p.str("expect-started", ""); expected != "" && (!s.Alive || s.Started != expected) {
+		return nil, nil, errors.New("selected session exited or changed generation")
+	}
+	return s, procs, nil
+}
+
 func cmdTail(args []string) error {
 	p, err := parseArgs(args)
 	if err != nil {
@@ -66,7 +79,7 @@ func cmdTail(args []string) error {
 	if above < 0 || lines < 0 || (p.has("lines") && lines == 0) {
 		return errors.New("--above must be nonnegative and --lines must be positive")
 	}
-	s, processes, err := lookup(p.pos[0])
+	s, processes, err := lookupExpected(p)
 	if err != nil {
 		return err
 	}
@@ -97,7 +110,7 @@ func cmdSend(args []string) (result error) {
 		return err
 	}
 	audit.input(len(text), !p.boolean("no-enter"), p.boolean("force"), "")
-	s, procs, err := lookup(p.pos[0])
+	s, procs, err := lookupExpected(p)
 	if err != nil {
 		return err
 	}
@@ -404,7 +417,7 @@ func cmdKey(args []string) (result error) {
 		}
 	}
 	audit.input(0, key == "enter", false, key)
-	s, procs, err := lookup(p.pos[0])
+	s, procs, err := lookupExpected(p)
 	if err != nil {
 		return err
 	}
@@ -550,7 +563,7 @@ func cmdName(args []string) error {
 	if len(p.pos) < 2 {
 		return errors.New(`usage: agents-cli name <ref> "label"`)
 	}
-	s, _, err := lookup(p.pos[0])
+	s, _, err := lookupExpected(p)
 	if err != nil {
 		return err
 	}

@@ -128,7 +128,7 @@ func cmdStop(args []string) error {
 	if len(p.pos) < 1 {
 		return errors.New("usage: agents-cli stop <ref> --confirm <pid>")
 	}
-	s, procs, err := lookup(p.pos[0])
+	s, procs, err := lookupExpected(p)
 	if err != nil {
 		return err
 	}
