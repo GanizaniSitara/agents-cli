@@ -240,6 +240,17 @@ func runWatch(args []string) error {
 	defer windows.CloseHandle(mutex)
 	windows.SetPriorityClass(windows.CurrentProcess(), windows.BELOW_NORMAL_PRIORITY_CLASS)
 	app := &watchApp{tracker: newWatchTracker(stable), dir: dir, stop: make(chan struct{}), policyQueue: make(chan watchSample, 16), policyAttempts: watchPolicyAttempts{}}
+	if data, err := os.ReadFile(statePath); err == nil {
+		var prior watchReceipt
+		if json.Unmarshal(data, &prior) == nil {
+			for _, saved := range prior.Sessions {
+				if (saved.Pinned || saved.Parked && saved.ParkOrigin != "") && watchTargetProblem(saved.Sample, watchReadTarget(saved.Sample)) == "" {
+					entry := saved
+					app.tracker.entries[entry.Sample.PID] = &entry
+				}
+			}
+		}
+	}
 	socket := os.Getenv("AGENTS_MASTER_SOCKET")
 	if socket == "" {
 		if _, err := os.Stat(filepath.Join(dir, "master-subscription.json")); err == nil {

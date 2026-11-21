@@ -430,7 +430,9 @@ func watchPanel(a *watchApp) error {
 						}
 						if p.Trigger == "park-shortcut" {
 							a.mu.Lock()
-							a.tracker.togglePark(p.Row.Sample)
+							if err := a.toggleRowPark(p.Row.Sample); err != nil {
+								desktopProblem = err.Error()
+							}
 							a.save()
 							a.mu.Unlock()
 						} else if watchCanReviewName(p.Row.Sample) {
@@ -570,6 +572,18 @@ func watchPanel(a *watchApp) error {
 				return 0
 			}
 			switch choice {
+			case watchRowPin, watchRowParkDesktop:
+				a.mu.Lock()
+				e := a.tracker.entries[row.Sample.PID]
+				if e != nil && watchSameClickSession(e.Sample, row.Sample) && !e.Parked && !e.Pinned {
+					if choice == watchRowPin {
+						e.Pinned = true
+					} else if err := a.parkDesktop(e); err != nil {
+						desktopProblem = err.Error()
+					}
+					a.save()
+				}
+				a.mu.Unlock()
 			case watchRowRename:
 				select {
 				case nameRequests <- row.Sample:
@@ -809,14 +823,20 @@ func watchPanel(a *watchApp) error {
 				a.logClick(p, releaseY, state, problem, false, false)
 				return 0
 			}
-			if x >= 330 {
-				parkTop := 34
-				if painted.Compact {
-					parkTop = 19
-				}
+			parkTop := 34
+			if painted.Compact {
+				parkTop = 19
+			}
+			if x >= 330 || row.Pinned && x >= 322 && (y-34)%panelRowHeight(painted.Compact) >= parkTop {
 				if (y-34)%panelRowHeight(painted.Compact) >= parkTop {
 					a.mu.Lock()
-					a.tracker.togglePark(row.Sample)
+					if row.Pinned {
+						if e := a.tracker.entries[row.Sample.PID]; e != nil && watchSameClickSession(e.Sample, row.Sample) {
+							e.Pinned = false
+						}
+					} else if err := a.toggleRowPark(row.Sample); err != nil {
+						desktopProblem = err.Error()
+					}
 					a.save()
 					rows, summaries = watchPanelLayout(a.tracker.panelRows(), currentDesktop, desktops, settings.includedDesktops())
 					a.mu.Unlock()
@@ -1047,7 +1067,7 @@ func watchPanel(a *watchApp) error {
 					if frame.Compact {
 						descriptionTop = top + 1
 					}
-					if inputFont != 0 && phase != "working" {
+					if inputFont != 0 {
 						watchGDI.NewProc("SelectObject").Call(dc, inputFont)
 					}
 					watchText(dc, watchRowDescription(row.Sample), 12, descriptionTop, 328, descriptionTop+18)
@@ -1077,7 +1097,10 @@ func watchPanel(a *watchApp) error {
 					watchText(dc, "x", 336, closeTop, 358, closeTop+18)
 					parkLabel := "park"
 					parkLeft := int32(330)
-					if row.Parked {
+					if row.Pinned {
+						parkLabel = "unpin"
+						parkLeft = 322
+					} else if row.Parked {
 						parkLabel = "^"
 						parkLeft = 336
 					}

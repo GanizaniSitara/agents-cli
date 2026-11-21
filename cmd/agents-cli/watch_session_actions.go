@@ -110,7 +110,7 @@ func (a *watchApp) applySessionAction(action watchSessionAction) bool {
 		return false
 	}
 	park := action.Action == "park"
-	if entry.Parked != park && !a.tracker.togglePark(action.Sample) {
+	if entry.Parked != park && a.toggleRowPark(action.Sample) != nil {
 		return false
 	}
 	a.save()

@@ -29,16 +29,18 @@ type watchSample struct {
 }
 
 type watchEntry struct {
-	Parked    bool        `json:"parked,omitempty"`
-	Sample    watchSample `json:"window"`
-	Since     time.Time   `json:"since"`
-	Candidate time.Time   `json:"-"`
-	Busy      bool        `json:"-"`
-	Stopped   bool        `json:"-"`
-	Attention bool        `json:"-"`
-	Dismissed bool        `json:"-"`
-	Order     uint64      `json:"-"`
-	Changed   time.Time   `json:"changed"`
+	Pinned     bool        `json:"pinned,omitempty"`
+	ParkOrigin string      `json:"park_origin,omitempty"`
+	Parked     bool        `json:"parked,omitempty"`
+	Sample     watchSample `json:"window"`
+	Since      time.Time   `json:"since"`
+	Candidate  time.Time   `json:"-"`
+	Busy       bool        `json:"-"`
+	Stopped    bool        `json:"-"`
+	Attention  bool        `json:"-"`
+	Dismissed  bool        `json:"-"`
+	Order      uint64      `json:"-"`
+	Changed    time.Time   `json:"changed"`
 }
 
 type watchTracker struct {
@@ -94,7 +96,7 @@ func (w *watchTracker) observe(s watchSample, now time.Time) (notify bool) {
 		if e != nil && e.Sample.Started == s.Started && e.Sample.RootStarted == s.RootStarted && e.Sample.HWND == s.HWND {
 			// Child discovery can change without replacing the console window.
 			// Reset stop tracking, but keep its place within the same group.
-			e = &watchEntry{Sample: e.Sample, Order: e.Order, Parked: e.Parked}
+			e = &watchEntry{Sample: e.Sample, Order: e.Order, Parked: e.Parked, Pinned: e.Pinned, ParkOrigin: e.ParkOrigin}
 		} else {
 			e = &watchEntry{}
 		}
@@ -188,7 +190,7 @@ func watchCanPark(s watchSample) bool {
 
 func (w *watchTracker) togglePark(s watchSample) bool {
 	e := w.entries[s.PID]
-	if e == nil || !watchSameClickSession(s, e.Sample) || (!e.Parked && !watchCanPark(e.Sample)) {
+	if e == nil || e.Pinned || !watchSameClickSession(s, e.Sample) || (!e.Parked && !watchCanPark(e.Sample)) {
 		return false
 	}
 	e.Parked = !e.Parked

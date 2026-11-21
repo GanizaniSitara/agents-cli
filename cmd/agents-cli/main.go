@@ -30,6 +30,13 @@ var (
 )
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "_park-move" {
+		if err := watchParkMoveHelper(os.Args[2]); err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "_switch-clicked-desktop" {
 		if err := switchClickedDesktop(os.Args[2]); err != nil {
 			emitError(err)

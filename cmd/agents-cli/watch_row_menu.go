@@ -10,9 +10,11 @@ const (
 	watchRowShelve = 102 + iota
 	watchRowRename
 	watchRowCancelShelve
+	watchRowPin
+	watchRowParkDesktop
 )
 
-func watchRowMenu(_ bool) uintptr {
+func watchRowMenu(parked, pinned bool) uintptr {
 	menu, _, _ := watchUser.NewProc("CreatePopupMenu").Call()
 	for _, item := range []struct {
 		id   uintptr
@@ -20,11 +22,19 @@ func watchRowMenu(_ bool) uintptr {
 	}{{watchRowRename, "Rename…"}, {watchRowShelve, "Shelve…"}, {watchRowCancelShelve, "Cancel pending shelving"}} {
 		watchUser.NewProc("AppendMenuW").Call(menu, 0, item.id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(item.text))))
 	}
+	if !parked && !pinned {
+		for _, item := range []struct {
+			id   uintptr
+			text string
+		}{{watchRowPin, "Pin to top"}, {watchRowParkDesktop, "Park to Desktop 2"}} {
+			watchUser.NewProc("AppendMenuW").Call(menu, 0, item.id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(item.text))))
+		}
+	}
 	return menu
 }
 
 func watchShowRowMenu(window uintptr, row watchEntry, point watchPoint) uintptr {
-	menu := watchRowMenu(row.Parked)
+	menu := watchRowMenu(row.Parked, row.Pinned)
 	if menu == 0 {
 		return 0
 	}

@@ -169,7 +169,7 @@ func TestShelfHostExitNeverAppendsToDraft(t *testing.T) {
 
 func TestWatchRowMenuParkUnparkNative(t *testing.T) {
 	for _, parked := range []bool{false, true} {
-		menu := watchRowMenu(parked)
+		menu := watchRowMenu(parked, false)
 		if menu == 0 {
 			t.Fatal("no menu")
 		}
@@ -183,7 +183,7 @@ func TestWatchRowMenuParkUnparkNative(t *testing.T) {
 			t.Fatal("wrong Shelve action")
 		}
 		count, _, _ := watchUser.NewProc("GetMenuItemCount").Call(menu)
-		if count != 3 {
+		if parked && count != 3 || !parked && count != 5 {
 			t.Fatal("menu must contain Rename, Shelve and cancel shelving only")
 		}
 		watchUser.NewProc("DestroyMenu").Call(menu)

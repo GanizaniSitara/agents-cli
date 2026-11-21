@@ -25,7 +25,7 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 			rows = append(rows, entry)
 			continue
 		}
-		if s.DesktopID != current && included[s.DesktopID] {
+		if s.DesktopID != current && (included[s.DesktopID] || entry.ParkOrigin != "") {
 			rows = append(rows, entry)
 		}
 		c := totals[s.DesktopID]
@@ -46,6 +46,9 @@ func watchPanelLayout(entries []watchEntry, current string, desktops []watchDesk
 	priority := func(row watchEntry) int {
 		if row.Parked {
 			return 6
+		}
+		if row.Pinned {
+			return -1
 		}
 		if row.Sample.State == "busy" || row.Sample.Phase == "working" {
 			return 5
