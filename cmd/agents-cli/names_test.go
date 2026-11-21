@@ -10,6 +10,7 @@ func TestShortSessionName(t *testing.T) {
 		"OP-066.1-tiling":                                              "OP-066.1",
 		"fix the flaky golf swing upload thing on the phone":           "fix the flaky golf swing",
 		"short": "short",
+		"工程師 界界界界界界界界界界界界界界界界界界界界界界界界":            "工程師 界界界界界界界界界界界界界界界界界界界界",
 		"CSF-166abc-not-a-ticket-but-long-enough": "CSF-166abc-not-a-ticket",
 	}
 	for in, want := range cases {

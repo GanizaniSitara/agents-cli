@@ -22,6 +22,7 @@ type Session struct {
 	Exe               string `json:"exe,omitempty"`     // the agent's own binary
 	Kind              string `json:"kind"`              // window | bg
 	Name              string `json:"name,omitempty"`
+	NameWarning       string `json:"name_warning,omitempty"`
 	Task              string `json:"task,omitempty"` // full launch-info task slug; Name is its short form (TECH-273)
 	Title             string `json:"title,omitempty"`
 	Zone              *int   `json:"zone,omitempty"`
@@ -173,6 +174,9 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		}
 		if a.Name != "" {
 			s.Name = shortSessionName(a.Name)
+			if s.Name != a.Name {
+				s.NameWarning = fmt.Sprintf("Legacy label: run agents-cli name %d %q to persist its short name", s.PID, s.Name)
+			}
 		}
 		s.PollingMuted = a.PollingMuted
 	}
@@ -202,6 +206,9 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 			}
 		}
 		refreshScreen(s, opts.withScreen, peek)
+		if s.Name == "" {
+			s.Name = shortSessionName(s.Title)
+		}
 		if opts.withScreen && !s.PollingMuted {
 			s.State = agyRuntimeState(s.State, agentRuntimeWork(*s, procs, commandLine, startTime))
 		}

@@ -608,7 +608,7 @@ func cmdAdopt(args []string) error {
 	a := m[key]
 	a.Tool = tool
 	if n := p.str("name", ""); n != "" {
-		a.Name = n
+		a.Name = shortSessionName(n)
 	}
 	if t := startTime(pid); !t.IsZero() {
 		a.Start = t.Format(time.RFC3339)

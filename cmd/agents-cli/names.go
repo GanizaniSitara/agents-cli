@@ -38,7 +38,7 @@ func shortSessionName(s string) string {
 	}
 	cut := string(r[:sessionNameMax])
 	for _, sep := range []string{" ", "-", "_"} {
-		if i := strings.LastIndex(cut, sep); i >= 8 {
+		if i := strings.LastIndex(cut, sep); i >= 0 && len([]rune(cut[:i])) >= 8 {
 			return strings.TrimRight(cut[:i], " -_")
 		}
 	}
