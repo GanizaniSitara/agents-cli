@@ -13,6 +13,7 @@ import (
 // agent. PID is the console-owning root, the thing the launcher recorded and
 // the thing `stop` kills; AgentPID is the agent process itself.
 type Session struct {
+	FullName          string `json:"full_name,omitempty"`
 	PollingMuted      bool   `json:"polling_muted,omitempty"`
 	PID               uint32 `json:"pid"`
 	AgentPID          uint32 `json:"agent_pid,omitempty"`
@@ -174,7 +175,9 @@ func discover(opts discoverOpts) ([]Session, procMap, error) {
 		}
 		if a.Name != "" {
 			s.Name = shortSessionName(a.Name)
+			s.FullName = a.FullName
 			if s.Name != a.Name {
+				s.FullName = a.Name
 				s.NameWarning = fmt.Sprintf("Legacy label: run agents-cli name %d %q to persist its short name", s.PID, s.Name)
 			}
 		}

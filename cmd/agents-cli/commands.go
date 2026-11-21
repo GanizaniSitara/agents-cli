@@ -571,7 +571,7 @@ func cmdName(args []string) error {
 	key := strconv.FormatUint(uint64(s.PID), 10)
 	a := m[key]
 	requested := strings.Join(p.pos[1:], " ")
-	a.Name = shortSessionName(requested) // TECH-273: ticket ID or <=24 chars
+	a.setName(requested)
 	if a.Name == "" {
 		return errors.New("name is empty")
 	}
@@ -621,7 +621,7 @@ func cmdAdopt(args []string) error {
 	a := m[key]
 	a.Tool = tool
 	if n := p.str("name", ""); n != "" {
-		a.Name = shortSessionName(n)
+		a.setName(n)
 	}
 	if t := startTime(pid); !t.IsZero() {
 		a.Start = t.Format(time.RFC3339)

@@ -38,3 +38,15 @@ func TestResolveTicketRefIsWholeToken(t *testing.T) {
 		t.Errorf("CSF-1 must not match CSF-16 or CSF-166")
 	}
 }
+
+func TestAdoptedRenameRetainsFullLabel(t *testing.T) {
+	var a adopted
+	a.setName("TECH-273-full-label")
+	if a.Name != "TECH-273" || a.FullName != "TECH-273-full-label" {
+		t.Fatal(a)
+	}
+	a.setName("short")
+	if a.Name != "short" || a.FullName != "" {
+		t.Fatal(a)
+	}
+}

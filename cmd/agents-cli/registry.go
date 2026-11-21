@@ -69,11 +69,20 @@ func readLaunchInfos() map[uint32]launchInfo {
 // ---- adopted sessions and labels -------------------------------------------
 
 type adopted struct {
+	FullName     string `json:"full_name,omitempty"`
 	PollingMuted bool   `json:"polling_muted,omitempty"`
 	Tool         string `json:"tool,omitempty"`
 	Name         string `json:"name,omitempty"`
 	Start        string `json:"start,omitempty"` // process start time, guards PID reuse
 	Added        string `json:"added"`
+}
+
+func (a *adopted) setName(requested string) {
+	a.Name = shortSessionName(requested)
+	a.FullName = ""
+	if a.Name != requested {
+		a.FullName = requested
+	}
 }
 
 func dataDir() string {
