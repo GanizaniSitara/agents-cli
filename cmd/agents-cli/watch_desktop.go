@@ -179,6 +179,9 @@ func watchPullAndForeground(hwnd uintptr, sampleDesktop, current string, move fu
 type watchShellCOM struct{ VTable *[16]uintptr }
 
 func watchGUID(s string) windows.GUID {
+	if len(s) == 0 || s[0] != '{' {
+		s = "{" + s + "}"
+	}
 	g, err := windows.GUIDFromString(s)
 	if err != nil {
 		return windows.GUID{}
@@ -225,13 +228,19 @@ func moveWatchWindowToDesktop(hwnd uintptr, desktopID string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	ole := windows.NewLazySystemDLL("ole32.dll")
-	hr, _, _ := ole.NewProc("CoInitializeEx").Call(0, 0)
+	// COINIT_APARTMENTTHREADED: the Immersive Shell LocalServer only activates
+	// from an STA thread (MTA returns REGDB_E_CLASSNOTREG for its CLSID).
+	const coinitApartmentThreaded = 2
+	hr, _, _ := ole.NewProc("CoInitializeEx").Call(0, coinitApartmentThreaded)
 	if int32(hr) < 0 {
 		return fmt.Errorf("CoInitializeEx failed: %#x", uint32(hr))
 	}
 	defer ole.NewProc("CoUninitialize").Call()
 	var shell *watchShellCOM
-	hr, _, _ = ole.NewProc("CoCreateInstance").Call(uintptr(unsafe.Pointer(&watchClsidImmersiveShell)), 0, 1,
+	// CLSCTX_ALL: the Immersive Shell CLSID is a LocalServer (AppID), not an
+	// InprocServer, so CLSCTX_INPROC_SERVER alone returns REGDB_E_CLASSNOTREG.
+	const clsctxAll = 1 | 2 | 4 | 16
+	hr, _, _ = ole.NewProc("CoCreateInstance").Call(uintptr(unsafe.Pointer(&watchClsidImmersiveShell)), 0, clsctxAll,
 		uintptr(unsafe.Pointer(&watchIIDIServiceProvider10)), uintptr(unsafe.Pointer(&shell)))
 	if int32(hr) < 0 || shell == nil {
 		return fmt.Errorf("ImmersiveShell CoCreateInstance failed: %#x", uint32(hr))
