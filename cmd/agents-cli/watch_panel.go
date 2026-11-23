@@ -455,7 +455,7 @@ func watchPanel(a *watchApp) error {
 						if row, ok := foregroundTarget(); ok {
 							activePID = row.Sample.PID
 						}
-						next, ok := attentionCycle.next(painted, currentDesktop, activePID, foreground)
+						next, ok := attentionCycle.nextAfterFailure(painted, currentDesktop, activePID, foreground)
 						if !ok {
 							break
 						}

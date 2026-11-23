@@ -84,6 +84,49 @@ func TestNextAttentionShortcutSkipsActiveBusyParked(t *testing.T) {
 	}
 }
 
+func TestAttentionRotationAdvancesPastFailedPull(t *testing.T) {
+	// Simulates the Ctrl+Win+Z fall-through: the first candidate's desktop
+	// move fails, so the panel calls cycle.next again without any successful
+	// activation. The failed row is already marked seen and must be skipped,
+	// never dead-ending the rotation.
+	rows := []watchEntry{}
+	for _, pid := range []uint32{1, 2, 3} {
+		rows = append(rows, watchEntry{Sample: watchSample{Session: Session{PID: pid, State: "idle"}, HWND: uintptr(pid), DesktopID: "other"}})
+	}
+	frame := newWatchPanelFrame(rows, nil, 0, len(rows), false)
+	var cycle watchAttentionCycle
+	p, ok := cycle.next(frame, "here", 0, 0)
+	if !ok || p.Row.Sample.PID != 1 {
+		t.Fatalf("first candidate = %+v %v", p, ok)
+	}
+	// "desktop-move-failed" on pid 1: the panel re-queries the cycle within
+	// the same press via nextAfterFailure, which must not reset seen.
+	p2, ok := cycle.nextAfterFailure(frame, "here", 0, 0)
+	if !ok || p2.Row.Sample.PID == 1 {
+		t.Fatalf("failed candidate repeated: pid=%d ok=%v", p2.Row.Sample.PID, ok)
+	}
+	if p2.Row.Sample.PID != 2 {
+		t.Fatalf("expected next candidate 2, got %+v", p2)
+	}
+	p3, ok := cycle.nextAfterFailure(frame, "here", 0, 0)
+	if !ok || p3.Row.Sample.PID != 3 {
+		t.Fatalf("expected candidate 3, got %+v %v", p3, ok)
+	}
+	// With a tracked foreground session active, a failed pull must also
+	// advance (the new-press reset in next() must not fire mid-press).
+	rows = append(rows, watchEntry{Sample: watchSample{Session: Session{PID: 9, State: "busy"}, HWND: 9, DesktopID: "here"}})
+	frame = newWatchPanelFrame(rows, nil, 0, len(rows), false)
+	var cycle2 watchAttentionCycle
+	p, ok = cycle2.next(frame, "here", 9, 9)
+	if !ok || p.Row.Sample.PID != 1 {
+		t.Fatalf("with active 9: first candidate = %d %v", p.Row.Sample.PID, ok)
+	}
+	p2, ok = cycle2.nextAfterFailure(frame, "here", 9, 9)
+	if !ok || p2.Row.Sample.PID != 2 {
+		t.Fatalf("with active 9: failed candidate repeated or wrong next: pid=%d ok=%v", p2.Row.Sample.PID, ok)
+	}
+}
+
 func TestActionShortcutForegroundIdentity(t *testing.T) {
 	rows := []watchEntry{{Sample: watchSample{Session: Session{PID: 1, Title: "one"}, HWND: 10}}, {Sample: watchSample{Session: Session{PID: 2, Title: "two"}, HWND: 10}}}
 	if r, ok := watchForegroundSession(rows, 10, "two", true); !ok || r.Sample.PID != 2 {

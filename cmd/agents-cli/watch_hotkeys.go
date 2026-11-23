@@ -167,15 +167,33 @@ type watchAttentionCycle struct {
 }
 
 func (c *watchAttentionCycle) next(frame watchPanelFrame, current string, activePID uint32, foreground uintptr) (watchPanelPress, bool) {
+	active := c.activeSample(frame, activePID)
+	// A new press restarts from the top when the owner manually focused a
+	// different session (or nothing tracked) since the last navigation.
+	if activePID == 0 || !watchSameClickSession(active, c.last) {
+		c.seen = make(map[uint32]watchSample)
+	}
+	return c.advance(frame, current, activePID, foreground, active)
+}
+
+// nextAfterFailure continues the same press after a candidate's desktop pull
+// failed. It must not apply the new-press reset: the failed row is already in
+// seen, and resetting would select it again (the rotation would dead-end).
+func (c *watchAttentionCycle) nextAfterFailure(frame watchPanelFrame, current string, activePID uint32, foreground uintptr) (watchPanelPress, bool) {
+	return c.advance(frame, current, activePID, foreground, c.activeSample(frame, activePID))
+}
+
+func (c *watchAttentionCycle) activeSample(frame watchPanelFrame, activePID uint32) watchSample {
 	var active watchSample
 	for _, row := range frame.Rows {
 		if row.Sample.PID == activePID {
 			active = row.Sample
 		}
 	}
-	if activePID == 0 || !watchSameClickSession(active, c.last) {
-		c.seen = make(map[uint32]watchSample)
-	}
+	return active
+}
+
+func (c *watchAttentionCycle) advance(frame watchPanelFrame, current string, activePID uint32, foreground uintptr, active watchSample) (watchPanelPress, bool) {
 	if c.seen == nil {
 		c.seen = make(map[uint32]watchSample)
 	}
