@@ -45,6 +45,7 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 	defer runtime.UnlockOSThread()
 	var edit, status, window uintptr
 	applying := false
+	queued := false
 	instance, _, _ := k32.NewProc("GetModuleHandleW").Call(0)
 	setText := func(h uintptr, text string) {
 		watchUser.NewProc("SetWindowTextW").Call(h, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(text))))
@@ -57,10 +58,20 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 			if applying {
 				return 0
 			}
+		case 0x113: // WM_TIMER: recheck only when the watcher sees this worker stop.
+			if wp == 7 && queued {
+				if watchRenameStillBusy(review) {
+					return 0
+				}
+				watchUser.NewProc("KillTimer").Call(hwnd, 7)
+				queued = false
+				watchUser.NewProc("PostMessageW").Call(hwnd, 0x111, 1, 0)
+			}
+			return 0
 		case 0x111: // WM_COMMAND
 			switch wp & 0xffff {
 			case 1:
-				if applying {
+				if applying || queued {
 					return 0
 				}
 				var text [256]uint16
@@ -109,7 +120,17 @@ func watchNameDialog(review watchNameReview, show bool) watchNameReview {
 			if problem == "" {
 				review.Action = "accept"
 				watchUser.NewProc("DestroyWindow").Call(hwnd)
+			} else if problem == watchRenameBusy || problem == watchRenameDraft {
+				if problem == watchRenameDraft {
+					setText(status, "Queued until the prompt is sent or cleared. Cancel to withdraw.")
+				} else {
+					setText(status, "Queued until idle. Cancel to withdraw.")
+				}
+				queued = true
+				watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 5), 0)
+				watchUser.NewProc("SetTimer").Call(hwnd, 7, 3000, 0)
 			} else {
+				watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 5), 1)
 				setText(status, problem)
 				watchUser.NewProc("EnableWindow").Call(edit, 1)
 				watchUser.NewProc("EnableWindow").Call(watchDialogItem(hwnd, 1), 1)

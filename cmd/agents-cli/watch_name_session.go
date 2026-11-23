@@ -6,10 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+const watchRenameBusy = "Rename queued until the session is idle."
+
+// A draft in the composer is never overwritten; the dialog queues and retries
+// until the owner sends or clears it.
+const watchRenameDraft = "Rename queued until the prompt is empty."
 
 func watchHarnessRenameSupported(tool string) bool {
 	switch tool {
@@ -100,8 +107,11 @@ func watchRenameHarness(tool, name string, validate func() error, read func() (*
 	if err != nil {
 		return "", err
 	}
-	if !watchRenameComposerEmpty(tool, before.Lines) {
-		return "", errors.New("Session rename requires an empty idle composer. Uncheck session rename for window title only.")
+	if !(tool == "claude" && claudeRenameReady(before)) && !watchRenameComposerEmpty(tool, before.Lines) {
+		if guessState(tool, before.Lines) == "busy" {
+			return "", errors.New(watchRenameBusy)
+		}
+		return "", errors.New(watchRenameDraft)
 	}
 	if err := validate(); err != nil {
 		return "", err
@@ -156,6 +166,12 @@ func watchApplyReviewedName(review watchNameReview) error {
 		if s.NamingAgentStarted == "" || startTime(s.AgentPID).Format(time.RFC3339Nano) != s.NamingAgentStarted {
 			return errors.New("Agent process changed. Reopen Rename.")
 		}
+		if s.Tool == "claude" && review.Conversation != "" {
+			_, record, err := claudeSessionRecord(s)
+			if err != nil || record.SessionID != review.Conversation {
+				return errors.New("Claude conversation changed. Reopen Rename.")
+			}
+		}
 		return nil
 	}
 	if err := validate(); err != nil {
@@ -172,7 +188,7 @@ func watchApplyReviewedName(review watchNameReview) error {
 		return err
 	}
 	if agentRuntimeWork(*live, procs, commandLine, startTime) > 0 {
-		return errors.New("Agent has background work. Uncheck session rename for window title only.")
+		return errors.New(watchRenameBusy)
 	}
 	read := func() (*peekResult, error) { return peek(s.PID, 0) }
 	before, err := read()
@@ -182,7 +198,31 @@ func watchApplyReviewedName(review watchNameReview) error {
 	if before.Title != s.Title {
 		return errors.New("Title changed. Reopen Rename.")
 	}
+	state := guessState(s.Tool, before.Lines)
+	if state == "busy" {
+		return errors.New(watchRenameBusy)
+	}
 	send := func(text string) (bool, error) {
+		if s.Tool == "claude" {
+			if err := inject(s.PID, text, false); err != nil {
+				return false, err
+			}
+			for attempt := 0; attempt < 8; attempt++ {
+				time.Sleep(100 * time.Millisecond)
+				if err := validate(); err != nil {
+					return false, err
+				}
+				r, err := read()
+				if err != nil {
+					return false, err
+				}
+				draft, _, ok := claudeRenameFrame(r.Lines)
+				if ok && draft == text && claudeState(r.Lines) == "idle" {
+					return true, sendKey(s.PID, "enter")
+				}
+			}
+			return false, errors.New("Claude input differed from the rename command. Inspect the composer; Enter was not sent.")
+		}
 		exe, err := os.Executable()
 		if err != nil {
 			return false, err
@@ -223,4 +263,48 @@ func watchApplyReviewedName(review watchNameReview) error {
 		return fmt.Errorf("Session renamed; window/tab rename failed: %w", err)
 	}
 	return nil
+}
+
+// Only the live framed prompt can supply a ghost-text candidate. A real
+// draft with the caret at Home will also pass this first check, so the
+// sender must verify the entire staged command before pressing Enter.
+func claudeRenameFrame(lines []string) (string, int, bool) {
+	normalized := append([]string(nil), lines...)
+	for i, line := range normalized {
+		text := strings.TrimSpace(line)
+		if strings.HasPrefix(text, "───") && strings.HasSuffix(text, "─") {
+			normalized[i] = "────────"
+		}
+	}
+	draft, bottom, ok := copilotComposerEnd(normalized)
+	if !ok {
+		return "", 0, false
+	}
+	for i := bottom - 1; i >= 0; i-- {
+		if normalized[i] == "────────" {
+			return draft, i + 2, true
+		}
+	}
+	return "", 0, false
+}
+func claudeRenameReady(r *peekResult) bool {
+	draft, row, ok := claudeRenameFrame(r.Lines)
+	return ok && claudeState(r.Lines) == "idle" && (draft == "" || row == r.ComposerStartRow)
+}
+
+func watchRenameStillBusy(r watchNameReview) bool {
+	b, err := os.ReadFile(filepath.Join(r.Dir, "status.json"))
+	if err != nil {
+		return false
+	}
+	var receipt watchReceipt
+	if json.Unmarshal(b, &receipt) != nil || time.Since(receipt.Updated) > 10*time.Second {
+		return false
+	}
+	for _, e := range receipt.Sessions {
+		if watchSameClickSession(e.Sample, r.Sample) {
+			return e.Sample.State == "busy" || e.Sample.WorkProcesses > 0
+		}
+	}
+	return false
 }

@@ -237,22 +237,9 @@ func shelfResolve(s watchSample) (shelfEntry, error) {
 	}
 	switch s.Tool {
 	case "claude":
-		base := envVar(s.AgentPID, "CLAUDE_CONFIG_DIR")
-		if base == "" {
-			home, _ := os.UserHomeDir()
-			base = filepath.Join(home, ".claude")
-		}
-		b, err := os.ReadFile(filepath.Join(base, "sessions", fmt.Sprint(s.AgentPID)+".json"))
+		base, record, err := claudeSessionRecord(s)
 		if err != nil {
-			return e, errors.New("Claude has no current PID/session record; window left open")
-		}
-		var record struct {
-			SessionID string `json:"sessionId"`
-			ProcStart string `json:"procStart"`
-			Cwd       string `json:"cwd"`
-		}
-		if json.Unmarshal(b, &record) != nil || shelfUUID.FindString(record.SessionID) != record.SessionID || len(record.SessionID) != 36 || record.ProcStart != strconv.FormatInt(startTime(s.AgentPID).UnixNano()/100+116444736000000000, 10) {
-			return e, errors.New("Claude session record is stale; window left open")
+			return e, err
 		}
 		e.Conversation = record.SessionID
 		e.Directory = record.Cwd
@@ -738,4 +725,28 @@ func cmdShelf(args []string) error {
 		return err
 	}
 	return errors.New("Unknown shelf command")
+}
+
+type claudePIDRecord struct {
+	SessionID string `json:"sessionId"`
+	ProcStart string `json:"procStart"`
+	Cwd       string `json:"cwd"`
+}
+
+func claudeSessionRecord(s watchSample) (string, claudePIDRecord, error) {
+	base := envVar(s.AgentPID, "CLAUDE_CONFIG_DIR")
+	if base == "" {
+		home, _ := os.UserHomeDir()
+		base = filepath.Join(home, ".claude")
+	}
+	b, err := os.ReadFile(filepath.Join(base, "sessions", fmt.Sprint(s.AgentPID)+".json"))
+	if err != nil {
+		return "", claudePIDRecord{}, errors.New("Claude has no current PID/session record")
+	}
+	var record claudePIDRecord
+
+	if json.Unmarshal(b, &record) != nil || shelfUUID.FindString(record.SessionID) != record.SessionID || len(record.SessionID) != 36 || record.ProcStart != strconv.FormatInt(startTime(s.AgentPID).UnixNano()/100+116444736000000000, 10) {
+		return "", claudePIDRecord{}, errors.New("Claude session record is stale")
+	}
+	return base, record, nil
 }

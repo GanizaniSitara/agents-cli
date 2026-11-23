@@ -92,6 +92,10 @@ func TestWatchHarnessRenameSingleSendAndGuards(t *testing.T) {
 			wantSends := 1
 			if mode == "busy" || mode == "draft" {
 				wantSends = 0
+				want := map[string]string{"busy": watchRenameBusy, "draft": watchRenameDraft}[mode]
+				if err.Error() != want {
+					t.Fatalf("%s should queue, got %v", mode, err)
+				}
 			}
 			if sends != wantSends {
 				t.Fatalf("%d sends want %d", sends, wantSends)

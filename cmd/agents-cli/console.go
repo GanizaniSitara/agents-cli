@@ -20,10 +20,11 @@ import (
 // ---- parent side: run the hidden helper -----------------------------------
 
 type peekResult struct {
-	Title string   `json:"title"`
-	Lines []string `json:"lines"`
-	Width int      `json:"width"`
-	Error string   `json:"error,omitempty"`
+	ComposerStartRow int      `json:"composer_start_row,omitempty"` // one-based; zero means unverified
+	Title            string   `json:"title"`
+	Lines            []string `json:"lines"`
+	Width            int      `json:"width"`
+	Error            string   `json:"error,omitempty"`
 }
 
 // runHelper re-executes this binary as a detached child so it can attach to
@@ -371,6 +372,13 @@ func doPeekProgress(pid uint32, above int, progress func(string) error) *peekRes
 		end := pos + width
 		if end > int(read) {
 			end = int(read)
+		}
+		x := int(info.Cursor.X)
+		if pos/width+top == int(info.Cursor.Y) && x > 0 && pos+x <= end {
+			prefix := cleanConsoleLine(windows.UTF16ToString(buf[pos : pos+x]))
+			if prefix == "❯" || prefix == "❯\u00a0" || prefix == ">" || prefix == ">\u00a0" {
+				r.ComposerStartRow = len(r.Lines) + 1
+			}
 		}
 		r.Lines = append(r.Lines, cleanConsoleLine(windows.UTF16ToString(buf[pos:end])))
 	}

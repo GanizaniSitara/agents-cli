@@ -213,6 +213,7 @@ func watchShortName(name string) string {
 }
 
 type watchNameReview struct {
+	Conversation  string
 	RenameSession bool
 	Dir           string
 	Sample        watchSample
@@ -226,7 +227,14 @@ func watchReviewName(ctx context.Context, dir string, s watchSample) {
 	if err != nil {
 		return
 	}
-	input, _ := json.Marshal(watchNameReview{Dir: dir, Sample: s, Name: firstNonEmpty(watchShortName(s.SuggestedName), watchShortName(s.Name), watchShortName(s.Title), s.Tool), RenameSession: watchHarnessRenameSupported(s.Tool)})
+	r := watchNameReview{Dir: dir, Sample: s, Name: firstNonEmpty(watchShortName(s.SuggestedName), watchShortName(s.Name), watchShortName(s.Title), s.Tool), RenameSession: watchHarnessRenameSupported(s.Tool)}
+	if s.Tool == "claude" {
+		_, record, err := claudeSessionRecord(s)
+		if err == nil {
+			r.Conversation = record.SessionID
+		}
+	}
+	input, _ := json.Marshal(r)
 	cmd := helperCommand(ctx, exe, string(input), "name-review", strconv.FormatUint(uint64(s.PID), 10))
 	cmd.WaitDelay = 250 * time.Millisecond
 	var out bytes.Buffer
