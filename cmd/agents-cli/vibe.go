@@ -46,7 +46,7 @@ func vibeState(lines []string) string {
 	top := -1
 	for i, line := range normalized {
 		text := strings.TrimSpace(line)
-		if strings.HasPrefix(text, "─") && (strings.Contains(text, "accept edits") || strings.Contains(text, "auto-approve") || strings.Contains(text, "smart-approve")) {
+		if strings.HasPrefix(text, "─") && (strings.Contains(text, "accept edits") || strings.Contains(text, "auto-approve") || strings.Contains(text, "auto approve") || strings.Contains(text, "smart-approve")) {
 			normalized[i] = "────────"
 			top = i
 		}

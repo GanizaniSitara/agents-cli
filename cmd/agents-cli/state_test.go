@@ -82,6 +82,23 @@ func TestGuessStateLiveScreens(t *testing.T) {
 	if s := guessState("vibe", append(vibeBusy, vibeFoot...)); s != "busy" {
 		t.Errorf("vibe busy screen -> %s", s)
 	}
+	// Current Vibe names the model on its mode rule: "Mistral Large 4[medium] · auto approve".
+	vibeModelFoot := []string{
+		"▶ 0/8 · Phase 1: create private repo                                 Cmd/Alt+\\ plan",
+		"─────────────────────────────────── Mistral Large 4[medium] · auto approve ─",
+		">",
+		"",
+		"",
+		"────────────────────────────────────────────────────────",
+		"~                                usage █▊     28% · ctx ▋      42.9k/400k",
+	}
+	vibeModelBusy := append([]string{"■ Ran 5 commands, thinking", "", "⠦  Generating… (1m53s Esc/Ctrl+C to interrupt)"}, vibeModelFoot...)
+	if s := guessState("vibe", vibeModelBusy); s != "busy" {
+		t.Errorf("vibe busy screen with model mode rule -> %s", s)
+	}
+	if s := guessState("vibe", append([]string{"Task complete."}, vibeModelFoot...)); s != "idle" {
+		t.Errorf("vibe idle screen with model mode rule -> %s", s)
+	}
 	vibeApproval := []string{
 		" ⣠ Running command… (1s Esc/Ctrl+C to interrupt)",
 		"│ Permission for the file_system.bash tool (mkdir *)                                                   │",
