@@ -443,7 +443,27 @@ func watchPanel(a *watchApp) error {
 						}
 						return 0
 					}
-					a.activateWatchRow(p, p.Y)
+					// A failed desktop pull must not dead-end the rotation: fall
+					// through to the next attention candidate and log each attempt.
+					for attempt := 0; attempt < len(rows)+1; attempt++ {
+						outcome := a.activateWatchRow(p, p.Y)
+						if outcome != "desktop-move-failed" || !pendingFirstRow {
+							break
+						}
+						foreground, _, _ := watchUser.NewProc("GetForegroundWindow").Call()
+						var activePID uint32
+						if row, ok := foregroundTarget(); ok {
+							activePID = row.Sample.PID
+						}
+						next, ok := attentionCycle.next(painted, currentDesktop, activePID, foreground)
+						if !ok {
+							break
+						}
+						next.Time = time.Now()
+						next.Trigger = "first-row-shortcut"
+						a.logClick(next, next.Y, watchReadTarget(next.Row.Sample), "shortcut-received", false, false)
+						p = next
+					}
 					watchSetLift(window, true)
 				} else {
 					a.logClick(p, p.Y, watchReadTarget(p.Row.Sample), "shortcut-cancelled", false, false)

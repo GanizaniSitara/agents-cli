@@ -313,12 +313,14 @@ func watchShortcutRow(frame watchPanelFrame, id uintptr) (watchPanelPress, bool)
 	return p, p.Kind == "row"
 }
 
-func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) {
+// activateWatchRow activates an explicitly selected row and reports the
+// outcome so the rotation can fall through past a failed desktop pull.
+func (a *watchApp) activateWatchRow(p watchPanelPress, releaseY int) string {
 	a.selectionID++
-	a.activateWatchRowSelected(p, releaseY, false)
+	return a.activateWatchRowSelected(p, releaseY, false)
 }
 
-func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, terminalSelected bool) {
+func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, terminalSelected bool) string {
 	row := p.Row
 	state := watchReadTarget(row.Sample)
 	problem := watchTargetProblem(row.Sample, state)
@@ -330,7 +332,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	a.mu.Unlock()
 	if problem != "" {
 		a.logClick(p, releaseY, state, problem, false, false)
-		return
+		return problem
 	}
 	// Only a session click or an explicit session shortcut calls this path.
 	settings := a.currentSettings()
@@ -343,22 +345,22 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
 	if !pullNeeded && (int32(hr) < 0 || cloaked != 0) {
 		a.logClick(p, releaseY, state, "window-cloaked", false, false)
-		return
+		return "window-cloaked"
 	}
 	if settings.DisableForeground {
 		if !settings.DisableSelectionBlink {
 			watchPulseWindow(row.Sample, pulseColour, settings.SelectionBlinkStyle)
 		}
 		a.logClick(p, releaseY, state, "foreground-disabled", false, false)
-		return
+		return "foreground-disabled"
 	}
 	if !terminalSelected && watchWindowClass(row.Sample.HWND) == "CASCADIA_HOSTING_WINDOW_CLASS" {
 		if a.selectTerminal == nil {
 			a.logClick(p, releaseY, state, "terminal-selector-unavailable", false, false)
-			return
+			return "terminal-selector-unavailable"
 		}
 		a.selectTerminal(watchTerminalRequest{Press: p, ReleaseY: releaseY, Generation: a.selectionID})
-		return
+		return "terminal-selected"
 	}
 	var before watchRect
 	watchUser.NewProc("GetWindowRect").Call(row.Sample.HWND, uintptr(unsafe.Pointer(&before)))
@@ -386,7 +388,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	})
 	if !proceeded {
 		a.logClick(p, releaseY, state, "desktop-move-failed", false, false)
-		return
+		return "desktop-move-failed"
 	}
 	if pulled {
 		// Keep the cloaked guard after the move.
@@ -394,7 +396,7 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 		hr2, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloakedAfter)), 4)
 		if int32(hr2) < 0 || cloakedAfter != 0 {
 			a.logClick(p, releaseY, state, "window-cloaked-after-move", false, false)
-			return
+			return "window-cloaked-after-move"
 		}
 	}
 	if set != 0 {
@@ -417,4 +419,5 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 			Outcome: "activation-geometry", BoundsBefore: &before, BoundsAfter: &after, WasMinimized: wasMinimized != 0,
 			ForegroundAfter: foreground, ForegroundPID: watchWindowPID(foreground), ForegroundTitle: watchWindowTitle(foreground)})
 	}()
+	return "activation-requested"
 }
