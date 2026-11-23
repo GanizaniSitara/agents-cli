@@ -335,9 +335,13 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	// Only a session click or an explicit session shortcut calls this path.
 	settings := a.currentSettings()
 	pulseColour := watchPulseColour(row, loadWatchTheme(a.dir), p.Trigger == "double-click")
+	// A window on another desktop reports cloaked until it is pulled onto the
+	// current one, so the cloaked guard runs after the move for those rows and
+	// before activation for rows already on the current desktop.
+	pullNeeded := watchDesktopPullNeeded(row.Sample.DesktopID, a.currentDesktop())
 	var cloaked uint32
 	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
-	if int32(hr) < 0 || cloaked != 0 {
+	if !pullNeeded && (int32(hr) < 0 || cloaked != 0) {
 		a.logClick(p, releaseY, state, "window-cloaked", false, false)
 		return
 	}
