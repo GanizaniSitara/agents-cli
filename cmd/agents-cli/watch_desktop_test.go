@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -76,6 +77,67 @@ func TestWatchMonitorFallback(t *testing.T) {
 	}
 	if selectWatchMonitor(ms, "secondary").Device != "secondary" {
 		t.Fatal("selected monitor ignored")
+	}
+}
+
+func TestWatchDesktopPullNeeded(t *testing.T) {
+	if !watchDesktopPullNeeded("two", "one") {
+		t.Fatal("other-desktop row needs a pull on explicit selection")
+	}
+	for _, pair := range [][2]string{{"one", "one"}, {"", "one"}, {"two", ""}, {"", ""}} {
+		if watchDesktopPullNeeded(pair[0], pair[1]) {
+			t.Fatalf("no pull expected for %v", pair)
+		}
+	}
+}
+
+func TestPullThenForegroundOrdering(t *testing.T) {
+	var calls []string
+	move := func(hwnd uintptr, desktopID string) error {
+		if hwnd != 77 || desktopID != "one" {
+			t.Fatalf("move target = %d %q", hwnd, desktopID)
+		}
+		calls = append(calls, "move")
+		return nil
+	}
+	foreground := func(hwnd uintptr) bool {
+		if hwnd != 77 {
+			t.Fatalf("foreground target = %d", hwnd)
+		}
+		calls = append(calls, "foreground")
+		return true
+	}
+	pulled, proceeded := watchPullAndForeground(77, "two", "one", move, foreground)
+	if !pulled || !proceeded || len(calls) != 2 || calls[0] != "move" || calls[1] != "foreground" {
+		t.Fatalf("other-desktop row must move-then-foreground: pulled=%v proceeded=%v calls=%v", pulled, proceeded, calls)
+	}
+	calls = nil
+	pulled, proceeded = watchPullAndForeground(77, "one", "one", move, foreground)
+	if pulled || !proceeded || len(calls) != 1 || calls[0] != "foreground" {
+		t.Fatalf("current-desktop row must not move: pulled=%v proceeded=%v calls=%v", pulled, proceeded, calls)
+	}
+	calls = nil
+	failMove := func(uintptr, string) error { calls = append(calls, "move"); return errors.New("denied") }
+	pulled, proceeded = watchPullAndForeground(77, "two", "one", failMove, foreground)
+	if pulled || proceeded || len(calls) != 1 {
+		t.Fatalf("failed move must stop before foreground: pulled=%v proceeded=%v calls=%v", pulled, proceeded, calls)
+	}
+}
+
+func TestBackgroundRefreshNeverMovesWindows(t *testing.T) {
+	a := &watchApp{dir: t.TempDir(), tracker: newWatchTracker(time.Second)}
+	moved := 0
+	a.moveWindowToDesktop = func(hwnd uintptr, desktopID string) error {
+		moved++
+		return nil
+	}
+	// Exercise the background refresh paths: worker batch acceptance and
+	// panel layout over rows that live on another desktop.
+	a.acceptDesktopState(watchBatch{CurrentDesktop: "one", Desktops: []watchDesktop{{ID: "one", Name: "Desktop 1"}, {ID: "two", Name: "Desktop 2"}}})
+	rows := []watchEntry{{Sample: watchSample{Session: Session{PID: 9, State: "idle"}, DesktopID: "two", HWND: 99}}}
+	watchPanelLayout(rows, a.currentDesktop(), a.desktopList(), map[string]bool{})
+	if moved != 0 {
+		t.Fatal("background refresh moved a window across desktops")
 	}
 }
 

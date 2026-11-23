@@ -26,11 +26,11 @@ func TestAttentionCycleVisitsAllRowsBeforeWrapping(t *testing.T) {
 		rows = append(rows, watchEntry{Sample: watchSample{Session: Session{PID: pid, State: "idle"}, HWND: uintptr(pid), DesktopID: "here"}})
 	}
 	rows[3].Parked = true
-	rows[4].Sample.DesktopID = "other"
+	rows[4].Sample.DesktopID = "other" // other-desktop rows stay in the rotation
 	frame := newWatchPanelFrame(rows, nil, 0, len(rows), false)
 	var cycle watchAttentionCycle
 	active := uint32(3)
-	for _, want := range []uint32{1, 2, 3, 2} {
+	for _, want := range []uint32{1, 2, 3, 5} {
 		p, ok := cycle.next(frame, "here", active, uintptr(active))
 		if !ok || p.Row.Sample.PID != want {
 			t.Fatalf("active %d: got %d, %v; want %d", active, p.Row.Sample.PID, ok, want)
@@ -46,7 +46,7 @@ func TestAttentionCycleVisitsAllRowsBeforeWrapping(t *testing.T) {
 	}
 }
 
-func TestNextAttentionShortcutSkipsActiveBusyParkedAndBackground(t *testing.T) {
+func TestNextAttentionShortcutSkipsActiveBusyParked(t *testing.T) {
 	row := func(pid uint32, state, desktop string) watchEntry {
 		return watchEntry{Sample: watchSample{Session: Session{PID: pid, State: state}, DesktopID: desktop, HWND: uintptr(pid)}}
 	}
@@ -58,6 +58,12 @@ func TestNextAttentionShortcutSkipsActiveBusyParkedAndBackground(t *testing.T) {
 		if !ok || p.Row.Sample.PID != tc.want {
 			t.Fatalf("active %d: got %+v %v, want %d", tc.active, p, ok, tc.want)
 		}
+	}
+	// Other-desktop rows are part of the rotation: they are selected like any
+	// other row and pulled onto the current desktop on activation.
+	otherOnly := newWatchPanelFrame([]watchEntry{row(7, "idle", "other")}, nil, 0, 1, false)
+	if p, ok := watchNextAttentionTarget(otherOnly, "here", 1, 1); !ok || p.Row.Sample.PID != 7 {
+		t.Fatal("rotation must include other-desktop rows")
 	}
 	frame.Rows[0].Parked = true
 	if p, ok := watchNextAttentionTarget(frame, "here", 6, 6); !ok || p.Row.Sample.PID != 2 {

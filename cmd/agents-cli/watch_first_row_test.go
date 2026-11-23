@@ -110,18 +110,20 @@ func TestFirstRowShortcutFollowsPaintedOrder(t *testing.T) {
 	}
 }
 
-func TestFirstRowShortcutSkipsOtherDesktops(t *testing.T) {
+func TestFirstRowShortcutIncludesOtherDesktops(t *testing.T) {
 	frame := watchPanelFrame{Rows: []watchEntry{
 		{Sample: watchSample{Session: Session{PID: 1, State: "prompt"}, DesktopID: "two"}},
 		{Sample: watchSample{Session: Session{PID: 2, State: "idle"}, DesktopID: "one"}},
 	}}
+	// The first displayed row wins even on another desktop; activation pulls
+	// its window onto the current desktop instead of skipping it.
 	p, ok := watchFirstRowTarget(frame, "one")
-	if !ok || p.Row.Sample.PID != 2 {
-		t.Fatal("included background session intercepted the activation shortcut")
+	if !ok || p.Row.Sample.PID != 1 {
+		t.Fatal("other-desktop first row must be selectable by Ctrl+Win+Z")
 	}
-	frame.Rows = frame.Rows[:1]
-	if _, ok := watchFirstRowTarget(frame, "one"); ok {
-		t.Fatal("shortcut attempted to activate another desktop")
+	frame.Rows = frame.Rows[1:]
+	if p, ok := watchFirstRowTarget(frame, "one"); !ok || p.Row.Sample.PID != 2 {
+		t.Fatal("current-desktop row no longer selected")
 	}
 }
 
