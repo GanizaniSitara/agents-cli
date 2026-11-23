@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -145,6 +147,143 @@ func (s *watchSettings) toggleDesktop(id string) {
 
 func watchDesktopSelectable(sample, current string) bool {
 	return sample != "" && current != "" && sample == current
+}
+
+// An explicit selection (row click, numbered shortcut, Ctrl+Win+Z) of a row on
+// another desktop pulls its window onto the owner's current desktop first.
+// Background discovery and monitoring never pull.
+func watchDesktopPullNeeded(sample, current string) bool {
+	return sample != "" && current != "" && sample != current
+}
+
+// watchPullAndForeground runs the explicit-selection sequence: an other-desktop
+// window is moved to the current desktop first, then foregrounded. It reports
+// whether the window was pulled and whether activation proceeded at all.
+func watchPullAndForeground(hwnd uintptr, sampleDesktop, current string, move func(hwnd uintptr, desktopID string) error, foreground func(hwnd uintptr) bool) (pulled, proceeded bool) {
+	if watchDesktopPullNeeded(sampleDesktop, current) {
+		if err := move(hwnd, current); err != nil {
+			return false, false
+		}
+		pulled = true
+	}
+	foreground(hwnd)
+	return pulled, true
+}
+
+// ImmersiveShell COM for moving another process's window across virtual
+// desktops. The public IVirtualDesktopManager::MoveWindowToDesktop returns
+// E_ACCESSDENIED for foreign windows, so this goes through
+// IApplicationViewCollection::GetViewForHwnd +
+// IVirtualDesktopManagerInternal::MoveViewToDesktop. GUIDs and vtable order
+// are the working Win10 19045 set ported from C:\scripts\move-to-desktop2.ps1.
+type watchShellCOM struct{ VTable *[16]uintptr }
+
+func watchGUID(s string) windows.GUID {
+	g, err := windows.GUIDFromString(s)
+	if err != nil {
+		return windows.GUID{}
+	}
+	return g
+}
+
+var (
+	watchClsidImmersiveShell              = watchGUID("C2F03A33-21F5-47FA-B4BB-156362A2F239")
+	watchIIDIServiceProvider10            = watchGUID("6D5140C1-7436-11CE-8034-00AA006009FA")
+	watchIIDApplicationViewCollection     = watchGUID("1841C6D7-4F9D-42C0-AF41-8747538F10E5")
+	watchSvcVirtualDesktopManagerInternal = watchGUID("C5E0CDCA-7B6E-41B2-9FC4-D93975CC467B")
+	watchIIDVirtualDesktopManagerInternal = watchGUID("F31574D6-B682-4CDC-BD56-1827860ABEC6")
+)
+
+func watchCOMRelease(obj *watchShellCOM) {
+	if obj != nil && obj.VTable != nil {
+		syscall.SyscallN(obj.VTable[2], uintptr(unsafe.Pointer(obj)))
+	}
+}
+
+func watchQueryShellService(shell *watchShellCOM, service, iid windows.GUID) (*watchShellCOM, error) {
+	var obj *watchShellCOM
+	hr, _, _ := syscall.SyscallN(shell.VTable[3], uintptr(unsafe.Pointer(shell)),
+		uintptr(unsafe.Pointer(&service)), uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&obj)))
+	if int32(hr) < 0 || obj == nil {
+		return nil, fmt.Errorf("QueryService %s failed: %#x", iid.String(), uint32(hr))
+	}
+	return obj, nil
+}
+
+// moveWatchWindowToDesktop moves hwnd onto the desktop identified by desktopID
+// (a GUID string from the Explorer VirtualDesktops list). It must run on a
+// thread that initialized COM; like the reader worker, it locks its OS thread
+// so a hung Explorer COM server cannot stall the caller's thread.
+func moveWatchWindowToDesktop(hwnd uintptr, desktopID string) error {
+	target := watchGUID(desktopID)
+	if target == (windows.GUID{}) {
+		return errors.New("invalid target desktop id")
+	}
+	if hwnd == 0 {
+		return errors.New("no window to move")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ole := windows.NewLazySystemDLL("ole32.dll")
+	hr, _, _ := ole.NewProc("CoInitializeEx").Call(0, 0)
+	if int32(hr) < 0 {
+		return fmt.Errorf("CoInitializeEx failed: %#x", uint32(hr))
+	}
+	defer ole.NewProc("CoUninitialize").Call()
+	var shell *watchShellCOM
+	hr, _, _ = ole.NewProc("CoCreateInstance").Call(uintptr(unsafe.Pointer(&watchClsidImmersiveShell)), 0, 1,
+		uintptr(unsafe.Pointer(&watchIIDIServiceProvider10)), uintptr(unsafe.Pointer(&shell)))
+	if int32(hr) < 0 || shell == nil {
+		return fmt.Errorf("ImmersiveShell CoCreateInstance failed: %#x", uint32(hr))
+	}
+	defer watchCOMRelease(shell)
+	views, err := watchQueryShellService(shell, watchIIDApplicationViewCollection, watchIIDApplicationViewCollection)
+	if err != nil {
+		return err
+	}
+	defer watchCOMRelease(views)
+	manager, err := watchQueryShellService(shell, watchSvcVirtualDesktopManagerInternal, watchIIDVirtualDesktopManagerInternal)
+	if err != nil {
+		return err
+	}
+	defer watchCOMRelease(manager)
+	var view *watchShellCOM
+	hr, _, _ = syscall.SyscallN(views.VTable[6], uintptr(unsafe.Pointer(views)), hwnd, uintptr(unsafe.Pointer(&view)))
+	if int32(hr) < 0 || view == nil {
+		return fmt.Errorf("GetViewForHwnd failed: %#x", uint32(hr))
+	}
+	defer watchCOMRelease(view)
+	var desktop *watchShellCOM
+	hr, _, _ = syscall.SyscallN(manager.VTable[12], uintptr(unsafe.Pointer(manager)),
+		uintptr(unsafe.Pointer(&target)), uintptr(unsafe.Pointer(&desktop)))
+	if int32(hr) < 0 || desktop == nil {
+		return fmt.Errorf("FindDesktop failed: %#x", uint32(hr))
+	}
+	defer watchCOMRelease(desktop)
+	hr, _, _ = syscall.SyscallN(manager.VTable[4], uintptr(unsafe.Pointer(manager)),
+		uintptr(unsafe.Pointer(view)), uintptr(unsafe.Pointer(desktop)))
+	if int32(hr) < 0 {
+		return fmt.Errorf("MoveViewToDesktop failed: %#x", uint32(hr))
+	}
+	return nil
+}
+
+// watchMoveWindowBounded bounds the COM move with the same deadline the reader
+// worker's watchdog applies to desktop COM calls, so an unresponsive Explorer
+// cannot freeze the panel on a keypress. The stuck goroutine keeps its own
+// locked thread; the panel continues without it.
+func watchMoveWindowBounded(hwnd uintptr, desktopID string) error {
+	type moveResult struct{ err error }
+	done := make(chan moveResult, 1)
+	go func() {
+		done <- moveResult{moveWatchWindowToDesktop(hwnd, desktopID)}
+	}()
+	select {
+	case r := <-done:
+		return r.err
+	case <-time.After(watchReadDeadline):
+		return errors.New("desktop move watchdog expired")
+	}
 }
 
 // The public IVirtualDesktopManager is stable across Windows 10/11. Keep COM

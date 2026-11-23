@@ -862,10 +862,9 @@ func watchPanel(a *watchApp) error {
 			} else {
 				previousSelection = p
 			}
-			if row.Sample.DesktopID != "" && row.Sample.DesktopID != currentDesktop && !settings.DisableForeground {
-				goDesktop(row.Sample.DesktopID, p, releaseY)
-				return 0
-			}
+			// A row click on another desktop pulls that window onto the
+			// current desktop during activation; the owner's desktop never
+			// switches. Desktop summaries keep the explicit go-to action.
 			a.activateWatchRow(p, releaseY)
 			watchSetLift(window, true)
 			return 0

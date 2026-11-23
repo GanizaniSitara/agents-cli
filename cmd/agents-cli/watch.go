@@ -94,6 +94,10 @@ type watchApp struct {
 	flashes           watchFlashController
 	agentRecords      watchAgentRecords
 	foregroundLift    watchForegroundLift
+	// moveWindowToDesktop pulls a foreign-desktop window onto the current
+	// desktop during an explicit selection. nil uses watchMoveWindowBounded.
+	// Only the activation path may call it; background refresh never does.
+	moveWindowToDesktop func(hwnd uintptr, desktopID string) error
 }
 
 func watchDirectory(p parsed) (string, error) {

@@ -127,7 +127,9 @@ func watchFirstRowTarget(frame watchPanelFrame, current string) (watchPanelPress
 		return watchPanelPress{}, false
 	}
 	for i, row := range frame.Rows {
-		if !row.Parked && watchDesktopSelectable(row.Sample.DesktopID, current) {
+		// Rows on other desktops are included: an explicit selection pulls
+		// their window onto the current desktop during activation.
+		if !row.Parked {
 			p := frame.hit(20, 34+i*panelRowHeight(frame.Compact)+20)
 			return p, p.Kind == "row"
 		}
@@ -213,7 +215,9 @@ func watchNextAttentionTarget(frame watchPanelFrame, current string, activePID u
 		i := (start + n) % len(frame.Rows)
 		row := frame.Rows[i]
 		s := row.Sample
-		if row.Parked || !watchDesktopSelectable(s.DesktopID, current) || s.PID == activePID || (activePID == 0 && foreground != 0 && s.HWND == foreground) {
+		// Other-desktop rows stay in the rotation: Ctrl+Win+Z pulls their
+		// window onto the current desktop when selected.
+		if row.Parked || s.PID == activePID || (activePID == 0 && foreground != 0 && s.HWND == foreground) {
 			continue
 		}
 		if activePID != 0 && !(s.State == "idle" || s.State == "unknown" || s.State == "prompt" || s.State == "error" || s.PendingQuestions > 0 || s.Phase == "finished" || s.Phase == "waiting" || s.Phase == "question" || s.Phase == "review" || s.Phase == "blocked") {
@@ -333,8 +337,8 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	pulseColour := watchPulseColour(row, loadWatchTheme(a.dir), p.Trigger == "double-click")
 	var cloaked uint32
 	hr, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
-	if !watchDesktopSelectable(row.Sample.DesktopID, a.currentDesktop()) || int32(hr) < 0 || cloaked != 0 {
-		a.logClick(p, releaseY, state, "background-desktop-display-only", false, false)
+	if int32(hr) < 0 || cloaked != 0 {
+		a.logClick(p, releaseY, state, "window-cloaked", false, false)
 		return
 	}
 	if settings.DisableForeground {
@@ -362,9 +366,33 @@ func (a *watchApp) activateWatchRowSelected(p watchPanelPress, releaseY int, ter
 	}, func(hwnd uintptr) { watchUser.NewProc("ShowWindowAsync").Call(hwnd, 9) })
 	// SwitchToThisWindow can post SC_RESTORE even for an existing window.
 	// Foreground activation alone lets the shell follow the explicit selection
-	// across desktops without an additional restore request.
+	// across desktops without an additional restore request. A row on another
+	// desktop is pulled onto the current desktop first; the owner's desktop
+	// itself never switches.
 	a.ui.step("selection.foreground")
-	set, _, _ := watchUser.NewProc("SetForegroundWindow").Call(row.Sample.HWND)
+	move := a.moveWindowToDesktop
+	if move == nil {
+		move = watchMoveWindowBounded
+	}
+	var set uintptr
+	pulled, proceeded := watchPullAndForeground(row.Sample.HWND, row.Sample.DesktopID, a.currentDesktop(), move, func(hwnd uintptr) bool {
+		s, _, _ := watchUser.NewProc("SetForegroundWindow").Call(hwnd)
+		set = s
+		return s != 0
+	})
+	if !proceeded {
+		a.logClick(p, releaseY, state, "desktop-move-failed", false, false)
+		return
+	}
+	if pulled {
+		// Keep the cloaked guard after the move.
+		var cloakedAfter uint32
+		hr2, _, _ := watchDWM.NewProc("DwmGetWindowAttribute").Call(row.Sample.HWND, 14, uintptr(unsafe.Pointer(&cloakedAfter)), 4)
+		if int32(hr2) < 0 || cloakedAfter != 0 {
+			a.logClick(p, releaseY, state, "window-cloaked-after-move", false, false)
+			return
+		}
+	}
 	if set != 0 {
 		a.foregroundLift.selectWindow(row.Sample, watchCoveredByTopmost(row.Sample.HWND), watchTopmost(row.Sample.HWND), watchLiftIdentity, watchSetLift)
 		if settings.MovePointerOnShortcut && (p.Trigger == "first-row-shortcut" || p.Trigger == "numbered-shortcut") {
