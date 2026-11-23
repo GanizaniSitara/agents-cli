@@ -16,19 +16,17 @@ const (
 
 func watchRowMenu(parked, pinned bool) uintptr {
 	menu, _, _ := watchUser.NewProc("CreatePopupMenu").Call()
-	for _, item := range []struct {
-		id   uintptr
-		text string
-	}{{watchRowRename, "Rename…"}, {watchRowShelve, "Shelve…"}, {watchRowCancelShelve, "Cancel pending shelving"}} {
-		watchUser.NewProc("AppendMenuW").Call(menu, 0, item.id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(item.text))))
+	appendItem := func(id uintptr, text string) {
+		watchUser.NewProc("AppendMenuW").Call(menu, 0, id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(text))))
 	}
 	if !parked && !pinned {
-		for _, item := range []struct {
-			id   uintptr
-			text string
-		}{{watchRowPin, "Pin to top"}, {watchRowParkDesktop, "Park to Desktop 2"}} {
-			watchUser.NewProc("AppendMenuW").Call(menu, 0, item.id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(item.text))))
-		}
+		appendItem(watchRowPin, "Pin to top")
+	}
+	appendItem(watchRowRename, "Rename…")
+	appendItem(watchRowShelve, "Shelve…")
+	appendItem(watchRowCancelShelve, "Cancel pending shelving")
+	if !parked && !pinned {
+		appendItem(watchRowParkDesktop, "Park to Desktop 2")
 	}
 	return menu
 }

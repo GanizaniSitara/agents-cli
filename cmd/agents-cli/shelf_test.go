@@ -168,25 +168,23 @@ func TestShelfHostExitNeverAppendsToDraft(t *testing.T) {
 }
 
 func TestWatchRowMenuParkUnparkNative(t *testing.T) {
-	for _, parked := range []bool{false, true} {
-		menu := watchRowMenu(parked, false)
-		if menu == 0 {
-			t.Fatal("no menu")
+	for _, state := range []struct{ parked, pinned bool }{{}, {parked: true}, {pinned: true}} {
+		want := []uintptr{watchRowRename, watchRowShelve, watchRowCancelShelve}
+		if !state.parked && !state.pinned {
+			want = append([]uintptr{watchRowPin}, append(want, watchRowParkDesktop)...)
 		}
-		var text [64]uint16
-		watchUser.NewProc("GetMenuStringW").Call(menu, 0, uintptr(unsafe.Pointer(&text[0])), 64, 0x400)
-		if windows.UTF16ToString(text[:]) != "Rename…" {
-			t.Fatal("Rename must be first")
-		}
-		id, _, _ := watchUser.NewProc("GetMenuItemID").Call(menu, 1)
-		if id != watchRowShelve {
-			t.Fatal("wrong Shelve action")
-		}
+		menu := watchRowMenu(state.parked, state.pinned)
+		defer watchUser.NewProc("DestroyMenu").Call(menu)
 		count, _, _ := watchUser.NewProc("GetMenuItemCount").Call(menu)
-		if parked && count != 3 || !parked && count != 5 {
-			t.Fatal("menu must contain Rename, Shelve and cancel shelving only")
+		if count != uintptr(len(want)) {
+			t.Fatalf("state %+v: menu count %d, want %d", state, count, len(want))
 		}
-		watchUser.NewProc("DestroyMenu").Call(menu)
+		for i, expected := range want {
+			id, _, _ := watchUser.NewProc("GetMenuItemID").Call(menu, uintptr(i))
+			if id != expected {
+				t.Fatalf("state %+v, item %d: got %d, want %d", state, i, id, expected)
+			}
+		}
 	}
 }
 
