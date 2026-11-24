@@ -56,3 +56,39 @@ func agyCommandPermissionScreen(selected string) []string {
 		"esc to cancel                 Gemini 3.8 Flash · medium",
 	}
 }
+
+func TestAGYScheduledTimer(t *testing.T) {
+	// Timer strip and footer captured from an idle AGY console (PID 18696).
+	border := strings.Repeat("─", 80)
+	timer := "  ● [10:21:21] 4h 9m timer running"
+	shell := "  ● [10:22:03] python.exe check.py 4h 9m timer running"
+	cases := []struct {
+		name, output, footer string
+		rows                 []string
+		work                 int
+		want                 string
+	}{
+		{"timer at empty prompt", "", "? for shortcuts", []string{timer}, 0, "idle"},
+		{"foreground tool", "⣯  Running command...", "esc to cancel", nil, 0, "busy"},
+		{"timer and spinner", "⣟  Reading file...", "? for shortcuts", []string{timer}, 0, "busy"},
+		{"timer and foreground turn", "", "esc to cancel", []string{timer}, 0, "busy"},
+		{"timer then shell task", "", "? for shortcuts", []string{timer, shell}, 0, "busy"},
+		{"shell task then timer", "", "? for shortcuts", []string{shell, timer}, 0, "busy"},
+		{"timer and working child process", "", "? for shortcuts", []string{timer}, 1, "busy"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := []string{tc.output, "", border, ">", border}
+			lines = append(lines, tc.rows...)
+			lines = append(lines, border, tc.footer+"     Gemini 4 Neon · medium · 1 task(s) · /tasks")
+			state := agyRuntimeState(guessState("agy", lines), tc.work)
+			if state != tc.want {
+				t.Fatalf("state = %s, want %s", state, tc.want)
+			}
+			phase, _ := watchPhase("agy", lines, state)
+			if (state == "idle" && phase != "idle") || (state == "busy" && phase != "working") {
+				t.Fatalf("unexpected watcher phase %s for state %s", phase, state)
+			}
+		})
+	}
+}

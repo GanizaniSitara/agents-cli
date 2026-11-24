@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	agyRunningTask   = regexp.MustCompile(`^\s*●\s+\[\d{2}:\d{2}:\d{2}\]\s+.+\s+running\s*$`)
+	agyRunningTask   = regexp.MustCompile(`^\s*●\s+\[\d{2}:\d{2}:\d{2}\]\s+(.+?)\s+running\s*$`)
+	agyTimerLabel    = regexp.MustCompile(`^(?:\d+[dhms]\s*)+\s+timer$`)
 	agyLiveSpinner   = regexp.MustCompile(`(?i)^\s*[\x{2800}-\x{28FF}]\s+(?:running command|reading file|thinking|generating|working)\b`)
 	agyCommandChoice = regexp.MustCompile(`^> [1-4]\. `)
 )
@@ -40,7 +41,8 @@ func agyState(lines []string) string {
 			return "prompt"
 		}
 		for _, line := range tail[bottom+1:] {
-			if agyRunningTask.MatchString(line) {
+			// A scheduled wakeup stays in the task strip while the composer is idle.
+			if task := agyRunningTask.FindStringSubmatch(line); task != nil && !agyTimerLabel.MatchString(task[1]) {
 				return "busy"
 			}
 		}
