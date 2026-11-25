@@ -51,8 +51,11 @@ func TestWatchReaderDiagnosticsSurviveRecovery(t *testing.T) {
 	if r.LastConsoleError == nil || r.LastConsoleError.PID != 88 {
 		t.Fatal("console error overwrote reader failure or was lost")
 	}
-	if watchReaderHeader("WR104") != "Agents | WR104 watchdog timeout" {
+	if watchReaderHeader("WR104", "") != "Agents | WR104 watchdog timeout" {
 		t.Fatal("header missing actionable code")
+	}
+	if watchReaderHeader("WR104", "read.screen") != "WR104 timeout @ read.screen" {
+		t.Fatal("header missing stalled stage")
 	}
 	if got := watchReaderExit(errors.New("broken pipe"), nil); got.Code != "WR106" {
 		t.Fatal(got)

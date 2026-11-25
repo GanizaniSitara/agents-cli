@@ -63,9 +63,13 @@ func (a *watchApp) recordReaderError(e watchReaderError) {
 	a.readerErrorCounts[e.Code]++
 }
 
-func watchReaderHeader(code string) string {
+func watchReaderHeader(code, stage string) string {
 	if code == "" {
 		return "Agents | reader retrying"
+	}
+	if code == "WR104" && stage != "" {
+		// The stalled step is the diagnosis; it must be readable off the screen.
+		return "WR104 timeout @ " + stage
 	}
 	labels := map[string]string{"WR101": "start failed", "WR102": "no heartbeat", "WR103": "bad reader data", "WR104": "watchdog timeout", "WR105": "reader exited", "WR106": "pipe failed", "WR107": "scan failed", "WR108": "console unreadable"}
 	label := labels[code]

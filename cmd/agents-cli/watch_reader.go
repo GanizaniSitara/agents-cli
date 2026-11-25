@@ -2,10 +2,12 @@ package main
 
 import "time"
 
-const watchReadDeadline = 4 * time.Second
+// Managed work PCs (endpoint protection hooking OpenProcess/ReadProcessMemory,
+// a dozen uncached Copilot consoles) can exceed 4s on one step.
+const watchReadDeadline = 10 * time.Second
 
 // Allow a bounded read, the normal two-second pause and scheduling slack.
-const watchHeartbeatTimeout = 9 * time.Second
+const watchHeartbeatTimeout = 15 * time.Second
 
 func watchReadCoolingDown(pid, failed uint32, now, until time.Time) bool {
 	return failed != 0 && pid == failed && now.Before(until)

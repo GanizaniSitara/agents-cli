@@ -926,9 +926,13 @@ func watchPanel(a *watchApp) error {
 			a.mu.Lock()
 			problem := a.problem
 			problemCode := a.problemCode
+			problemStage := ""
+			if a.lastReaderError != nil {
+				problemStage = a.lastReaderError.Stage
+			}
 			a.mu.Unlock()
 			if problem != "" {
-				header = watchReaderHeader(problemCode)
+				header = watchReaderHeader(problemCode, problemStage)
 				watchGDI.NewProc("SetTextColor").Call(dc, theme.rowColour("error"))
 			}
 			if desktopProblem != "" {
