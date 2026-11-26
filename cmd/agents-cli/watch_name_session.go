@@ -66,6 +66,16 @@ func watchHarnessRenameConfirmed(tool, name string, lines []string) bool {
 		}
 		return false
 	}
+	// The live composer is not transcript: Copilot's empty prompt shows a
+	// "❯ Type @ to mention files…" placeholder that would read as a new command.
+	if _, bottom, ok := copilotComposerEnd(lines); ok {
+		for top := bottom - 1; top >= 0; top-- {
+			if t := strings.TrimSpace(lines[top]); len([]rune(t)) >= 3 && strings.Trim(t, "─━") == "" {
+				lines = lines[:top]
+				break
+			}
+		}
+	}
 	command := ""
 	confirmed := false
 	for _, line := range lines {
@@ -123,8 +133,14 @@ func watchRenameHarness(tool, name string, validate func() error, read func() (*
 	if !submitted {
 		return "", errors.New("Session rename submission is uncertain. Inspect the session before retrying; nothing was resent.")
 	}
+	var last *peekResult
 	for {
 		if err := pause(); err != nil {
+			// The harness retitling its own window to exactly the new name is
+			// confirmation too; leaving the dialog up after that just looks broken.
+			if last != nil && last.Title == name && before.Title != name {
+				return last.Title, nil
+			}
 			return "", errors.New("Session rename was not confirmed. Inspect the session before retrying; window title was not changed by agents-cli.")
 		}
 		if err := validate(); err != nil {
@@ -134,6 +150,7 @@ func watchRenameHarness(tool, name string, validate func() error, read func() (*
 		if err != nil {
 			return "", err
 		}
+		last = after
 		if watchHarnessRenameConfirmed(tool, name, after.Lines) {
 			if after.Title != before.Title && after.Title != name {
 				return "", errors.New("Session renamed, but the window title changed independently. Reopen Rename to review it.")

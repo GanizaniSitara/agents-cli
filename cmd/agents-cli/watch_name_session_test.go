@@ -23,6 +23,15 @@ func TestWatchHarnessRenameConfirmation(t *testing.T) {
 			}
 		}
 	}
+	// Copilot's empty composer shows a placeholder behind the same ❯ marker.
+	copilotScreen := []string{"❯ /rename Music sheets", "● Session renamed to: Music sheets", "",
+		"────────────", "❯ Type @ to mention files, # for issues/PRs, / for commands, or ? for shortcuts", "────────────", " shift+tab switch mode"}
+	if !watchHarnessRenameConfirmed("copilot", "Music sheets", copilotScreen) {
+		t.Fatal("Copilot placeholder hid the rename confirmation")
+	}
+	if watchHarnessRenameConfirmed("copilot", "Music sheets", copilotScreen[2:]) {
+		t.Fatal("composer placeholder alone confirmed a rename")
+	}
 	for _, tc := range []struct {
 		line string
 		want bool
@@ -101,6 +110,35 @@ func TestWatchHarnessRenameSingleSendAndGuards(t *testing.T) {
 				t.Fatalf("%d sends want %d", sends, wantSends)
 			}
 		})
+	}
+}
+
+func TestWatchHarnessRenameTitleConfirmsOnTimeout(t *testing.T) {
+	idle := []string{"────────", ">", "────────", "? for shortcuts"}
+	for _, after := range []string{"Music sheets", "Something else"} {
+		reads, pauses := 0, 0
+		read := func() (*peekResult, error) {
+			reads++
+			if reads == 1 {
+				return &peekResult{Title: "Old title", Lines: idle}, nil
+			}
+			return &peekResult{Title: after, Lines: []string{"> /rename Music sheets", ">"}}, nil
+		}
+		pause := func() error {
+			pauses++
+			if pauses > 3 {
+				return errors.New("deadline")
+			}
+			return nil
+		}
+		title, err := watchRenameHarness("copilot", "Music sheets", func() error { return nil }, read,
+			func(string) (bool, error) { return true, nil }, pause)
+		if after == "Music sheets" && (err != nil || title != "Music sheets") {
+			t.Fatalf("retitled window not accepted: %q %v", title, err)
+		}
+		if after != "Music sheets" && err == nil {
+			t.Fatalf("unrelated title accepted: %q", title)
+		}
 	}
 }
 
