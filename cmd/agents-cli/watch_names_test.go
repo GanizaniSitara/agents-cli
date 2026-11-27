@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -248,6 +249,10 @@ func TestWatchNameDialogCancelNative(t *testing.T) {
 }
 
 func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fixture.launch-info.json")
+	t.Setenv("AGENTS_CLI_TASKS_DIR", dir)
+	t.Setenv("CODEX_LAUNCH_INFO", path)
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	fixture := exec.CommandContext(ctx, os.Args[0])
@@ -274,7 +279,11 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 	if got := watchWindowTitle(s.HWND); got != s.Title {
 		t.Fatalf("fixture initial caption %q, want %q", got, s.Title)
 	}
-	dir := t.TempDir()
+	s.Task = "fixture"
+	fixtureInfo, _ := json.Marshal(map[string]any{"Tool": "codex", "PID": s.PID, "ProcessStartTimeUtc": s.RootStarted, "WindowTitle": "codex", "TaskSlug": s.Task, "Zone": 5})
+	if err := os.WriteFile(path, fixtureInfo, 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := saveWatchSettings(dir, watchSettings{SuggestSessionNames: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -300,6 +309,9 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 	apply := func(sample watchSample, name string) error { return applyReview(sample, name, "accept") }
 	stale := s
 	stale.RootStarted = "reused"
+	if matched, err := updateLauncherTitle(path, stale, "Wrong session"); err != nil || matched {
+		t.Fatalf("launcher accepted a reused PID: matched=%v err=%v", matched, err)
+	}
 	if apply(stale, "Wrong session") == nil {
 		t.Fatal("accepted stale identity")
 	}
@@ -310,6 +322,9 @@ func TestWatchNameActualConsoleAndStaleIdentity(t *testing.T) {
 	}
 	if err := apply(s, "Investigate refresh hangs"); err != nil {
 		t.Fatal(err)
+	}
+	if info := readLaunchInfos()[s.PID]; info.WindowTitle != "Investigate refresh hangs" || info.TaskSlug != s.Task || info.Zone == nil || *info.Zone != 5 {
+		t.Fatalf("watchdog would restore the wrong caption or lost launch metadata: %+v", info)
 	}
 	// Check the real conhost caption, not just the watcher's persisted label.
 	deadline := time.Now().Add(time.Second)

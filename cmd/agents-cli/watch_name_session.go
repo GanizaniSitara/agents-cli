@@ -241,7 +241,7 @@ func watchApplyReviewedName(review watchNameReview) error {
 	}
 	s := review.Sample
 	if !review.RenameSession {
-		return watchDoRename(s, review.Name)
+		return watchRenameWindow(s, review.Name)
 	}
 	if !watchHarnessRenameSupported(s.Tool) {
 		return errors.New("This harness supports window/tab title rename only.")
@@ -392,7 +392,7 @@ func watchApplyReviewedName(review watchNameReview) error {
 		return err
 	}
 	s.Title = title // The harness itself may already have changed its title.
-	if err := watchDoRename(s, review.Name); err != nil {
+	if err := watchRenameWindow(s, review.Name); err != nil {
 		return fmt.Errorf("Session renamed; window/tab rename failed: %w", err)
 	}
 	return nil
