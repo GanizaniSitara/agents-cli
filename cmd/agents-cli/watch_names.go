@@ -287,7 +287,11 @@ func watchDoRename(s watchSample, name string) error {
 	if terminal {
 		probe := s
 		probe.Title = name
-		if problem := watchDoTerminalTab(probe, true); problem != "terminal-tab-not-found" {
+		problem := watchDoTerminalTab(probe, true)
+		if s.Title == name && problem == "" {
+			return nil // The harness has already set and published this unique tab title.
+		}
+		if problem != "terminal-tab-not-found" {
 			return errors.New("Suggested title already exists in this Terminal, or tabs could not be checked. Choose another name.")
 		}
 		if watchTerminalConsoleTitle() != s.Title {

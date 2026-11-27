@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,8 @@ const watchRenameBusy = "Rename queued until the session is idle."
 // A draft in the composer is never overwritten; the dialog queues and retries
 // until the owner sends or clears it.
 const watchRenameDraft = "Rename queued until the prompt is empty."
+
+var codexFooterWarnings = regexp.MustCompile(`^\s+⚠\s+\d+\s+warnings?(?:\s+·\s+f2 to view)?$`)
 
 func watchHarnessRenameSupported(tool string) bool {
 	switch tool {
@@ -40,7 +44,19 @@ func watchRenameComposerEmpty(tool string, lines []string) bool {
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
 		if strings.HasPrefix(line, "›") {
-			return line == "›" || line == "› Ask Codex to do anything"
+			if line == "› Ask Codex to do anything" {
+				return true
+			}
+			if line != "›" {
+				return false
+			}
+			// A multiline draft can start on the row below an empty marker.
+			for _, next := range lines[i+1:] {
+				if row := strings.TrimSpace(next); row != "" {
+					return strings.HasPrefix(strings.ToLower(row), "gpt-") || strings.Contains(row, "? for shortcuts")
+				}
+			}
+			return true
 		}
 	}
 	return false
@@ -49,20 +65,24 @@ func watchRenameComposerEmpty(tool string, lines []string) bool {
 func watchHarnessRenameConfirmed(tool, name string, lines []string) bool {
 	if tool == "codex" {
 		tail := trimBlankTail(lines)
-		if len(tail) == 0 {
+		// Current Codex adds a shortcuts/warnings row below the model row.
+		// Never search above the live composer for a matching old footer.
+		for i := len(tail) - 1; i >= 0 && i >= len(tail)-3; i-- {
+			row := strings.TrimSpace(tail[i])
+			if strings.HasPrefix(row, "›") {
+				break
+			}
+			if !strings.HasPrefix(strings.ToLower(row), "gpt-") {
+				continue
+			}
+			for field, rest, ok := strings.Cut(row, " · "); ok; field, rest, ok = strings.Cut(rest, " · ") {
+				if contextRemaining.FindString(field) != field || field == "" {
+					continue
+				}
+				suffix, match := strings.CutPrefix(strings.TrimSpace(rest), name)
+				return match && (suffix == "" || codexFooterWarnings.MatchString(suffix))
+			}
 			return false
-		}
-		parts := strings.Split(tail[len(tail)-1], " · ")
-		for i := 1; i < len(parts); i++ {
-			if !strings.Contains(strings.ToLower(parts[i-1]), "context") || !strings.Contains(parts[i-1], "% left") {
-				continue
-			}
-			part := strings.TrimSpace(parts[i])
-			if !strings.HasPrefix(part, name) {
-				continue
-			}
-			rest := strings.TrimSpace(strings.TrimPrefix(part, name))
-			return rest == "" || strings.HasPrefix(rest, "⚠")
 		}
 		return false
 	}
@@ -130,18 +150,12 @@ func watchRenameHarness(tool, name string, validate func() error, read func() (*
 	if err != nil {
 		return "", err
 	}
-	if !submitted {
-		return "", errors.New("Session rename submission is uncertain. Inspect the session before retrying; nothing was resent.")
-	}
-	var last *peekResult
 	for {
 		if err := pause(); err != nil {
-			// The harness retitling its own window to exactly the new name is
-			// confirmation too; leaving the dialog up after that just looks broken.
-			if last != nil && last.Title == name && before.Title != name {
-				return last.Title, nil
+			if !submitted {
+				return "", errRenameUncertain
 			}
-			return "", errors.New("Session rename was not confirmed. Inspect the session before retrying; window title was not changed by agents-cli.")
+			return "", errRenameUnconfirmed
 		}
 		if err := validate(); err != nil {
 			return "", err
@@ -150,14 +164,75 @@ func watchRenameHarness(tool, name string, validate func() error, read func() (*
 		if err != nil {
 			return "", err
 		}
-		last = after
-		if watchHarnessRenameConfirmed(tool, name, after.Lines) {
-			if after.Title != before.Title && after.Title != name {
+		if after.Title == name && before.Title != name {
+			return name, nil
+		}
+		if watchHarnessRenameConfirmed(tool, name, after.Lines) && (submitted || !watchHarnessRenameConfirmed(tool, name, before.Lines)) {
+			if !watchRenameTitleExpected(tool, before.Title, after.Title, name) {
 				return "", errors.New("Session renamed, but the window title changed independently. Reopen Rename to review it.")
 			}
 			return after.Title, nil
 		}
 	}
+}
+
+var errRenameUnconfirmed = errors.New("Session rename was not confirmed. Inspect the session before retrying; window title was not changed by agents-cli.")
+var errRenameUncertain = errors.New("Session rename submission is uncertain. Inspect the session before retrying; nothing was resent.")
+
+// Codex shortens its own Windows title separately from the footer. A clipped
+// prefix is an expected title transition, never proof of the saved name.
+func watchRenameTitleExpected(tool, before, after, name string) bool {
+	if before == after || after == name {
+		return true
+	}
+	if tool == "codex" {
+		for _, end := range []string{"...", "…"} {
+			if prefix, ok := strings.CutSuffix(after, end); ok && prefix != "" && strings.HasPrefix(name, prefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// The current TUI prints /status and its native identity panel into history.
+// Compare the history through the command so a changing footer cannot refresh
+// a stale panel. The thread's latest index entry preserves even wrapped names.
+func watchCodexStatus(lines []string) (history, id string) {
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(lines[i]) != "/status" {
+			continue
+		}
+		for j := i + 1; j < len(lines); j++ {
+			row := strings.TrimSpace(lines[j])
+			if row == "" {
+				continue
+			}
+			if strings.HasPrefix(row, ">_ OpenAI Codex") {
+				return strings.Join(lines[:i+1], "\n"), shelfStatusID(lines[j:])
+			}
+			break
+		}
+		break
+	}
+	return "", ""
+}
+
+func watchCodexSavedName(home, id, name string) bool {
+	if home == "" || id == "" {
+		return false
+	}
+	rows := bytes.Split(subscriptionFileTail(filepath.Join(home, "session_index.jsonl"), 512<<10), []byte{'\n'})
+	for i := len(rows) - 1; i >= 0; i-- {
+		var entry struct {
+			ID   string
+			Name string `json:"thread_name"`
+		}
+		if json.Unmarshal(rows[i], &entry) == nil && entry.ID == id {
+			return entry.Name == name
+		}
+	}
+	return false
 }
 
 func watchApplyReviewedName(review watchNameReview) error {
@@ -245,7 +320,7 @@ func watchApplyReviewedName(review watchNameReview) error {
 			return false, err
 		}
 		cmd := helperCommand(ctx, exe, text)
-		cmd.Args = []string{exe, "send", strconv.FormatUint(uint64(s.PID), 10), "--stdin", "--via", "inject"}
+		cmd.Args = []string{exe, "send", strconv.FormatUint(uint64(s.PID), 10), "--stdin", "--via", "inject", "--expect-started", live.Started}
 		cmd.WaitDelay = 250 * time.Millisecond
 		out, err := cmd.Output()
 		if err != nil {
@@ -259,8 +334,15 @@ func watchApplyReviewedName(review watchNameReview) error {
 		}
 		return receipt.Submitted, nil
 	}
-	deadline := time.Now().Add(8 * time.Second)
+	confirmationWait := 8 * time.Second
+	if s.Tool == "codex" {
+		confirmationWait = 2 * time.Second
+	}
+	var deadline time.Time
 	pause := func() error {
+		if deadline.IsZero() {
+			deadline = time.Now().Add(confirmationWait)
+		}
 		if time.Now().After(deadline) {
 			return context.DeadlineExceeded
 		}
@@ -272,6 +354,40 @@ func watchApplyReviewedName(review watchNameReview) error {
 		}
 	}
 	title, err := watchRenameHarness(s.Tool, review.Name, validate, read, send, pause)
+	if s.Tool == "codex" && (errors.Is(err, errRenameUnconfirmed) || errors.Is(err, errRenameUncertain)) {
+		// A narrow footer and a pinned or abbreviated window title can hide
+		// the full name. Ask this same idle console for its current thread.
+		probe := func() (*peekResult, error) { return peek(s.PID, 80) }
+		screen, e := probe()
+		if e != nil {
+			return e
+		}
+		if !watchRenameComposerEmpty(s.Tool, screen.Lines) || !watchRenameTitleExpected(s.Tool, before.Title, screen.Title, review.Name) {
+			return err
+		}
+		prior, _ := watchCodexStatus(screen.Lines)
+		if e = validate(); e != nil {
+			return e
+		}
+		if _, e = send("/status"); e != nil {
+			return e
+		}
+		deadline = time.Now().Add(3 * time.Second)
+		for pause() == nil {
+			if e = validate(); e != nil {
+				return e
+			}
+			screen, e = probe()
+			if e != nil {
+				return e
+			}
+			history, id := watchCodexStatus(screen.Lines)
+			if history != prior && watchCodexSavedName(live.Home, id, review.Name) && watchRenameTitleExpected(s.Tool, before.Title, screen.Title, review.Name) {
+				title, err = screen.Title, nil
+				break
+			}
+		}
+	}
 	if err != nil {
 		return err
 	}

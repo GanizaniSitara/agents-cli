@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -47,9 +49,55 @@ func TestWatchHarnessRenameConfirmation(t *testing.T) {
 	}
 }
 
+func TestCodexRenameWithShortcutsFooter(t *testing.T) {
+	name := "Music · sheets"
+	footer := "  GPT-6.2-Astra high · ~ · Context 75% left · " + name
+	shortcuts := "  ← for agents · ? for shortcuts          ⚠ 2 warnings · f2 to view"
+	if !watchHarnessRenameConfirmed("codex", name, []string{"› Ask Codex to do anything", "", footer, shortcuts}) {
+		t.Fatal("missed the live thread name above the shortcuts")
+	}
+	for _, lines := range [][]string{
+		{footer, "› Ask Codex to do anything", shortcuts},
+		{footer + " extra", shortcuts},
+		{"user prose · Context 75% left · " + name, shortcuts},
+	} {
+		if watchHarnessRenameConfirmed("codex", name, lines) {
+			t.Fatalf("accepted %q", lines)
+		}
+	}
+}
+
+func TestCodexRenameStatusReadback(t *testing.T) {
+	const id = "11111111-2222-3333-4444-555555555555"
+	panel := []string{"/status", "", "  >_ OpenAI Codex (v0.170.0)", "  Session: " + id, "› Ask Codex to do anything"}
+	history, got := watchCodexStatus(panel)
+	if history == "" || got != id {
+		t.Fatalf("status identity %q %q", history, got)
+	}
+	if h, _ := watchCodexStatus(append(panel, "shortcuts")); h != history {
+		t.Fatal("footer repaint counted as a fresh /status")
+	}
+	if h, got := watchCodexStatus(append(append([]string{}, panel...), panel...)); h == history || got != id {
+		t.Fatal("missed a fresh /status")
+	}
+	dir := t.TempDir()
+	data := `{"id":"` + id + `","thread_name":"Old"}
+{"id":"other","thread_name":"Other"}
+{"id":"` + id + `","thread_name":"Music · sheets"}`
+	if err := os.WriteFile(filepath.Join(dir, "session_index.jsonl"), []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !watchCodexSavedName(dir, id, "Music · sheets") || watchCodexSavedName(dir, id, "Old") || watchCodexSavedName(dir, id, "Other") {
+		t.Fatal("must read the latest full name of this exact thread")
+	}
+	if !watchRenameTitleExpected("codex", "Old", "Music...", "Music · sheets") || watchRenameTitleExpected("codex", "Old", "Another...", "Music · sheets") {
+		t.Fatal("unexpected treatment of abbreviated Codex titles")
+	}
+}
+
 func TestWatchHarnessRenameSingleSendAndGuards(t *testing.T) {
 	idle := []string{"────────", ">", "────────", "? for shortcuts"}
-	for _, mode := range []string{"success", "uncertain", "timeout", "replaced", "busy", "draft", "independent-title"} {
+	for _, mode := range []string{"success", "uncertain", "confirmed-after-uncertain", "timeout", "replaced", "busy", "draft", "independent-title"} {
 		t.Run(mode, func(t *testing.T) {
 			reads, sends, validations := 0, 0, 0
 			validate := func() error {
@@ -72,6 +120,9 @@ func TestWatchHarnessRenameSingleSendAndGuards(t *testing.T) {
 					return &peekResult{Title: "Old title", Lines: lines}, nil
 				}
 				title := "Music sheets"
+				if mode == "uncertain" {
+					return &peekResult{Title: "Old title", Lines: idle}, nil
+				}
 				if mode == "independent-title" {
 					title = "Other owner's title"
 				}
@@ -82,16 +133,16 @@ func TestWatchHarnessRenameSingleSendAndGuards(t *testing.T) {
 				if text != "/rename Music sheets" {
 					t.Fatalf("sent %q", text)
 				}
-				return mode != "uncertain", nil
+				return mode != "uncertain" && mode != "confirmed-after-uncertain", nil
 			}
 			pause := func() error {
-				if mode == "timeout" {
+				if mode == "timeout" || (mode == "uncertain" && reads > 1) {
 					return errors.New("deadline")
 				}
 				return nil
 			}
 			title, err := watchRenameHarness("agy", "Music sheets", validate, read, send, pause)
-			if mode == "success" {
+			if mode == "success" || mode == "confirmed-after-uncertain" {
 				if err != nil || title != "Music sheets" {
 					t.Fatalf("%q %v", title, err)
 				}
@@ -158,5 +209,8 @@ func TestWatchHarnessRenameCapability(t *testing.T) {
 	}
 	if watchRenameComposerEmpty("codex", []string{"› my unfinished draft", "GPT-6 · Context 50% left"}) {
 		t.Fatal("Codex draft overwritten")
+	}
+	if watchRenameComposerEmpty("codex", []string{"›", "  unfinished second line", "GPT-6 · Context 50% left"}) {
+		t.Fatal("multiline Codex draft overwritten")
 	}
 }
